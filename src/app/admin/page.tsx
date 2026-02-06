@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db";
 import Link from "next/link";
-import { Music, Users, Bell, ArrowRight, Ticket, Tag, Settings, ScrollText, Activity, Send } from "lucide-react";
+import { Music, Users, Bell, ArrowRight, Ticket, Tag, Settings, ScrollText, Activity, Send, Building2 } from "lucide-react";
 
 export default async function AdminDashboard() {
    const pendingSongsCount = await prisma.songRequest.count({
@@ -97,6 +97,10 @@ export default async function AdminDashboard() {
                <Link href="/admin/test" className="px-6 py-3 rounded-xl bg-slate-800 text-rose-400 border border-rose-900/50 font-bold flex items-center gap-2 hover:bg-rose-900/20 transition-colors">
                   시스템 기능 진단
                   <Activity className="w-4 h-4" />
+               </Link>
+               <Link href="/admin/sites" className="px-6 py-3 rounded-xl bg-slate-800 text-teal-400 border border-teal-900/50 font-bold flex items-center gap-2 hover:bg-teal-900/20 transition-colors">
+                  교내 사이트 관리
+                  <Building2 className="w-4 h-4" />
                </Link>
             </div>
          </div>

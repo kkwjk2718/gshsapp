@@ -136,6 +136,15 @@ model LinkItem {
   createdAt   DateTime @default(now())
 }
 
+model RelatedSite {
+  id          String   @id @default(uuid())
+  name        String
+  url         String
+  category    String   // OFFICIAL(학교), CLUB(동아리), COMMUNITY(커뮤니티)
+  description String?
+  createdAt   DateTime @default(now())
+}
+
 // C. 개인화 및 알림
 model PersonalEvent {
   id         String   @id @default(uuid())

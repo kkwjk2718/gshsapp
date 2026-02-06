@@ -1,4 +1,4 @@
-import { Home, Utensils, Music, Clock, Calendar, User, Menu, Calculator, Megaphone, Link as LinkIcon, Radio, Bell, AlertCircle } from "lucide-react";
+import { Home, Utensils, Music, Clock, Calendar, User, Menu, Calculator, Megaphone, Link as LinkIcon, Radio, Bell, AlertCircle, Building2 } from "lucide-react";
 
 // Primary items for mobile bottom navigation (most frequently used)
 export const primaryNavItems = [
@@ -16,6 +16,7 @@ export const allNavItems = [
   { name: "시간표", href: "/timetable", icon: Clock },
   { name: "학사일정", href: "/calendar", icon: Calendar },
   { name: "바로가기", href: "/links", icon: LinkIcon },
+  { name: "교내 사이트", href: "/sites", icon: Building2 },
   { name: "도구", href: "/utils", icon: Calculator },
   { name: "알림", href: "/notifications", icon: Bell },
   { name: "오류 신고", href: "/report", icon: AlertCircle },
