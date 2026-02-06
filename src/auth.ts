@@ -7,18 +7,18 @@ import { logAction } from '@/lib/logger';
 import bcrypt from 'bcryptjs';
 
 async function verifyPassword(password: string, hash: string) {
-    return await bcrypt.compare(password, hash);
+  return await bcrypt.compare(password, hash);
 }
- 
+
 export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
   events: {
-      async signIn({ user }) {
-          await logAction("LOGIN", { role: user.role });
-      },
-      async signOut() {
-          await logAction("LOGOUT");
-      }
+    async signIn({ user }) {
+      await logAction("LOGIN", { role: user.role });
+    },
+    async signOut() {
+      await logAction("LOGOUT");
+    }
   },
   providers: [
     Credentials({
@@ -26,35 +26,40 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const parsedCredentials = z
           .object({ userId: z.string(), password: z.string().min(4) })
           .safeParse(credentials);
- 
+
         if (parsedCredentials.success) {
           const { userId, password } = parsedCredentials.data;
           const user = await prisma.user.findUnique({ where: { userId } });
-          
+
           if (!user) {
-              await logAction("LOGIN_FAILED", { userId, reason: "User not found" });
-              return null;
+            await logAction("LOGIN_FAILED", { userId, reason: "User not found" });
+            return null;
           }
-          
+
           const passwordsMatch = await verifyPassword(password, user.passwordHash);
- 
+
           if (passwordsMatch) {
-             return {
-                 id: user.id,
-                 name: user.name,
-                 email: user.email,
-                 role: user.role,
-                 studentId: user.studentId,
-                 gisu: user.gisu,
-             };
+            return {
+              id: user.id,
+              name: user.name,
+              email: user.email,
+              role: user.role,
+              studentId: user.studentId,
+              gisu: user.gisu,
+            };
           } else {
-             await logAction("LOGIN_FAILED", { userId, reason: "Invalid password" });
+            await logAction("LOGIN_FAILED", { userId, reason: "Invalid password" });
           }
         }
- 
+
         console.log('Invalid credentials');
         return null;
       },
+    },
     }),
   ],
+session: {
+  strategy: 'jwt',
+    maxAge: 30 * 24 * 60 * 60, // 30 days
+  },
 });
