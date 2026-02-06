@@ -1,0 +1,115 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: var(--font-noto-sans-kr), sans-serif;
+
+  /* Animtations */
+  --animate-float: float 6s ease-in-out infinite;
+  --animate-pulse-slow: pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+
+  @keyframes float {
+
+    0%,
+    100% {
+      transform: translateY(0);
+    }
+
+    50% {
+      transform: translateY(-10px);
+    }
+  }
+}
+
+/* Light Mode (Default) */
+:root {
+  --background: #f8fafc;
+  /* slate-50 */
+  --foreground: #1e293b;
+  /* slate-800 */
+
+  /* Gradients */
+  --bg-gradient-start: #f1f5f9;
+  /* slate-100 */
+  --bg-gradient-end: #e2e8f0;
+  /* slate-200 */
+  --accent-glow: rgba(99, 102, 241, 0.1);
+  /* indigo-500 light */
+}
+
+/* Dark Mode */
+.dark {
+  --background: #030712;
+  /* gray-950 */
+  --foreground: #f8fafc;
+  /* slate-50 */
+
+  /* Gradients */
+  --bg-gradient-start: #0f172a;
+  /* slate-900 */
+  --bg-gradient-end: #020617;
+  /* slate-950 */
+  --accent-glow: rgba(99, 102, 241, 0.15);
+  /* indigo-500 dark */
+}
+
+body {
+  color: var(--foreground);
+  background: radial-gradient(circle at 50% 0%, var(--bg-gradient-start), var(--background) 100%);
+  background-attachment: fixed;
+  font-family: var(--font-sans);
+  transition: background-color 0.3s ease, color 0.3s ease;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-slate-300 dark:bg-slate-800/50 rounded-full hover:bg-slate-400 dark:hover:bg-slate-700/80 transition-colors;
+}
+
+::selection {
+  @apply bg-indigo-200 dark:bg-indigo-500/40 text-indigo-900 dark:text-indigo-50;
+}
+
+@layer utilities {
+
+  /* Premium Glass Effect */
+  .glass {
+    @apply bg-white/80 dark:bg-slate-900/40 backdrop-blur-xl border border-slate-200 dark:border-white/5 shadow-lg shadow-slate-300/30 dark:shadow-black/20;
+  }
+
+  /* Lighter Glass for Cards */
+  .glass-card {
+    @apply bg-white/90 dark:bg-slate-900/40 backdrop-blur-lg border border-slate-200 dark:border-white/5 rounded-3xl transition-all duration-300;
+  }
+
+  /* Hover effect for cards */
+  .glass-card-hover {
+    @apply hover:bg-white dark:hover:bg-slate-800/40 hover:border-slate-300 dark:hover:border-white/10 hover:shadow-xl hover:shadow-indigo-300/20 dark:hover:shadow-indigo-500/5 hover:-translate-y-1;
+  }
+
+  /* Gradient Text */
+  .text-gradient {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 via-violet-600 to-indigo-600 dark:from-indigo-400 dark:via-violet-400 dark:to-indigo-400;
+  }
+
+  /* Primary Button */
+  .btn-primary {
+    @apply bg-indigo-600 text-white font-bold py-3 px-6 rounded-xl hover:bg-indigo-500 transition-all duration-300 shadow-lg shadow-indigo-500/20 active:scale-95 flex items-center justify-center gap-2;
+  }
+
+  /* Secondary/Glass Button */
+  .btn-glass {
+    @apply bg-white/5 text-slate-200 font-medium py-3 px-6 rounded-xl hover:bg-white/10 border border-white/5 transition-all duration-300 active:scale-95 flex items-center justify-center gap-2;
+  }
+}

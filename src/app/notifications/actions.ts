@@ -1,0 +1,34 @@
+"use server"
+
+import { prisma } from "@/lib/db";
+import { revalidatePath } from "next/cache";
+import { getCurrentUser } from "@/lib/session";
+
+export async function markAsRead(notificationId: string) {
+    const user = await getCurrentUser();
+    if (!user) return { error: "Unauthorized" };
+
+    try {
+        await prisma.notification.update({
+            where: { id: notificationId, userId: user.id },
+            data: { isRead: true }
+        });
+        revalidatePath("/notifications");
+    } catch (e) {
+        return { error: "Failed" };
+    }
+}
+
+export async function deleteNotification(notificationId: string) {
+    const user = await getCurrentUser();
+    if (!user) return { error: "Unauthorized" };
+
+    try {
+        await prisma.notification.delete({
+            where: { id: notificationId, userId: user.id }
+        });
+        revalidatePath("/notifications");
+    } catch (e) {
+        return { error: "Failed" };
+    }
+}

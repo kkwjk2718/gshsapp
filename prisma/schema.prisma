@@ -1,0 +1,206 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// A. 사용자 및 인증
+model User {
+  id             String   @id @default(uuid())
+  userId         String   @unique // 로그인 ID
+  passwordHash   String
+  name           String
+  email          String?  @unique
+  role           String   @default("STUDENT") // STUDENT, TEACHER, ADMIN
+  studentId      String?  // 학번 (학생인 경우)
+  gisu           Int?     // 기수
+  banExpiresAt   DateTime?
+  isOnboarded    Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  
+  // Relations
+  notices        Notice[]
+  schedules      Schedule[]
+  songRequests   SongRequest[]
+  personalEvents PersonalEvent[]
+  notifications  Notification[]
+  teacherProfile TeacherProfile?
+  auditLogs      AuditLog[]
+  systemLogs     SystemLog[]
+  usedToken      InviteToken? @relation("TokenUsedByUser")
+  errorReports   ErrorReport[]
+}
+
+model TokenBatch {
+  id          String   @id @default(uuid())
+  title       String
+  memo        String?
+  createdBy   String
+  createdAt   DateTime @default(now())
+  
+  tokens      InviteToken[]
+}
+
+model InviteToken {
+  id          String   @id @default(uuid())
+  token       String   @unique
+  targetRole  String   // STUDENT, TEACHER, ADMIN
+  targetGisu  Int?
+  isUsed      Boolean  @default(false)
+  createdBy   String   // User ID who created this
+  createdAt   DateTime @default(now())
+  
+  batchId     String?
+  batch       TokenBatch? @relation(fields: [batchId], references: [id])
+
+  usedByUserId String? @unique
+  usedBy       User?   @relation("TokenUsedByUser", fields: [usedByUserId], references: [id])
+}
+
+// B. 기능 및 콘텐츠
+model NoticeCategory {
+  id    String @id @default(uuid())
+  label String @unique // 화면에 표시될 이름 (예: 학사, 행사)
+  value String @unique // 코드값 (예: ACADEMIC, EVENT)
+}
+
+model Notice {
+  id        String   @id @default(uuid())
+  writerId  String
+  category  String   // GENERAL, ACADEMIC, EVENT
+  title     String
+  content   String
+  expiresAt DateTime?
+  createdAt DateTime @default(now())
+  
+  writer    User     @relation(fields: [writerId], references: [id])
+}
+
+model Schedule {
+  id          String   @id @default(uuid())
+  writerId    String
+  title       String
+  description String?
+  startDate   DateTime
+  endDate     DateTime
+  category    String   // ACADEMIC, EVENT, HOLIDAY
+  createdAt   DateTime @default(now())
+
+  writer      User     @relation(fields: [writerId], references: [id])
+}
+
+model TeacherProfile {
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  subject   String
+  location  String?
+  message   String?
+  links     String?  // JSON string for links
+  updatedAt DateTime @updatedAt
+
+  user      User     @relation(fields: [userId], references: [id])
+}
+
+model SongRequest {
+  id            String   @id @default(uuid())
+  requesterId   String
+  youtubeUrl    String
+  videoTitle    String
+  status        String   @default("PENDING") // PENDING, APPROVED, REJECTED, PLAYED
+  priorityScore Int      @default(0)
+  createdAt     DateTime @default(now())
+
+  requester     User     @relation(fields: [requesterId], references: [id])
+}
+
+model SongRule {
+  id            String   @id @default(uuid())
+  dayOfWeek     Int      // 0: Sun, 1: Mon, ... 6: Sat
+  allowedGrade  String   // e.g. "1,2,3" or "1" or "ALL"
+  description   String?
+}
+
+model LinkItem {
+  id          String   @id @default(uuid())
+  title       String
+  url         String
+  description String?
+  category    String   @default("GENERAL") // LEARNING, SCHOOL, EXTERNAL
+  createdAt   DateTime @default(now())
+}
+
+// C. 개인화 및 알림
+model PersonalEvent {
+  id         String   @id @default(uuid())
+  userId     String
+  title      String
+  targetDate DateTime
+  isPrimary  Boolean  @default(false)
+  
+  user       User     @relation(fields: [userId], references: [id])
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  type      String   // SYSTEM, NOTICE, SONG, SCHEDULE
+  title     String
+  content   String
+  link      String?
+  isRead    Boolean  @default(false)
+  expiresAt DateTime?
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id])
+}
+
+// D. 시스템 관리
+model AuditLog {
+  id         String   @id @default(uuid())
+  actorId    String
+  action     String
+  targetType String?
+  targetId   String?
+  ipAddress  String?
+  createdAt  DateTime @default(now())
+
+  actor      User     @relation(fields: [actorId], references: [id])
+}
+
+model SystemSetting {
+  key         String   @id
+  value       String
+  description String?
+}
+
+model SystemLog {
+  id        String   @id @default(uuid())
+  action    String   // PAGE_VIEW, SONG_REQUEST, MEAL_VIEW, LOGIN, LOGOUT etc.
+  userId    String?
+  ip        String?
+  userAgent String?
+  path      String?
+  details   String?  // JSON string for extra details
+  createdAt DateTime @default(now())
+
+  user      User?    @relation(fields: [userId], references: [id])
+}
+
+model ErrorReport {
+  id         String    @id @default(uuid())
+  title      String
+  content    String
+  userId     String
+  user       User      @relation(fields: [userId], references: [id])
+  status     String    @default("PENDING") // PENDING, REVIEWING, RESOLVED
+  createdAt  DateTime  @default(now())
+  resolvedAt DateTime?
+  adminNotes String?
+}
