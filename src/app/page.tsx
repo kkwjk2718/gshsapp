@@ -11,6 +11,8 @@ import { WeatherWidget } from "@/components/weather-widget";
 import { getUserGrade } from "@/lib/grade-utils";
 import { NotificationBadge } from "@/components/layout/notification-badge";
 
+import { MealViewTracker } from "@/components/meal-view-tracker";
+
 export default async function Home() {
     const today = new Date();
     const currentHour = today.getHours();
@@ -112,6 +114,7 @@ export default async function Home() {
 
     return (
         <div className="p-4 md:p-6 max-w-5xl mx-auto">
+            <MealViewTracker />
             {/* Header */}
             <header className="flex items-center justify-between mb-6">
                 <div>

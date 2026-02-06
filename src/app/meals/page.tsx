@@ -7,6 +7,7 @@ import { Metadata } from "next";
 import { MealAllergyInfo } from "./meal-allergy-info";
 import { MealCalendar } from "./meal-calendar";
 import { MealInfoTooltip } from "./meal-info-tooltip";
+import { MealViewTracker } from "@/components/meal-view-tracker";
 
 export const metadata: Metadata = {
   title: "급식",
@@ -114,6 +115,7 @@ export default async function MealsPage({ searchParams }: { searchParams: Promis
 
   return (
     <div className="p-4 md:p-8 space-y-6">
+      <MealViewTracker />
       {/* Header & Nav */}
       <div className="flex flex-col items-center justify-center gap-1 mb-8 relative">
         <div className="flex items-center gap-2">

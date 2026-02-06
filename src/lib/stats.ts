@@ -25,51 +25,57 @@ export async function getPublicStats() {
 
   // 5. 최근 7일간 일별 트래픽 (병렬 처리로 성능 최적화)
   const dailyTrafficPromises = Array.from({ length: 7 }, (_, i) => {
-      const date = subDays(new Date(), 6 - i); // 6일전 ~ 오늘
-      return prisma.systemLog.count({
-          where: {
-              createdAt: {
-                  gte: startOfDay(date),
-                  lte: endOfDay(date)
-              }
-          }
-      }).then(count => ({ date, count }));
+    const date = subDays(new Date(), 6 - i); // 6일전 ~ 오늘
+    return prisma.systemLog.count({
+      where: {
+        createdAt: {
+          gte: startOfDay(date),
+          lte: endOfDay(date)
+        }
+      }
+    }).then(count => ({ date, count }));
   });
 
   const dailyTraffic = await Promise.all(dailyTrafficPromises);
-  
+
   const maxDailyTraffic = Math.max(...dailyTraffic.map(d => d.count)) || 1;
 
   // 6. 현재 서버 부하 (최근 10분간 요청 수)
   const recentRequestCount = await prisma.systemLog.count({
-      where: {
-          createdAt: { gte: subMinutes(new Date(), 10) }
-      }
+    where: {
+      createdAt: { gte: subMinutes(new Date(), 10) }
+    }
   });
-  
+
   // 부하 상태 계산
   let loadStatus = "원활";
   let loadColor = "text-emerald-500";
-  
+
   if (recentRequestCount > 500) {
-      loadStatus = "혼잡";
-      loadColor = "text-rose-500";
+    loadStatus = "혼잡";
+    loadColor = "text-rose-500";
   } else if (recentRequestCount > 100) {
-      loadStatus = "보통";
-      loadColor = "text-amber-500";
+    loadStatus = "보통";
+    loadColor = "text-amber-500";
   }
+
+  // 7. 총 급식 확인 횟수
+  const totalMealViews = await prisma.systemLog.count({
+    where: { action: "MEAL_VIEW" }
+  });
 
   return {
     totalPageViews,
     totalVisitors,
     totalSongRequests,
+    totalMealViews,
     sinceDate,
     dailyTraffic,
     maxDailyTraffic,
     currentLoad: {
-        rpm: (recentRequestCount / 10).toFixed(1), // Requests Per Minute
-        status: loadStatus,
-        color: loadColor
+      rpm: (recentRequestCount / 10).toFixed(1), // Requests Per Minute
+      status: loadStatus,
+      color: loadColor
     }
   };
 }
