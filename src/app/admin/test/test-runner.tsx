@@ -7,6 +7,7 @@ import { Play, CheckCircle, XCircle, Loader2, AlertTriangle } from "lucide-react
 export function TestRunner() {
   const [results, setResults] = useState<TestResult[] | null>(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
 
   const handleRunTest = async () => {
