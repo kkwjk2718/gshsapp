@@ -7,12 +7,13 @@ import { Play, CheckCircle, XCircle, Loader2, AlertTriangle } from "lucide-react
 export function TestRunner() {
   const [results, setResults] = useState<TestResult[] | null>(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
 
   const handleRunTest = async () => {
     setLoading(true);
     setResults(null);
     setError(null);
+    setExpandedIndex(null); // Reset expansion
     try {
       const data = await runSystemTests();
       setResults(data);
@@ -21,6 +22,10 @@ export function TestRunner() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const toggleExpand = (idx: number) => {
+    setExpandedIndex(expandedIndex === idx ? null : idx);
   };
 
   return (
@@ -50,26 +55,50 @@ export function TestRunner() {
       {results && (
         <div className="grid gap-4">
           {results.map((res, idx) => (
-            <div key={idx} className="flex items-center justify-between p-5 bg-slate-900 rounded-2xl border border-slate-800 shadow-sm transition-all duration-500 animate-in fade-in slide-in-from-bottom-2" style={{ animationDelay: `${idx * 100}ms` }}>
-              <div className="flex items-center gap-4">
-                {res.status === 'PASS' ? (
-                  <div className="p-2 bg-emerald-900/30 text-emerald-600 rounded-full">
-                    <CheckCircle className="h-6 w-6" />
+            <div key={idx} className="group overflow-hidden bg-slate-900 rounded-2xl border border-slate-800 shadow-sm transition-all duration-500 animate-in fade-in slide-in-from-bottom-2" style={{ animationDelay: `${idx * 100}ms` }}>
+              <div
+                className="flex items-center justify-between p-5 cursor-pointer hover:bg-slate-800/50 transition-colors"
+                onClick={() => toggleExpand(idx)}
+              >
+                <div className="flex items-center gap-4">
+                  {res.status === 'PASS' ? (
+                    <div className="p-2 bg-emerald-900/30 text-emerald-600 rounded-full">
+                      <CheckCircle className="h-6 w-6" />
+                    </div>
+                  ) : (
+                    <div className="p-2 bg-rose-900/30 text-rose-600 rounded-full">
+                      <XCircle className="h-6 w-6" />
+                    </div>
+                  )}
+                  <div>
+                    <div className="font-bold text-slate-200 text-lg flex items-center gap-2">
+                      {res.name}
+                      <span className="text-xs font-normal px-2 py-0.5 rounded bg-slate-800 text-slate-400 group-hover:bg-slate-700 transition-colors">
+                        {expandedIndex === idx ? "접기" : "상세보기"}
+                      </span>
+                    </div>
+                    {res.message && <div className="text-sm text-rose-500 mt-1 font-medium">{res.message}</div>}
                   </div>
-                ) : (
-                  <div className="p-2 bg-rose-900/30 text-rose-600 rounded-full">
-                    <XCircle className="h-6 w-6" />
-                  </div>
-                )}
-                <div>
-                  <div className="font-bold text-slate-200 text-lg">{res.name}</div>
-                  {res.message && <div className="text-sm text-rose-500 mt-1 font-medium">{res.message}</div>}
+                </div>
+                <div className="text-right">
+                  <div className={`text-base font-bold ${res.status === 'PASS' ? 'text-emerald-600' : 'text-rose-600'}`}>{res.status}</div>
+                  {res.latency !== undefined && <div className="text-xs text-slate-400 font-mono mt-1">{res.latency}ms</div>}
                 </div>
               </div>
-              <div className="text-right">
-                <div className={`text-base font-bold ${res.status === 'PASS' ? 'text-emerald-600' : 'text-rose-600'}`}>{res.status}</div>
-                {res.latency !== undefined && <div className="text-xs text-slate-400 font-mono mt-1">{res.latency}ms</div>}
-              </div>
+
+              {/* Detail Logs */}
+              {expandedIndex === idx && res.details && (
+                <div className="px-5 pb-5 animate-in slide-in-from-top-2 duration-200">
+                  <div className="p-4 bg-black/50 rounded-xl font-mono text-xs md:text-sm text-emerald-400/90 border border-slate-800 max-h-60 overflow-y-auto">
+                    {res.details.map((log, i) => (
+                      <div key={i} className="mb-1 last:mb-0 break-all">
+                        <span className="text-slate-600 mr-2">$</span>
+                        {log}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           ))}
         </div>
