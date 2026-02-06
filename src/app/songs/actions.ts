@@ -87,14 +87,21 @@ export async function getTodayMorningSongs() {
 }
 
 export async function getNextMorningSongs() {
-  const { nextMorning } = getSongTimeRanges();
+  const { todayMorning, nextMorning } = getSongTimeRanges();
+  const dateUtils = await import("@/lib/date-utils");
+  const now = dateUtils.getKSTDate();
+  const currentHour = now.getHours();
 
-  // 내일 아침 기상곡 후보 (오늘 07:00 ~ 내일 05:00 신청분 전체)
+  // If currently before 07:00, users are still viewing/applying for "Today's" playlist (or it's just closed).
+  // In this case, "Application Status" should show the songs for "Today Morning" so users can see their pending/rejected status.
+  // After 07:00, it switches to "Next Morning".
+  const targetRange = currentHour < 7 ? todayMorning : nextMorning;
+
   return await prisma.songRequest.findMany({
     where: {
       createdAt: {
-        gte: nextMorning.start,
-        lt: nextMorning.end
+        gte: targetRange.start,
+        lt: targetRange.end
       }
     },
     orderBy: [

@@ -2,7 +2,15 @@
 
 import { useState, useTransition } from "react";
 import { banUser } from "@/app/admin/users/actions";
-import { UserX, X } from "lucide-react";
+import { UserX } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 
 interface BanUserButtonProps {
   userId: string;
@@ -36,57 +44,70 @@ export function BanUserButton({ userId, userName }: BanUserButtonProps) {
   const minDate = today.toISOString().split("T")[0];
 
   return (
-    <>
-      <button
-        onClick={() => setIsOpen(true)}
-        className="p-2 rounded-lg bg-slate-100 text-slate-500 hover:bg-rose-100 hover:text-rose-500 transition-colors"
-        title="신청 제한"
-      >
-        <UserX className="w-4 h-4" />
-      </button>
+    <Dialog open={isOpen} onOpenChange={setIsOpen}>
+      <DialogTrigger asChild>
+        <button
+          className="p-2 bg-slate-100 text-slate-500 hover:bg-rose-100 hover:text-rose-500 rounded-lg transition-colors"
+          title="신청 제한"
+        >
+          <UserX className="w-4 h-4" />
+        </button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>신청 제한</DialogTitle>
+          <DialogDescription>
+            <span className="font-bold text-rose-500">{userName}</span>님의
+            기상곡 신청을 제한합니다.
+          </DialogDescription>
+        </DialogHeader>
 
-      {isOpen && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center">
-          <div className="bg-slate-900 rounded-3xl p-8 max-w-sm w-full relative shadow-2xl border border-slate-800">
-            <button
-              onClick={() => setIsOpen(false)}
-              className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-600"
+        <form onSubmit={handleSubmit} className="space-y-4 py-2">
+          <div>
+            <label
+              htmlFor="banUntil"
+              className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1"
             >
-              <X className="w-5 h-5" />
-            </button>
-            <h2 className="text-lg font-bold mb-2">신청 제한</h2>
-            <p className="text-sm text-slate-500 mb-6">
-              <span className="font-bold text-rose-500">{userName}</span>님의
-              기상곡 신청을 특정 날짜까지 제한합니다.
-            </p>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label
-                  htmlFor="banUntil"
-                  className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1"
-                >
-                  제한 만료일
-                </label>
-                <input
-                  type="date"
-                  id="banUntil"
-                  name="banUntil"
-                  min={minDate}
-                  required
-                  className="w-full px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 border-transparent focus:border-indigo-500 focus:ring-indigo-500"
-                />
-              </div>
-              <button
-                type="submit"
-                disabled={isPending}
-                className="w-full py-3 bg-rose-600 text-white font-bold rounded-xl hover:bg-rose-700 transition-colors disabled:opacity-50"
-              >
-                {isPending ? "처리 중..." : "신청 제한하기"}
-              </button>
-            </form>
+              제한 만료일
+            </label>
+            <input
+              type="date"
+              id="banUntil"
+              name="banUntil"
+              min={minDate}
+              required
+              className="w-full px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 border-transparent focus:border-indigo-500 focus:ring-indigo-500"
+            />
           </div>
-        </div>
-      )}
-    </>
+
+          <div>
+            <label
+              htmlFor="reason"
+              className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1"
+            >
+              제한 사유
+            </label>
+            <textarea
+              id="reason"
+              name="reason"
+              rows={3}
+              required
+              placeholder="예: 과도한 도배 신청, 부적절한 곡 신청 등"
+              className="w-full px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 border-transparent focus:border-indigo-500 focus:ring-indigo-500 text-sm resize-none"
+            />
+          </div>
+
+          <div className="flex justify-end pt-2">
+            <button
+              type="submit"
+              disabled={isPending}
+              className="w-full py-3 bg-rose-600 text-white font-bold rounded-xl hover:bg-rose-700 transition-colors disabled:opacity-50"
+            >
+              {isPending ? "처리 중..." : "신청 제한하기"}
+            </button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }

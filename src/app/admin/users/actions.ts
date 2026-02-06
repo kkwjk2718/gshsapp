@@ -30,21 +30,19 @@ export async function resetPassword(formData: FormData) {
 
 export async function banUser(formData: FormData) {
     const sessionUser = await getCurrentUser();
-    if (sessionUser?.role !== 'ADMIN') {
+    if (sessionUser?.role !== 'ADMIN' && sessionUser?.role !== 'BROADCAST') {
         return { error: 'Permission denied.' };
     }
 
     const userId = formData.get("userId") as string;
     const banUntilDate = formData.get("banUntil") as string;
+    const reason = formData.get("reason") as string;
 
     if (!userId || !banUntilDate) {
         return { error: "User ID and ban date are required." };
     }
 
     try {
-
-
-        // ... inside banUser
         await prisma.user.update({
             where: { id: userId },
             data: {
@@ -52,11 +50,15 @@ export async function banUser(formData: FormData) {
             },
         });
 
+        const message = reason
+            ? `${banUntilDate}까지 계정 이용이 제한되었습니다.\n사유: ${reason}`
+            : `${banUntilDate}까지 계정 이용이 제한되었습니다.`;
+
         await createNotification(
             userId,
             "SYSTEM",
             "계정 일시 정지 안내",
-            `${banUntilDate}까지 계정 이용이 제한되었습니다.`,
+            message,
             "/privacy"
         );
 
