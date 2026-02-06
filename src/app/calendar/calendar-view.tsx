@@ -4,6 +4,7 @@ import { useState } from "react";
 import { format, addMonths, subMonths, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, isSameMonth, isSameDay, isToday } from "date-fns";
 import { ko } from "date-fns/locale";
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, ExternalLink } from "lucide-react";
+import { CalendarInfoTooltip } from "./calendar-info-tooltip";
 
 interface ScheduleItem {
     id: string;
@@ -55,7 +56,10 @@ export function CalendarView({ schedules }: { schedules: ScheduleItem[] }) {
                 {/* Header */}
                 <div className="flex flex-col gap-3 mb-6">
                     <div className="flex items-center justify-between">
-                        <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100">{format(currentDate, "yyyy년 M월")}</h2>
+                        <div className="flex items-center gap-2">
+                            <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100">{format(currentDate, "yyyy년 M월")}</h2>
+                            <CalendarInfoTooltip />
+                        </div>
                         <div className="flex items-center gap-2">
                             <button onClick={goToday} className="px-3 py-2 text-xs font-bold bg-indigo-100 text-indigo-600 rounded-xl hover:bg-indigo-200 transition-colors mr-2">오늘</button>
                             <button onClick={prevMonth} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors"><ChevronLeft className="w-5 h-5" /></button>
