@@ -7,6 +7,7 @@ import { BottomNav } from "@/components/layout/BottomNav";
 import { Footer } from "@/components/layout/Footer";
 import { Analytics } from "@/components/analytics";
 import { Noto_Sans_KR } from "next/font/google";
+import { Toaster } from "sonner";
 
 const notoSansKr = Noto_Sans_KR({
   subsets: ["latin"],
@@ -117,6 +118,7 @@ export default function RootLayout({
             </main>
             <BottomNav />
           </div>
+          <Toaster />
         </ThemeProvider>
       </body>
     </html>
