@@ -34,7 +34,33 @@ export default async function MealsPage({ searchParams }: { searchParams: Promis
   const prevDate = format(subDays(currentDate, 1), "yyyyMMdd");
   const nextDate = format(addDays(currentDate, 1), "yyyyMMdd");
 
-  const meals = await getMeals(dateStr);
+  // [Cache Optimization]
+  // Fetch Prev, Current, Next MONTH data to warm up the cache as requested.
+  const currYear = currentDate.getFullYear().toString();
+  const currMonth = (currentDate.getMonth() + 1).toString().padStart(2, '0');
+
+  const prevMonthDate = subDays(currentDate, 30);
+  const nextMonthDate = addDays(currentDate, 30);
+
+  const pmYear = prevMonthDate.getFullYear().toString();
+  const pmMonth = (prevMonthDate.getMonth() + 1).toString().padStart(2, '0');
+
+  const nmYear = nextMonthDate.getFullYear().toString();
+  const nmMonth = (nextMonthDate.getMonth() + 1).toString().padStart(2, '0');
+
+  // Pre-fetch all 3 months in parallel
+  // We dynamic import to avoid circular dependency if any? No, direct import is fine.
+  // We use Promise.all to fetch them.
+  // Note: getMonthlyMeals is cached.
+  const importNeis = await import("@/lib/neis");
+  const [prevMeals, currMeals, nextMeals] = await Promise.all([
+    importNeis.getMonthlyMeals(pmYear, pmMonth),
+    importNeis.getMonthlyMeals(currYear, currMonth),
+    importNeis.getMonthlyMeals(nmYear, nmMonth),
+  ]);
+
+  // Filter current date's meal from the monthly list
+  const meals = currMeals.filter(m => m.MLSV_YMD === dateStr);
 
   // 음식별 알레르기 정보 파싱 함수 (개선: <br/> 기준 분리)
   const parseAllergiesByFood = (dishName: string): FoodAllergyDetail[] => {

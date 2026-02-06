@@ -127,7 +127,7 @@ export const getSchoolSchedule = async (fromDate: string, toDate: string): Promi
     });
 
     const response = await fetch(`${BASE_URL}/SchoolSchedule?${params.toString()}`, {
-      next: { revalidate: 3600 }, // Cache for 1 hour
+      next: { revalidate: 86400 }, // Cache for 24 hours
     });
 
     if (!response.ok) throw new Error("Network response was not ok");
@@ -143,3 +143,42 @@ export const getSchoolSchedule = async (fromDate: string, toDate: string): Promi
     return [];
   }
 };
+
+export const getMonthlyMeals = async (year: string, month: string): Promise<MealInfo[]> => {
+  // month: 01 ~ 12
+  const fromDate = `${year}${month}01`;
+  // Calculate last day of month
+  const lastDay = new Date(parseInt(year), parseInt(month), 0).getDate(); // month is 1-based here for Date constructor? No, 0 is last day of prev month.
+  // simpler:
+  // new Date(y, m, 0) -> last day of m
+  const toDate = `${year}${month}${lastDay.toString().padStart(2, '0')}`;
+
+  try {
+    const params = new URLSearchParams({
+      KEY: NEIS_API_KEY || "",
+      Type: 'json',
+      pIndex: '1',
+      pSize: '100', // Max 100 per page (3 meal types * 31 days = 93 rows max)
+      ATPT_OFCDC_SC_CODE: OFFICE_CODE,
+      SD_SCHUL_CODE: SCHOOL_CODE,
+      MLSV_FROM_YMD: fromDate,
+      MLSV_TO_YMD: toDate,
+    });
+
+    const response = await fetch(`${BASE_URL}/mealServiceDietInfo?${params.toString()}`, {
+      next: { revalidate: 3600 }, // Keep 1 hour for meals as they might change
+    });
+
+    if (!response.ok) throw new Error("Network response was not ok");
+
+    const data = await response.json();
+
+    if (data.mealServiceDietInfo) {
+      return data.mealServiceDietInfo[1].row as MealInfo[];
+    }
+    return [];
+  } catch (error) {
+    console.error("Failed to fetch monthly meals:", error);
+    return [];
+  }
+}

@@ -16,10 +16,23 @@ export default async function CalendarPage() {
   const iCalUrl = await getICalUrl();
   const iCalEventsPromise = getEventsFromICal(iCalUrl || "");
 
-  // Fetch NEIS schedules for current month (±1 month for better coverage)
+  // Fetch NEIS schedules for current ACADEMIC YEAR (March 1st ~ Next Feb end)
   const now = new Date();
-  const fromDate = format(startOfMonth(new Date(now.getFullYear(), now.getMonth() - 1, 1)), "yyyyMMdd");
-  const toDate = format(endOfMonth(new Date(now.getFullYear(), now.getMonth() + 1, 1)), "yyyyMMdd");
+  const currentMonth = now.getMonth() + 1; // 1~12
+  const currentYear = now.getFullYear();
+
+  // 학사년도 시작 연도 계산 (3월 기준)
+  // 1, 2월이면 작년 3월부터 시작한 학기임.
+  const academicStartYear = currentMonth >= 3 ? currentYear : currentYear - 1;
+  const fromDate = `${academicStartYear}0301`;
+
+  // 학사년도 종료: 다음해 2월 말일
+  // 윤년 계산 필요하지만, 2월 29일을 포함하려면 그냥 2월 29일로 해도 API가 알아서 처리하거나 28일로 끊어도 됨.
+  // 안전하게 다음 해 3월 1일 전날... 보다는 그냥 마지막날 string 생성.
+  // new Date(y, m, 0)
+  const nextFebLastDay = new Date(academicStartYear + 1, 2, 0).getDate(); // 3월(idx 2)의 0일 = 2월 말일
+  const toDate = `${academicStartYear + 1}02${nextFebLastDay}`;
+
   const neisSchedulesPromise = getSchoolSchedule(fromDate, toDate);
 
   const [dbSchedules, iCalEvents, neisSchedules] = await Promise.all([
