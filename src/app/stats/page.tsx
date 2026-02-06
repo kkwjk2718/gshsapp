@@ -1,6 +1,6 @@
 import { getPublicStats } from "@/lib/stats";
 import { format, differenceInDays } from "date-fns";
-import { Activity, Users, MousePointer2, Music, Utensils } from "lucide-react";
+import { Activity, Users, MousePointer2, Music, Utensils, Flame } from "lucide-react";
 import { Metadata } from "next";
 
 export const metadata: Metadata = {
@@ -23,6 +23,28 @@ export default async function StatsPage() {
                 </p>
             </div>
 
+            {/* Hero Card for Meal Views */}
+            <div className="relative overflow-hidden bg-gradient-to-br from-orange-500 to-rose-600 rounded-3xl p-8 md:p-12 text-center text-white shadow-2xl transform hover:scale-[1.02] transition-all duration-300">
+                <div className="absolute top-0 right-0 p-8 opacity-10">
+                    <Utensils className="w-64 h-64 rotate-12" />
+                </div>
+                <div className="relative z-10 flex flex-col items-center gap-4">
+                    <div className="inline-flex items-center gap-2 bg-white/20 backdrop-blur-md px-4 py-1.5 rounded-full text-sm font-semibold text-white/90 mb-2">
+                        <Flame className="w-4 h-4 animate-pulse text-amber-300" />
+                        경남과고 학생들의 급식 열정 🔥
+                    </div>
+                    <h2 className="text-2xl md:text-3xl font-bold opacity-90 break-keep">
+                        학생들이 지금까지 확인한 급식 횟수!! 🍚
+                    </h2>
+                    <div className="text-6xl md:text-8xl font-black tracking-tight drop-shadow-lg my-4 font-mono">
+                        {stats.totalMealViews.toLocaleString()}
+                    </div>
+                    <p className="text-white/70 text-sm md:text-base max-w-lg mx-auto">
+                        우리는 밥심으로 공부합니다. 맛있는 급식 감사합니다! 🙇‍♂️
+                    </p>
+                </div>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 <div className="glass p-6 rounded-3xl flex flex-col items-center justify-center text-center gap-2 hover:scale-105 transition-transform">
                     <Activity className="w-10 h-10 text-indigo-500 mb-2" />
@@ -39,11 +61,7 @@ export default async function StatsPage() {
                     <div className="text-4xl font-bold text-slate-800 dark:text-slate-100">{stats.totalSongRequests.toLocaleString()}</div>
                     <div className="text-sm text-slate-500 font-medium">신청된 기상곡</div>
                 </div>
-                <div className="glass p-6 rounded-3xl flex flex-col items-center justify-center text-center gap-2 hover:scale-105 transition-transform">
-                    <Utensils className="w-10 h-10 text-orange-500 mb-2" />
-                    <div className="text-4xl font-bold text-slate-800 dark:text-slate-100">{stats.totalMealViews.toLocaleString()}</div>
-                    <div className="text-sm text-slate-500 font-medium">급식 확인 횟수</div>
-                </div>
+
                 <div className="glass p-6 rounded-3xl flex flex-col items-center justify-center text-center gap-2 hover:scale-105 transition-transform">
                     <MousePointer2 className="w-10 h-10 text-amber-500 mb-2" />
                     <div className="text-4xl font-bold text-slate-800 dark:text-slate-100">{(stats.totalPageViews / daysActive).toFixed(0)}</div>
