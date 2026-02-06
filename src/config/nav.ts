@@ -18,8 +18,6 @@ export const allNavItems = [
   { name: "바로가기", href: "/links", icon: LinkIcon },
   { name: "교내 사이트", href: "/sites", icon: Building2 },
   { name: "도구", href: "/utils", icon: Calculator },
-  { name: "알림", href: "/notifications", icon: Bell },
-  { name: "오류 신고", href: "/report", icon: AlertCircle },
 ];
 
 // Keep for backward compatibility
