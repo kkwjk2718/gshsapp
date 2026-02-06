@@ -6,7 +6,8 @@ import Link from "next/link";
 import { getCurrentUser } from "@/lib/session";
 import { prisma } from "@/lib/db";
 import { NoticeRollingBanner } from "@/components/notice-rolling-banner";
-import { WeatherWidget, RealtimeClock } from "@/components/dashboard-widgets";
+import { RealtimeClock } from "@/components/dashboard-widgets";
+import { WeatherWidget } from "@/components/weather-widget";
 import { getUserGrade } from "@/lib/grade-utils";
 import { NotificationBadge } from "@/components/layout/notification-badge";
 
