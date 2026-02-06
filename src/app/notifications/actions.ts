@@ -29,6 +29,24 @@ export async function deleteNotification(notificationId: string) {
         });
         revalidatePath("/notifications");
     } catch (e) {
+        revalidatePath("/notifications");
         return { error: "Failed" };
+    }
+}
+
+export async function getUnreadNotificationCount() {
+    const user = await getCurrentUser();
+    if (!user) return 0;
+
+    try {
+        const count = await prisma.notification.count({
+            where: {
+                userId: user.id,
+                isRead: false
+            }
+        });
+        return count;
+    } catch (error) {
+        return 0;
     }
 }

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { mainNavItems } from "@/config/nav";
 import { cn } from "@/lib/utils";
+import { NotificationBadge } from "./notification-badge";
 
 export function SidebarNav() {
   const pathname = usePathname();
@@ -23,7 +24,10 @@ export function SidebarNav() {
                 : "text-slate-700 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-slate-200 hover:translate-x-1"
             )}
           >
-            <item.icon className={cn("w-5 h-5", isActive ? "text-indigo-600 dark:text-indigo-400" : "text-slate-600 dark:text-slate-500")} />
+            <div className="relative">
+              <item.icon className={cn("w-5 h-5", isActive ? "text-indigo-600 dark:text-indigo-400" : "text-slate-600 dark:text-slate-500")} />
+              {item.href === "/notifications" && <NotificationBadge className="-top-1 -right-1" />}
+            </div>
             <span>{item.name}</span>
           </Link>
         );

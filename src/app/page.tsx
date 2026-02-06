@@ -8,6 +8,7 @@ import { prisma } from "@/lib/db";
 import { NoticeRollingBanner } from "@/components/notice-rolling-banner";
 import { WeatherWidget, RealtimeClock } from "@/components/dashboard-widgets";
 import { getUserGrade } from "@/lib/grade-utils";
+import { NotificationBadge } from "@/components/layout/notification-badge";
 
 export default async function Home() {
     const today = new Date();
@@ -126,8 +127,9 @@ export default async function Home() {
                 </div>
                 <div className="flex items-center gap-2">
                     <WeatherWidget />
-                    <Link href="/notifications" className="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors cursor-pointer">
+                    <Link href="/notifications" className="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors cursor-pointer relative">
                         <Bell className="w-5 h-5" />
+                        <NotificationBadge className="w-2.5 h-2.5 top-2 right-2 border-slate-50 dark:border-slate-900" />
                     </Link>
                 </div>
             </header>

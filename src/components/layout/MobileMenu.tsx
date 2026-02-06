@@ -7,6 +7,7 @@ import { usePathname } from "next/navigation";
 import { X } from "lucide-react";
 import { allNavItems } from "@/config/nav";
 import { cn } from "@/lib/utils";
+import { NotificationBadge } from "./notification-badge";
 
 export function MobileMenu() {
     const [isOpen, setIsOpen] = useState(false);
@@ -56,7 +57,10 @@ export function MobileMenu() {
                                                 : "bg-slate-100 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800/50 hover:text-slate-900 dark:hover:text-slate-200 hover:border-slate-300 dark:hover:border-slate-700"
                                         )}
                                     >
-                                        <item.icon className={cn("w-8 h-8", isActive ? "text-indigo-600 dark:text-indigo-400" : "text-slate-700 dark:text-slate-500")} />
+                                        <div className="relative">
+                                            <item.icon className={cn("w-8 h-8", isActive ? "text-indigo-600 dark:text-indigo-400" : "text-slate-700 dark:text-slate-500")} />
+                                            {item.href === '/notifications' && <NotificationBadge className="w-3 h-3 top-0 right-0" />}
+                                        </div>
                                         <span className="text-sm font-medium text-center">{item.name}</span>
                                     </Link>
                                 );
