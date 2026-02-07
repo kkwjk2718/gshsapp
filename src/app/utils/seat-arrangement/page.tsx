@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { ArrowLeft, User, Shuffle, RefreshCw, Armchair, Settings, X, Ban, Download } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
