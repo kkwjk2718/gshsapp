@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link";
-import { Calculator, ArrowRight, Wrench, Dices } from "lucide-react";
+import { Calculator, ArrowRight, Wrench, Dices, Armchair } from "lucide-react";
 
 const tools = [
    {
@@ -17,6 +17,13 @@ const tools = [
       icon: Dices,
       href: "/utils/random-number",
       color: "bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400",
+   },
+   {
+      name: "자리 배치",
+      description: "교실 좌석을 랜덤으로 배치합니다. (없는 자리 제외 가능)",
+      icon: Armchair,
+      href: "/utils/seat-arrangement",
+      color: "bg-indigo-100 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400",
    },
    // Add more tools here in the future
 ];
