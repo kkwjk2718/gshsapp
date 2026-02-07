@@ -81,6 +81,18 @@ export function SongRequestForm() {
             disabled={isBreakTime}
           />
         </div>
+        <div className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            id="isAnonymous"
+            name="isAnonymous"
+            className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+            disabled={isBreakTime}
+          />
+          <label htmlFor="isAnonymous" className="text-sm text-slate-600 dark:text-slate-400 select-none cursor-pointer">
+            내 정보 가리기
+          </label>
+        </div>
         <button
           type="submit"
           disabled={isBreakTime}

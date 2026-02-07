@@ -52,13 +52,16 @@ export async function requestSong(formData: FormData) {
   if (dbUser.role === 'ADMIN') priorityScore = 999;
   else if (dbUser.role === 'BROADCAST') priorityScore = 50;
 
+  const isAnonymous = formData.get("isAnonymous") === "on";
+
   await prisma.songRequest.create({
     data: {
       requesterId: user.id,
       youtubeUrl,
       videoTitle,
       status: "PENDING",
-      priorityScore
+      priorityScore,
+      isAnonymous
     },
   });
 
