@@ -245,19 +245,19 @@ export default function SeatArrangementPage() {
                         </h2>
                         <div className="grid grid-cols-2 gap-3">
                             <div className="space-y-1">
-                                <label className="text-xs text-slate-500">시작 번호</label>
+                                <label className="text-xs text-slate-500 dark:text-slate-400">시작 번호</label>
                                 <input
                                     type="number" value={startNum}
                                     onChange={(e) => setStartNum(e.target.value)}
-                                    className="w-full px-3 py-1.5 rounded-lg bg-slate-50 border border-slate-200 text-sm"
+                                    className="w-full px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                                 />
                             </div>
                             <div className="space-y-1">
-                                <label className="text-xs text-slate-500">끝 번호</label>
+                                <label className="text-xs text-slate-500 dark:text-slate-400">끝 번호</label>
                                 <input
                                     type="number" value={endNum}
                                     onChange={(e) => setEndNum(e.target.value)}
-                                    className="w-full px-3 py-1.5 rounded-lg bg-slate-50 border border-slate-200 text-sm"
+                                    className="w-full px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                                     placeholder={String(currentStart + validSeatsCount - 1)}
                                 />
                             </div>
