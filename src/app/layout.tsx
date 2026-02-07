@@ -105,7 +105,16 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <Analytics />
-          {children}
+          <div className="flex min-h-screen">
+            <Sidebar />
+            <main className="flex-1 md:pl-64 pb-20 md:pb-0 min-h-screen flex flex-col">
+              <div className="flex-1">
+                {children}
+              </div>
+              <Footer />
+            </main>
+            <BottomNav />
+          </div>
           <Toaster />
         </ThemeProvider>
       </body>
