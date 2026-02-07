@@ -52,7 +52,7 @@ export default function LandingPage() {
                     <motion.div variants={item}>
                         <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 text-xs font-medium mb-4">
                             <Sparkles className="w-3 h-3" />
-                            경기과학고등학교 학생을 위한 올인원 플랫폼
+                            경남과학고등학교 학생을 위한 올인원 플랫폼
                         </span>
                     </motion.div>
 
