@@ -1,10 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
-import { Sidebar } from "@/components/layout/Sidebar";
 import Script from 'next/script';
-import { BottomNav } from "@/components/layout/BottomNav";
-import { Footer } from "@/components/layout/Footer";
 import { Analytics } from "@/components/analytics";
 import { Noto_Sans_KR } from "next/font/google";
 import { Toaster } from "sonner";
@@ -108,16 +105,7 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <Analytics />
-          <div className="flex min-h-screen">
-            <Sidebar />
-            <main className="flex-1 md:pl-64 pb-20 md:pb-0 min-h-screen flex flex-col">
-              <div className="flex-1">
-                {children}
-              </div>
-              <Footer />
-            </main>
-            <BottomNav />
-          </div>
+          {children}
           <Toaster />
         </ThemeProvider>
       </body>
