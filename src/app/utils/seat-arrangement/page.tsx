@@ -368,8 +368,8 @@ export default function SeatArrangementPage() {
                                                     onClick={() => handleSeatClick(r, c)}
                                                     disabled={!isVoidMode && !isVoid}
                                                     className={`
-                                            w-14 h-14 md:w-20 md:h-20 rounded-xl flex items-center justify-center transition-all bg-white dark:bg-slate-800 shadow-sm border
-                                            ${isVoid ? 'opacity-20 hover:opacity-100 border-dashed border-slate-400 bg-transparent shadow-none' : 'border-slate-200 dark:border-slate-700'}
+                                            w-16 h-12 md:w-24 md:h-16 rounded-lg flex items-center justify-center transition-all bg-white dark:bg-slate-800 shadow-sm border
+                                            ${isVoid ? 'opacity-20 hover:opacity-100 border-dashed border-slate-400 bg-transparent shadow-none' : 'border-slate-200 dark:border-slate-700 shadow-md'}
                                             ${isVoidMode && !isVoid ? 'hover:ring-2 hover:ring-rose-400 cursor-pointer' : ''}
                                             ${isVoidMode && isVoid ? 'ring-2 ring-rose-400 cursor-pointer' : ''}
                                         `}
