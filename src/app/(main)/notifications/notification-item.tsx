@@ -3,7 +3,7 @@
 import { useTransition } from "react";
 import { CheckCircle, X, Bell, Info, Calendar } from "lucide-react";
 import { format } from "date-fns";
-import { markAsRead, deleteNotification } from "@/app/notifications/actions";
+import { markAsRead, deleteNotification } from "@/app/(main)/notifications/actions";
 
 interface NotificationItemProps {
     notification: {

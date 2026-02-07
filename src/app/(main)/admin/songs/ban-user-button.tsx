@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { banUser } from "@/app/admin/users/actions";
+import { banUser } from "@/app/(main)/admin/users/actions";
 import { UserX } from "lucide-react";
 import {
   Dialog,

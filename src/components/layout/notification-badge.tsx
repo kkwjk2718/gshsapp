@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getUnreadNotificationCount } from "@/app/notifications/actions";
+import { getUnreadNotificationCount } from "@/app/(main)/notifications/actions";
 import { cn } from "@/lib/utils";
 
 interface NotificationBadgeProps {
