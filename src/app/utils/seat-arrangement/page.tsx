@@ -105,10 +105,9 @@ export default function SeatArrangementPage() {
         setAssignments(new Map());
 
         // Animation Logic
-        const duration = 800;
-        const intervalTime = 50;
-        const steps = duration / intervalTime;
-        let step = 0;
+        let currentInterval = 50;
+        let elapsed = 0;
+        const totalDuration = 3000 + Math.random() * 1000; // 3~4 seconds random duration
 
         const availableSeatKeys: string[] = [];
         for (let r = 0; r < rows; r++) {
@@ -119,9 +118,7 @@ export default function SeatArrangementPage() {
             }
         }
 
-        const timer = setInterval(() => {
-            step++;
-
+        const animate = () => {
             // Random scramble effect
             const tempMap = new Map<string, number>();
             const shuffledKeys = [...availableSeatKeys].sort(() => Math.random() - 0.5);
@@ -133,14 +130,16 @@ export default function SeatArrangementPage() {
 
             setAssignments(tempMap);
 
-            if (step >= steps) {
-                clearInterval(timer);
+            elapsed += currentInterval;
+            currentInterval *= 1.1; // Slow down by 10% each step
 
-                // Final Shuffle
+            if (elapsed < totalDuration) {
+                setTimeout(animate, currentInterval);
+            } else {
+                // Final Shuffle & Set
                 const finalMap = new Map<string, number>();
                 const finalKeys = [...availableSeatKeys].sort(() => Math.random() - 0.5);
 
-                // Shuffle students too just in case
                 const shuffledStudents = [...students].sort(() => Math.random() - 0.5);
 
                 shuffledStudents.forEach((student, idx) => {
@@ -151,8 +150,9 @@ export default function SeatArrangementPage() {
                 setIsAnimating(false);
                 toast.success("자리 배치가 완료되었습니다!");
             }
-        }, intervalTime);
+        };
 
+        animate();
     };
 
     // Calculate expected student count
