@@ -149,7 +149,7 @@ export default function LandingPage() {
                     <FeatureCard
                         icon={<Shield className="w-6 h-6 text-rose-400" />}
                         title="학생 인증"
-                        desc="오직 경기과학고 학생들만 접근할 수 있는 안전한 커뮤니티입니다."
+                        desc="오직 경남과학고 학생들만 접근할 수 있는 안전한 커뮤니티입니다."
                     />
                     <FeatureCard
                         icon={<Sparkles className="w-6 h-6 text-purple-400" />}
