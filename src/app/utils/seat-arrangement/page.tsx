@@ -30,34 +30,21 @@ export default function SeatArrangementPage() {
     const totalSeats = rows * cols;
     const validSeatsCount = totalSeats - voidSeats.size;
 
-    // Calculate student pool
-    const getStudentPool = () => {
-        const start = parseInt(startNum) || 1;
-        // To match students to seats, we need exactly validSeatsCount students?
-        // Or just a pool of students. 
-        // Usually, we want to place Students 1..N into seats.
-        // Let's assume the user wants to fit students into the available seats.
-        // Max student number would be approximately Start + ValidSeats + Excluded - 1
-    };
-
-    // Actually, usually users have a fixes list of students (e.g. 1~25).
-    // They want to put them into 30 seats. 5 seats will be empty (or void).
-    // User asked for "Check if seat count matches". 
-    // So we need to calculate "Target Student Count" based on Start/End? 
-    // No, user said "Number 1~n ... adjust start ... exclude numbers".
-    // So we generate numbers starting from startNum.
-    // How many? It should probably match validSeatsCount? 
-    // If validSeats > students, some seats are empty (but not void).
-    // If students > validSeats, error.
-
-    // Let's infer "Total Students" from the valid seat count for now, 
-    // but allow user to check if it matches their expectation.
-    // Actually, the prompt says "Check if seat count corresponds".
-    // Let's add an explicit "Total Students" input, or just "End Number".
-    // "Basically numbers are 1~n".
-    // Let's deduce N = validSeatsCount for a perfect fit, but allow user to specify "Last Number".
-
     const [endNum, setEndNum] = useState<string>("");
+    const [isEndNumManual, setIsEndNumManual] = useState<boolean>(false);
+
+    // Smart default for endNum: Sync with validSeatsCount until manually edited
+    useEffect(() => {
+        if (!isEndNumManual) {
+            const start = parseInt(startNum) || 1;
+            setEndNum(String(start + validSeatsCount - 1));
+        }
+    }, [validSeatsCount, startNum, isEndNumManual]);
+
+    const handleEndNumChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setEndNum(e.target.value);
+        setIsEndNumManual(true);
+    };
 
     // Initialize endNum based on logic if empty?
     // Let's just calculate "Expected End Number" for display.
@@ -256,9 +243,9 @@ export default function SeatArrangementPage() {
                                 <label className="text-xs text-slate-500 dark:text-slate-400">끝 번호</label>
                                 <input
                                     type="number" value={endNum}
-                                    onChange={(e) => setEndNum(e.target.value)}
+                                    onChange={handleEndNumChange}
                                     className="w-full px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                                    placeholder={String(currentStart + validSeatsCount - 1)}
+                                    placeholder="자동 계산됨"
                                 />
                             </div>
                         </div>
