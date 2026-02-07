@@ -172,14 +172,10 @@ export default function SeatArrangementPage() {
         if (!gridRef.current) return;
 
         try {
-            const canvas = await html2canvas(gridRef.current, {
-                backgroundColor: '#ffffff', // Force white background for the image
-                scale: 2, // Improve quality
-            });
-
+            const dataUrl = await toPng(gridRef.current, { cacheBust: true, backgroundColor: '#ffffff' });
             const link = document.createElement('a');
             link.download = `자리배치표_${new Date().toISOString().slice(0, 10)}.png`;
-            link.href = canvas.toDataURL();
+            link.href = dataUrl;
             link.click();
             toast.success("이미지로 저장되었습니다.");
         } catch (error) {
