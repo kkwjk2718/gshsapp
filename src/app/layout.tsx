@@ -1,6 +1,9 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
+import { Sidebar } from "@/components/layout/Sidebar";
+import { BottomNav } from "@/components/layout/BottomNav";
+import { Footer } from "@/components/layout/Footer";
 import Script from 'next/script';
 import { Analytics } from "@/components/analytics";
 import { Noto_Sans_KR } from "next/font/google";
