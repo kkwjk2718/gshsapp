@@ -1,0 +1,24 @@
+# === GSHS.app Docker 배포용 환경변수 예시 ===
+# 이 파일의 내용을 복사하여 서버의 .env 파일에 붙여넣으세요.
+
+# 1. 데이터베이스 (필수)
+# Docker 컨테이너 내부의 경로를 가리켜야 합니다. 변경하지 마세요.
+DATABASE_URL="file:./data/dev.db"
+
+# 2. NextAuth 인증 (필수)
+# 배포할 서버의 전체 URL (포트 1234 포함)
+NEXTAUTH_URL="http://YOUR_SERVER_IP:1234"
+# 보안을 위한 랜덤 문자열 (터미널에서 'openssl rand -base64 32' 등으로 생성 추천)
+NEXTAUTH_SECRET="your-random-secret-key-at-least-32-chars"
+
+# 3. NEIS API 키 (필수)
+# 급식/학사일정 조회용 (기존 개발환경 키 사용 가능)
+NEXT_PUBLIC_NEIS_API_KEY="your-neis-api-key"
+
+# 4. 앱 설정 (선택/권장)
+# 사이트맵 생성 등에 사용됩니다. (NEXTAUTH_URL과 동일하게 설정)
+NEXT_PUBLIC_APP_URL="http://YOUR_SERVER_IP:1234"
+
+# 5. 기타 (선택)
+# 구글 애널리틱스 ID (없으면 비워두세요)
+NEXT_PUBLIC_GA_ID=""

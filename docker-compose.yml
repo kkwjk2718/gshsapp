@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  web:
+    container_name: gshsapp-web
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: always
+    # ports:        <-- host 모드에서는 포트 매핑이 무시됩니다.
+    #   - "1234:3000"
+    network_mode: "host" # 호스트 네트워크 직접 사용 (리눅스 전용 해결책)
+    volumes:
+      - ./data:/app/data
+    env_file:
+      - .env
+    environment:
+      - NODE_OPTIONS=--dns-result-order=ipv4first
+      - PORT=1234 # 앱이 직접 1234 포트로 실행되도록 설정
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4

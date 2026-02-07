@@ -70,6 +70,8 @@ USER nextjs
 EXPOSE 3000
 
 ENV PORT 3000
+# Force Node.js to prefer IPv4 (fixes ETIMEDOUT on some IPv6-enabled hosts)
+ENV NODE_OPTIONS "--dns-result-order=ipv4first"
 # set hostname to localhost
 ENV HOSTNAME "0.0.0.0"
 

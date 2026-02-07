@@ -95,8 +95,14 @@ export default function LandingPage() {
                         {/* Feature Cards as Visuals */}
                         <div className="transform rotate-y-12 translate-y-12 bg-slate-800/50 border border-slate-700/50 p-6 rounded-3xl h-64 backdrop-blur-sm">
                             <Utensils className="w-10 h-10 text-orange-400 mb-4" />
-                            <div className="h-4 w-24 bg-slate-700 rounded mb-2" />
-                            <div className="h-20 w-full bg-slate-700/50 rounded" />
+                            <div className="text-sm font-bold text-slate-300 mb-3">오늘의 중식</div>
+                            <div className="space-y-1.5 text-xs text-slate-400">
+                                <div>• 잡곡밥</div>
+                                <div>• 된장찌개</div>
+                                <div>• 불고기</div>
+                                <div>• 시금치나물</div>
+                                <div>• 배추김치</div>
+                            </div>
                         </div>
                         <div className="transform translate-y-0 bg-slate-800/80 border border-indigo-500/30 p-6 rounded-3xl h-64 z-20 shadow-2xl shadow-indigo-500/20 backdrop-blur-md">
                             <div className="flex items-center justify-between mb-6">
@@ -104,15 +110,33 @@ export default function LandingPage() {
                                 <div className="px-3 py-1 bg-indigo-500/20 text-indigo-300 rounded-full text-xs">Active</div>
                             </div>
                             <div className="space-y-3">
-                                <div className="h-12 w-full bg-slate-700/50 rounded-xl" />
-                                <div className="h-12 w-full bg-slate-700/50 rounded-xl" />
-                                <div className="h-12 w-full bg-slate-700/50 rounded-xl" />
+                                <div className="h-12 w-full bg-indigo-500/10 border border-indigo-500/20 rounded-xl flex items-center px-4 gap-3">
+                                    <div className="w-2 h-2 rounded-full bg-indigo-400" />
+                                    <span className="text-sm text-slate-300">1교시 국어</span>
+                                </div>
+                                <div className="h-12 w-full bg-emerald-500/10 border border-emerald-500/20 rounded-xl flex items-center px-4 gap-3">
+                                    <div className="w-2 h-2 rounded-full bg-emerald-400" />
+                                    <span className="text-sm text-slate-300">2교시 수학</span>
+                                </div>
+                                <div className="h-12 w-full bg-orange-500/10 border border-orange-500/20 rounded-xl flex items-center px-4 gap-3">
+                                    <div className="w-2 h-2 rounded-full bg-orange-400" />
+                                    <span className="text-sm text-slate-300">3교시 영어</span>
+                                </div>
                             </div>
                         </div>
                         <div className="transform -rotate-y-12 translate-y-12 bg-slate-800/50 border border-slate-700/50 p-6 rounded-3xl h-64 backdrop-blur-sm">
                             <BookOpen className="w-10 h-10 text-emerald-400 mb-4" />
-                            <div className="h-4 w-24 bg-slate-700 rounded mb-2" />
-                            <div className="h-20 w-full bg-slate-700/50 rounded" />
+                            <div className="text-sm font-bold text-slate-300 mb-3">최신 공지사항</div>
+                            <div className="space-y-2 text-xs text-slate-400">
+                                <div className="flex items-start gap-2">
+                                    <div className="w-1 h-1 rounded-full bg-emerald-400 mt-1.5 flex-shrink-0" />
+                                    <span>2026학년도 1학기 중간고사 일정 안내</span>
+                                </div>
+                                <div className="flex items-start gap-2">
+                                    <div className="w-1 h-1 rounded-full bg-emerald-400 mt-1.5 flex-shrink-0" />
+                                    <span>과학축전 참가 신청 마감 공지</span>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </motion.div>
