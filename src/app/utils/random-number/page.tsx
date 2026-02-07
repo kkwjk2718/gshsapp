@@ -34,6 +34,11 @@ export default function RandomNumberPage() {
             return;
         }
 
+        if (countNum > 500) {
+            toast.error("한 번에 최대 500개까지만 뽑을 수 있습니다.");
+            return;
+        }
+
         // Parse excluded numbers
         const excludedNums = exclude
             .split(",")
@@ -157,6 +162,7 @@ export default function RandomNumberPage() {
                                 value={count}
                                 onChange={(e) => setCount(e.target.value)}
                                 min="1"
+                                max="500"
                                 className="w-full px-4 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-purple-500"
                             />
                         </div>
