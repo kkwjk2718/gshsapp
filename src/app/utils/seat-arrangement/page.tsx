@@ -105,9 +105,9 @@ export default function SeatArrangementPage() {
         setAssignments(new Map());
 
         // Animation Logic
-        let currentInterval = 50;
+        let currentInterval = 5; // Start very fast
         let elapsed = 0;
-        const totalDuration = 3000 + Math.random() * 1000; // 3~4 seconds random duration
+        const totalDuration = 2500 + Math.random() * 1000; // 2.5~3.5 seconds
 
         const availableSeatKeys: string[] = [];
         for (let r = 0; r < rows; r++) {
