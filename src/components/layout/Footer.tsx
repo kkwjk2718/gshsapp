@@ -13,7 +13,7 @@ export function Footer() {
         </div>
         <div className="flex flex-col md:flex-row gap-4 text-xs items-center">
           <div className="flex gap-4">
-            <Link href="/about" className="hover:text-indigo-500 transition-colors">서비스 소개</Link>
+            <Link href="/help" className="hover:text-indigo-500 transition-colors">도움말</Link>
             <Link href="/privacy" className="hover:text-indigo-500 transition-colors">개인정보처리방침</Link>
             <Link href="/stats" className="hover:text-indigo-500 transition-colors">서버 통계</Link>
             <a href="https://gshs-h.gne.go.kr" target="_blank" rel="noreferrer" className="hover:text-indigo-500 transition-colors">학교 홈페이지</a>
