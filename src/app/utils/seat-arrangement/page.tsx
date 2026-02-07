@@ -349,9 +349,10 @@ export default function SeatArrangementPage() {
 
                                 {/* Rows */}
                                 {Array.from({ length: rows }).map((_, r) => (
-                                    <>
+                                    /* Use fragment with key to satisfy unique key prop warning */
+                                    <div key={`row-group-${r}`} className="contents">
                                         {/* Row Header */}
-                                        <div key={`row-${r}`} className="flex items-center justify-center font-bold text-slate-400 text-lg pr-2">
+                                        <div className="flex items-center justify-center font-bold text-slate-400 text-lg pr-2">
                                             {r + 1}
                                         </div>
 
@@ -384,7 +385,7 @@ export default function SeatArrangementPage() {
                                                 </button>
                                             );
                                         })}
-                                    </>
+                                    </div>
                                 ))}
                             </div>
                         </div>
