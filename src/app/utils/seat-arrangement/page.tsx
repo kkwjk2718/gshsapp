@@ -172,7 +172,17 @@ export default function SeatArrangementPage() {
         if (!gridRef.current) return;
 
         try {
-            const dataUrl = await toPng(gridRef.current, { cacheBust: true, backgroundColor: '#ffffff' });
+            // Force Dark Mode for capture
+            gridRef.current.classList.add('dark');
+
+            const dataUrl = await toPng(gridRef.current, {
+                cacheBust: true,
+                backgroundColor: '#0f172a', // Force slate-900 background
+            });
+
+            // Remove Dark Mode class
+            gridRef.current.classList.remove('dark');
+
             const link = document.createElement('a');
             link.download = `자리배치표_${new Date().toISOString().slice(0, 10)}.png`;
             link.href = dataUrl;
@@ -181,6 +191,8 @@ export default function SeatArrangementPage() {
         } catch (error) {
             console.error("Image save failed:", error);
             toast.error("이미지 저장에 실패했습니다.");
+            // Ensure class is removed in case of error
+            if (gridRef.current) gridRef.current.classList.remove('dark');
         }
     };
 
