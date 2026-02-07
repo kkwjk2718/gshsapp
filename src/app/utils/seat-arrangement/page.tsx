@@ -330,43 +330,61 @@ export default function SeatArrangementPage() {
                             </div>
 
                             {/* Seating Grid */}
+                            {/* Seating Grid with Coordinates */}
                             <div
-                                className="grid gap-3 md:gap-4 p-4 rounded-3xl bg-slate-100/50 dark:bg-slate-900/50"
+                                className="grid gap-3 md:gap-4 p-4 rounded-3xl bg-slate-100/50 dark:bg-slate-900/50 items-center justify-center"
                                 style={{
-                                    gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`
+                                    gridTemplateColumns: `auto repeat(${cols}, minmax(0, 1fr))`
                                 }}
                             >
-                                {Array.from({ length: rows }).map((_, r) => (
-                                    Array.from({ length: cols }).map((_, c) => {
-                                        const key = `${r}-${c}`;
-                                        const isVoid = voidSeats.has(key);
-                                        const studentNum = assignments.get(key);
+                                {/* Top-Left Corner (Empty) */}
+                                <div className="w-6 h-6 md:w-8 md:h-8" />
 
-                                        return (
-                                            <button
-                                                key={key}
-                                                onClick={() => handleSeatClick(r, c)}
-                                                disabled={!isVoidMode && !isVoid} // Clickable only in void mode or if void? No, clickable only in void mode
-                                                className={`
+                                {/* Column Headers */}
+                                {Array.from({ length: cols }).map((_, c) => (
+                                    <div key={`col-${c}`} className="flex items-center justify-center font-bold text-slate-400 text-lg">
+                                        {c + 1}
+                                    </div>
+                                ))}
+
+                                {/* Rows */}
+                                {Array.from({ length: rows }).map((_, r) => (
+                                    <>
+                                        {/* Row Header */}
+                                        <div key={`row-${r}`} className="flex items-center justify-center font-bold text-slate-400 text-lg pr-2">
+                                            {r + 1}
+                                        </div>
+
+                                        {/* Seats */}
+                                        {Array.from({ length: cols }).map((_, c) => {
+                                            const key = `${r}-${c}`;
+                                            const isVoid = voidSeats.has(key);
+                                            const studentNum = assignments.get(key);
+
+                                            return (
+                                                <button
+                                                    key={key}
+                                                    onClick={() => handleSeatClick(r, c)}
+                                                    disabled={!isVoidMode && !isVoid}
+                                                    className={`
                                             w-14 h-14 md:w-20 md:h-20 rounded-xl flex items-center justify-center transition-all bg-white dark:bg-slate-800 shadow-sm border
                                             ${isVoid ? 'opacity-20 hover:opacity-100 border-dashed border-slate-400 bg-transparent shadow-none' : 'border-slate-200 dark:border-slate-700'}
                                             ${isVoidMode && !isVoid ? 'hover:ring-2 hover:ring-rose-400 cursor-pointer' : ''}
                                             ${isVoidMode && isVoid ? 'ring-2 ring-rose-400 cursor-pointer' : ''}
                                         `}
-                                            >
-                                                {!isVoid && (
-                                                    studentNum ? (
-                                                        <span className="text-2xl font-bold text-indigo-600 dark:text-indigo-400 animate-in zoom-in spin-in-3 duration-300">
-                                                            {studentNum}
-                                                        </span>
-                                                    ) : (
-                                                        <span className="text-xs text-slate-300">{r + 1}-{c + 1}</span>
-                                                    )
-                                                )}
-                                                {isVoid && <Ban className="w-6 h-6 text-slate-400" />}
-                                            </button>
-                                        );
-                                    })
+                                                >
+                                                    {!isVoid && (
+                                                        studentNum && (
+                                                            <span className="text-2xl font-bold text-indigo-600 dark:text-indigo-400 animate-in zoom-in spin-in-3 duration-300">
+                                                                {studentNum}
+                                                            </span>
+                                                        )
+                                                    )}
+                                                    {isVoid && <Ban className="w-6 h-6 text-slate-400" />}
+                                                </button>
+                                            );
+                                        })}
+                                    </>
                                 ))}
                             </div>
                         </div>
