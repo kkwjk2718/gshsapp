@@ -1,9 +1,10 @@
 "use client"
 
-import { useState, useEffect } from "react";
-import { ArrowLeft, User, Shuffle, RefreshCw, Armchair, Settings, X, Ban } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { ArrowLeft, User, Shuffle, RefreshCw, Armchair, Settings, X, Ban, Download } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
+import html2canvas from "html2canvas";
 
 export default function SeatArrangementPage() {
     // Seat Settings
@@ -155,6 +156,8 @@ export default function SeatArrangementPage() {
         animate();
     };
 
+    const gridRef = useRef<HTMLDivElement>(null);
+
     // Calculate expected student count
     const currentStart = parseInt(startNum) || 1;
     const currentEnd = parseInt(endNum) || 0;
@@ -164,6 +167,26 @@ export default function SeatArrangementPage() {
         for (let i = currentStart; i <= currentEnd; i++) potentialStudentList.push(i);
     }
     const realStudentCount = potentialStudentList.filter(n => !excludedNums.has(n)).length;
+
+    const handleSaveImage = async () => {
+        if (!gridRef.current) return;
+
+        try {
+            const canvas = await html2canvas(gridRef.current, {
+                backgroundColor: '#ffffff', // Force white background for the image
+                scale: 2, // Improve quality
+            });
+
+            const link = document.createElement('a');
+            link.download = `자리배치표_${new Date().toISOString().slice(0, 10)}.png`;
+            link.href = canvas.toDataURL();
+            link.click();
+            toast.success("이미지로 저장되었습니다.");
+        } catch (error) {
+            console.error("Image save failed:", error);
+            toast.error("이미지 저장에 실패했습니다.");
+        }
+    };
 
     return (
         <div className="p-4 md:p-8 max-w-6xl mx-auto space-y-6">
@@ -273,14 +296,24 @@ export default function SeatArrangementPage() {
                             </div>
                         </div>
 
-                        <button
-                            onClick={shuffleSeats}
-                            disabled={realStudentCount > validSeatsCount || realStudentCount === 0 || isAnimating}
-                            className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold shadow-lg shadow-indigo-500/20 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                        >
-                            <RefreshCw className={`w-5 h-5 ${isAnimating ? "animate-spin" : ""}`} />
-                            {isAnimating ? "배정 중..." : "자리 배치하기"}
-                        </button>
+                        <div className="grid grid-cols-2 gap-2">
+                            <button
+                                onClick={handleSaveImage}
+                                disabled={assignments.size === 0 || isAnimating}
+                                className="w-full py-3 bg-white text-indigo-600 border border-indigo-200 hover:bg-slate-50 rounded-xl font-bold shadow-sm active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                            >
+                                <Download className="w-5 h-5" />
+                                저장
+                            </button>
+                            <button
+                                onClick={shuffleSeats}
+                                disabled={realStudentCount > validSeatsCount || realStudentCount === 0 || isAnimating}
+                                className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold shadow-lg shadow-indigo-500/20 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                            >
+                                <RefreshCw className={`w-5 h-5 ${isAnimating ? "animate-spin" : ""}`} />
+                                {isAnimating ? "..." : "배치"}
+                            </button>
+                        </div>
                     </div>
                 </div>
 
@@ -310,7 +343,10 @@ export default function SeatArrangementPage() {
                             </div>
                         </div>
                     ) : (
-                        <div className="flex flex-col items-center gap-8 min-h-[500px] justify-center">
+                        <div
+                            ref={gridRef}
+                            className="flex flex-col items-center gap-8 min-h-[500px] justify-center p-8 bg-white dark:bg-slate-900 rounded-3xl"
+                        >
                             {/* Teacher Desk */}
                             <div className="w-64 h-16 bg-amber-200 dark:bg-amber-900/40 border-2 border-amber-300 dark:border-amber-700/50 rounded-lg flex items-center justify-center shadow-sm mb-4">
                                 <span className="font-bold text-amber-800 dark:text-amber-100">교탁</span>
