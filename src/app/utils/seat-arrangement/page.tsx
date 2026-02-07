@@ -326,7 +326,7 @@ export default function SeatArrangementPage() {
                         <div className="flex flex-col items-center gap-8 min-h-[500px] justify-center">
                             {/* Teacher Desk */}
                             <div className="w-64 h-16 bg-amber-200 dark:bg-amber-900/40 border-2 border-amber-300 dark:border-amber-700/50 rounded-lg flex items-center justify-center shadow-sm mb-4">
-                                <span className="font-bold text-amber-800 dark:text-amber-100">교탁 (앞임)</span>
+                                <span className="font-bold text-amber-800 dark:text-amber-100">교탁</span>
                             </div>
 
                             {/* Seating Grid */}
