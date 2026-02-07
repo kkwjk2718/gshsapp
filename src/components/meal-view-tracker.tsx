@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { logMealView } from "@/app/actions/logging";
+import { logMealView } from "@/app/(main)/actions/logging";
 
 export function MealViewTracker() {
     const logged = useRef(false);
