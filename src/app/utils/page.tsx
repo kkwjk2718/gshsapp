@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link";
-import { Calculator, ArrowRight, Wrench } from "lucide-react";
+import { Calculator, ArrowRight, Wrench, Dices } from "lucide-react";
 
 const tools = [
    {
@@ -10,6 +10,13 @@ const tools = [
       icon: Calculator,
       href: "/utils/byte-calculator",
       color: "bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400",
+   },
+   {
+      name: "랜덤 숫자 뽑기",
+      description: "지정된 범위 내에서 무작위 숫자를 뽑습니다. (추첨/순서 정하기)",
+      icon: Dices,
+      href: "/utils/random-number",
+      color: "bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400",
    },
    // Add more tools here in the future
 ];
