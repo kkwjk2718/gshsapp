@@ -8,8 +8,8 @@ import { motion, AnimatePresence } from "framer-motion";
 export default function HelpPage() {
     const faqs = [
         {
-            question: "로그인이 안 돼요.",
-            answer: "GSHS.app은 학교 구글 계정(@gshs.gne.go.kr)으로만 로그인할 수 있습니다. 만약 계정에 문제가 있다면 정보부를 찾아와주세요."
+            question: "아이디/비밀번호를 분실했어요.",
+            answer: "구글 계정(@gshs.gne.go.kr)의 비밀번호를 분실하셨다면, 정보부 학생에게 비밀번호 초기화를 요청해주세요."
         },
         {
             question: "기상곡 신청은 언제 할 수 있나요?",
