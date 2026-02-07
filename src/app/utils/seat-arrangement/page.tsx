@@ -214,10 +214,10 @@ export default function SeatArrangementPage() {
                         <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
                             <button
                                 onClick={() => setIsVoidMode(!isVoidMode)}
-                                className={`w-full py-2 px-3 rounded-xl text-sm font-medium transition-all flex items-center justify-center gap-2 ${isVoidMode ? 'bg-rose-100 text-rose-600 ring-2 ring-rose-500 ring-offset-1' : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400'}`}
+                                className={`w-full py-2 px-3 rounded-xl text-sm font-medium transition-all flex items-center justify-center gap-2 ${isVoidMode ? 'bg-rose-600 text-white shadow-lg shadow-rose-500/30 ring-2 ring-rose-500 ring-offset-1' : 'bg-rose-50 text-rose-600 hover:bg-rose-100 dark:bg-rose-900/20 dark:text-rose-400 dark:hover:bg-rose-900/40'}`}
                             >
                                 <Ban className="w-4 h-4" />
-                                {isVoidMode ? "없는 자리 선택 중..." : "없는 자리 지정하기"}
+                                {isVoidMode ? "선택 종료" : "없는 자리 지정하기"}
                             </button>
                             <p className="text-xs text-slate-400 mt-2 text-center">
                                 {isVoidMode ? "좌석을 클릭하여 사용 안 함 처리하세요" : "버튼을 누르고 빈 공간으로 둘 자리를 클릭하세요"}
@@ -252,7 +252,7 @@ export default function SeatArrangementPage() {
 
                         <button
                             onClick={() => setIsExcludeMode(!isExcludeMode)}
-                            className="w-full py-2 px-3 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl text-sm font-medium transition-colors"
+                            className={`w-full py-2 px-3 rounded-xl text-sm font-medium transition-colors ${isExcludeMode ? 'bg-rose-600 text-white shadow-lg shadow-rose-500/30' : 'bg-rose-50 text-rose-600 hover:bg-rose-100 dark:bg-rose-900/20 dark:text-rose-400 dark:hover:bg-rose-900/40'}`}
                         >
                             제외할 번호 선택 ({excludedNums.size}명)
                         </button>
