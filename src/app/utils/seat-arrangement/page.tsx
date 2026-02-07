@@ -363,7 +363,7 @@ export default function SeatArrangementPage() {
                             {/* Seating Grid */}
                             {/* Seating Grid with Coordinates */}
                             <div
-                                className="grid gap-3 md:gap-4 p-4 rounded-3xl bg-slate-100/50 dark:bg-slate-900/50 items-center justify-center"
+                                className="grid gap-3 md:gap-4 p-6 rounded-3xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 shadow-inner items-center justify-center"
                                 style={{
                                     gridTemplateColumns: `auto repeat(${cols}, minmax(0, 1fr))`
                                 }}
