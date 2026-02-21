@@ -34,3 +34,26 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+## Local Environment Setup
+
+Create a `.env` (or `.env.local`) file before running the app:
+
+```bash
+cp .env.example .env
+```
+
+Then initialize the local SQLite database schema:
+
+```bash
+npx prisma db push
+```
+
+After that, run:
+
+```bash
+npm run dev
+```
+
+`NEXT_PUBLIC_GA_ID` and `NEXT_PUBLIC_NEIS_API_KEY` are optional for local development and can be left empty.
+
