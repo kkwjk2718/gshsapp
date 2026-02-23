@@ -32,7 +32,7 @@ export default async function MyPage() {
   if (!dbUser) redirect("/login");
 
   return (
-     <div className="p-4 md:p-8 max-w-2xl mx-auto space-y-6">
+     <div className="mobile-page mobile-safe-bottom max-w-2xl mx-auto space-y-6">
         <h1 className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">내 정보</h1>
         
         <ProfileCard user={dbUser} />
@@ -66,7 +66,7 @@ export default async function MyPage() {
                             <div className="text-lg font-bold text-indigo-600 dark:text-indigo-400">{differenceInDays(event.targetDate, new Date()) === 0 ? "D-Day" : `D${differenceInDays(event.targetDate, new Date()) > 0 ? "-" : "+"}${Math.abs(differenceInDays(event.targetDate, new Date()))}`}</div>
                             <form action={deleteDDay}>
                                 <input type="hidden" name="id" value={event.id} />
-                                <button className="text-slate-400 hover:text-rose-500 transition-colors"><Trash2 className="w-4 h-4" /></button>
+                                <button className="text-slate-400 hover:text-rose-500 transition-colors p-2 -mr-2 tap-target"><Trash2 className="w-4 h-4" /></button>
                             </form>
                         </div>
                     </div>
@@ -75,10 +75,10 @@ export default async function MyPage() {
             </div>
 
             {dbUser.personalEvents.length < 3 && (
-                <form action={createDDay} className="flex gap-2 mt-4 pt-4 border-t border-slate-100 dark:border-slate-800">
+                <form action={createDDay} className="grid grid-cols-1 sm:grid-cols-[1fr_auto_auto] gap-2 mt-4 pt-4 border-t border-slate-100 dark:border-slate-800">
                     <input name="title" type="text" placeholder="일정 제목" required className="flex-1 px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                     <input name="date" type="date" required className="px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-                    <button className="p-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-colors"><Plus className="w-5 h-5" /></button>
+                    <button className="p-2 tap-target bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-colors flex items-center justify-center"><Plus className="w-5 h-5" /></button>
                 </form>
             )}
         </div>

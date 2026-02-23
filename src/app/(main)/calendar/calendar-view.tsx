@@ -50,9 +50,9 @@ export function CalendarView({ schedules }: { schedules: ScheduleItem[] }) {
     };
 
     return (
-        <div className="flex flex-col lg:flex-row gap-8" style={{ height: 'calc(100vh - 12rem)' }}>
+        <div className="flex flex-col lg:flex-row gap-6 lg:gap-8 lg:h-[calc(100vh-12rem)]">
             {/* Calendar Grid */}
-            <div className="flex-1 glass p-6 rounded-3xl flex flex-col">
+            <div className="flex-1 glass p-4 sm:p-6 rounded-3xl flex flex-col">
                 {/* Header */}
                 <div className="flex flex-col gap-3 mb-6">
                     <div className="flex items-center justify-between">
@@ -79,14 +79,14 @@ export function CalendarView({ schedules }: { schedules: ScheduleItem[] }) {
                     <div className="text-rose-500">일</div><div>월</div><div>화</div><div>수</div><div>목</div><div>금</div><div className="text-blue-500">토</div>
                 </div>
                 {/* Day Cells */}
-                <div className="grid grid-cols-7 flex-1 auto-rows-fr gap-1">
+                <div className="grid grid-cols-7 auto-rows-fr gap-1">
                     {calendarDays.map((day, idx) => {
                         const dayEvents = schedules.filter(s => isSameDay(new Date(s.startDate), day) || (new Date(s.startDate) <= day && new Date(s.endDate) >= day));
                         return (
                             <div
                                 key={idx}
                                 onClick={() => setSelectedDate(day)}
-                                className={`relative p-2 rounded-xl cursor-pointer transition-all border flex flex-col items-center 
+                                className={`relative p-1.5 sm:p-2 rounded-xl cursor-pointer transition-all border flex flex-col items-center min-h-16 sm:min-h-20 
                             ${!isSameMonth(day, monthStart) ? "text-slate-300 dark:text-slate-700 bg-slate-50/50 dark:bg-slate-900/30 border-transparent" : "bg-white dark:bg-slate-900/50 border-slate-100 dark:border-slate-800"}
                             ${isSameDay(day, selectedDate) ? "ring-2 ring-indigo-500 z-10" : "hover:bg-slate-50 dark:hover:bg-slate-800"}`}
                             >

@@ -140,7 +140,7 @@ export default async function MealsPage({ searchParams }: { searchParams: Promis
   };
 
   return (
-    <div className="p-4 md:p-8 space-y-6">
+    <div className="mobile-page mobile-safe-bottom space-y-6">
       <MealViewTracker />
       {/* Header & Nav */}
       <div className="flex flex-col items-center justify-center gap-1 mb-8 relative">

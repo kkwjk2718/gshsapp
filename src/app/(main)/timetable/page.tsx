@@ -49,7 +49,7 @@ export default async function TimetablePage({ searchParams }: { searchParams: Pr
   const timetable = await getTimetable(dateStr, grade, classNum);
 
   return (
-    <div className="p-4 md:p-8 space-y-6">
+    <div className="mobile-page mobile-safe-bottom space-y-6">
        {/* Controls */}
        <TimetableControls 
           currentDate={currentDate} 

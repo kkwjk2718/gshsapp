@@ -52,18 +52,18 @@ export function TimetableControls({ currentDate, currentGrade, currentClass }: T
             </div>
 
             {/* Date Navigation */}
-            <div className="flex items-center gap-4 bg-white dark:bg-slate-900 p-2 rounded-2xl shadow-sm">
-                <button onClick={handlePrevDate} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors">
+            <div className="flex items-center gap-2 sm:gap-4 bg-white dark:bg-slate-900 p-2 rounded-2xl shadow-sm w-full max-w-sm justify-between">
+                <button onClick={handlePrevDate} className="p-2.5 tap-target hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors">
                     <ChevronLeft className="w-5 h-5" />
                 </button>
                 <TimetableCalendar currentDate={currentDate} />
-                <button onClick={handleNextDate} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors">
+                <button onClick={handleNextDate} className="p-2.5 tap-target hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors">
                     <ChevronRight className="w-5 h-5" />
                 </button>
             </div>
 
             {/* Grade/Class Filter */}
-            <div className="flex gap-2">
+            <div className="grid grid-cols-2 gap-2 w-full max-w-sm">
                 <select
                     value={currentGrade}
                     onChange={handleGradeChange}

@@ -63,7 +63,7 @@ export default async function CalendarPage() {
   const allSchedules = [...dbSchedules, ...iCalEvents, ...neisEvents];
 
   return (
-    <div className="p-4 md:p-8">
+    <div className="mobile-page mobile-safe-bottom">
       <CalendarView schedules={allSchedules} />
     </div>
   );

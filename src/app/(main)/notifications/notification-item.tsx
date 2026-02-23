@@ -63,18 +63,18 @@ export function NotificationItem({ notification }: NotificationItemProps) {
                 {getIcon(notification.type)}
             </div>
             <div className="flex-1">
-                <div className="flex justify-between items-start">
+                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-2">
                     <h3 className={`font-bold ${notification.isRead ? 'text-slate-500 line-through decoration-slate-400/50' : 'text-slate-800 dark:text-slate-200'}`}>
                         {notification.title}
                     </h3>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1 self-end sm:self-auto">
                         <span className="text-xs text-slate-400 whitespace-nowrap">
                             {format(notification.createdAt, "MM.dd HH:mm")}
                         </span>
                         <button
                             onClick={handleDelete}
                             disabled={isPending}
-                            className="text-slate-400 hover:text-rose-500 p-1 disabled:opacity-50"
+                            className="text-slate-400 hover:text-rose-500 p-2 tap-target disabled:opacity-50"
                         >
                             <X className="w-4 h-4" />
                         </button>

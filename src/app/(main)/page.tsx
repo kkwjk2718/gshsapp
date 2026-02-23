@@ -113,7 +113,7 @@ export default async function Home() {
     }
 
     return (
-        <div className="p-4 md:p-6 max-w-5xl mx-auto">
+        <div className="mobile-page mobile-safe-bottom md:pb-6 max-w-5xl mx-auto">
             <MealViewTracker />
             {/* Header */}
             <header className="flex items-center justify-between mb-6">
@@ -184,7 +184,7 @@ export default async function Home() {
                         {user ? (
                             <Link href="/timetable" className="flex-1 grid grid-cols-3 gap-3">
                                 {timetable.length > 0 ? timetable.slice(0, 6).map((t, i) => (
-                                    <div key={i} className="flex flex-col items-center justify-center p-2 rounded-2xl bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/5 hover:bg-slate-200 dark:hover:bg-white/10 transition-colors">
+                                    <div key={i} className="flex flex-col items-center justify-center p-2 rounded-2xl bg-white dark:bg-white/5 border border-slate-200 dark:border-white/5 hover:bg-slate-50 dark:hover:bg-white/10 transition-colors">
                                         <div className="text-[10px] text-slate-600 dark:text-slate-400 font-bold mb-1">{t.PERIO}교시</div>
                                         <div className="text-xs font-bold text-slate-800 dark:text-slate-300 text-center line-clamp-1 break-all px-1">
                                             {t.ITRT_CNTNT}
@@ -197,7 +197,7 @@ export default async function Home() {
                                 )}
                             </Link>
                         ) : (
-                            <div className="flex-1 flex flex-col items-center justify-center text-slate-500 dark:text-slate-400 gap-2 bg-slate-100 dark:bg-white/5 rounded-2xl border border-slate-200 dark:border-white/5">
+                            <div className="flex-1 flex flex-col items-center justify-center text-slate-600 dark:text-slate-400 gap-2 bg-white dark:bg-white/5 rounded-2xl border border-slate-200 dark:border-white/5">
                                 <Clock className="w-8 h-8 opacity-20" />
                                 <span className="text-xs">로그인 후 내 시간표를 확인하세요</span>
                             </div>
@@ -222,7 +222,7 @@ export default async function Home() {
                             <ChevronRight className="w-4 h-4 text-slate-500 group-hover:text-orange-400 transition-colors" />
                         </div>
 
-                        <div className="flex-1 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/5 rounded-2xl p-4 flex items-center justify-center">
+                        <div className="flex-1 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/5 rounded-2xl p-4 flex items-center justify-center">
                             <p className="text-slate-800 dark:text-slate-300 whitespace-pre-wrap text-center leading-loose font-medium text-sm">
                                 {targetMealData ? cleanMealName(targetMealData.DDISH_NM) : "급식 정보가 없습니다."}
                             </p>

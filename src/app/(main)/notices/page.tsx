@@ -27,8 +27,8 @@ export default async function NoticesPage() {
    const canWrite = user?.role === 'ADMIN' || user?.role === 'TEACHER';
 
    return (
-      <div className="p-4 md:p-8 space-y-6">
-         <div className="flex items-center justify-between mb-6">
+      <div className="mobile-page mobile-safe-bottom space-y-6">
+         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
             <div className="flex items-center gap-3">
                <div className="p-3 bg-indigo-100 dark:bg-indigo-900/30 rounded-full text-indigo-600">
                   <Megaphone className="w-6 h-6" />
@@ -42,7 +42,7 @@ export default async function NoticesPage() {
             {canWrite && (
                <Link
                   href="/admin/notices/new"
-                  className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition-colors"
+                  className="flex items-center justify-center gap-2 px-4 py-2.5 tap-target bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition-colors w-full sm:w-auto"
                >
                   <PlusCircle className="w-4 h-4" />
                   새 공지 작성

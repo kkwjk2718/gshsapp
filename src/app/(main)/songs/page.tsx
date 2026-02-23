@@ -65,7 +65,7 @@ export default async function SongsPage() {
   const nextSongs = await getNextMorningSongs();
 
   return (
-    <div className="p-4 md:p-8 space-y-8">
+    <div className="mobile-page mobile-safe-bottom space-y-8">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">기상곡 신청</h1>

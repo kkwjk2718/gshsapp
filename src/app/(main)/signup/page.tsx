@@ -8,8 +8,8 @@ export default async function SignupPage({ searchParams }: { searchParams: Promi
   const token = searchToken || "";
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950 p-4">
-      <div className="w-full max-w-sm bg-white dark:bg-slate-900 p-8 rounded-3xl shadow-xl border border-slate-100 dark:border-slate-800">
+    <div className="min-h-[100dvh] flex items-center justify-center bg-slate-50 dark:bg-slate-950 p-4">
+      <div className="w-full max-w-sm bg-white dark:bg-slate-900 p-6 sm:p-8 rounded-3xl shadow-xl border border-slate-100 dark:border-slate-800">
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-indigo-600 dark:text-indigo-400">GSHS.app</h1>
           <p className="text-slate-500 dark:text-slate-400 mt-2">회원가입</p>

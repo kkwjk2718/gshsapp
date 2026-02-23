@@ -36,7 +36,7 @@ export default async function NotificationsPage() {
 
 
     return (
-        <div className="p-4 md:p-8 space-y-6 max-w-2xl mx-auto">
+        <div className="mobile-page mobile-safe-bottom space-y-6 max-w-2xl mx-auto">
             <div className="flex items-center gap-3 mb-6">
                 <div className="p-3 bg-indigo-100 dark:bg-indigo-900/30 rounded-full text-indigo-600">
                     <Bell className="w-6 h-6" />

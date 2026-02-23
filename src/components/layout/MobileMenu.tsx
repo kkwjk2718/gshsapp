@@ -8,6 +8,7 @@ import { X } from "lucide-react";
 import { allNavItems } from "@/config/nav";
 import { cn } from "@/lib/utils";
 import { NotificationBadge } from "./notification-badge";
+import { ModeToggle } from "@/components/mode-toggle";
 
 export function MobileMenu() {
     const [isOpen, setIsOpen] = useState(false);
@@ -18,7 +19,7 @@ export function MobileMenu() {
             {/* Menu Button */}
             <button
                 onClick={() => setIsOpen(true)}
-                className="flex flex-col items-center justify-center p-2 rounded-xl transition-all w-16 text-slate-500 dark:text-slate-400"
+                className="flex flex-col items-center justify-center p-2 rounded-xl transition-all w-16 min-h-11 text-slate-500 dark:text-slate-400"
             >
                 <svg className="w-6 h-6 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
@@ -28,16 +29,19 @@ export function MobileMenu() {
 
             {/* Full Screen Modal - Rendered via Portal */}
             {isOpen && typeof window !== 'undefined' && createPortal(
-                <div className="fixed inset-0 z-[100] flex flex-col bg-white/95 dark:bg-slate-950/95 backdrop-blur-xl">
+                <div className="fixed inset-0 z-[100] flex flex-col bg-white/95 dark:bg-slate-950/95 backdrop-blur-xl pb-[env(safe-area-inset-bottom)]">
                     {/* Header */}
                     <div className="flex items-center justify-between p-6 border-b border-slate-200 dark:border-slate-800">
                         <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">전체 메뉴</h2>
-                        <button
-                            onClick={() => setIsOpen(false)}
-                            className="p-2 rounded-xl hover:bg-slate-200 dark:hover:bg-white/5 text-slate-700 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 transition-colors"
-                        >
-                            <X className="w-6 h-6" />
-                        </button>
+                        <div className="flex items-center gap-2">
+                            <ModeToggle className="p-2 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-800" />
+                            <button
+                                onClick={() => setIsOpen(false)}
+                                className="p-2 rounded-xl hover:bg-slate-200 dark:hover:bg-white/5 text-slate-700 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 transition-colors"
+                            >
+                                <X className="w-6 h-6" />
+                            </button>
+                        </div>
                     </div>
 
                     {/* Menu Items */}
