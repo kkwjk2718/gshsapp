@@ -21,14 +21,14 @@ export async function Sidebar() {
         <SidebarNav />
 
         {(user?.role === "BROADCAST" || user?.role === "ADMIN") && (
-          <Link href="/music" className="flex items-center gap-3 px-4 py-2.5 rounded-xl text-rose-400 hover:bg-rose-900/20 transition-colors">
+          <Link href="/music" className="flex items-center gap-3 px-4 py-2.5 rounded-xl text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-900/20 transition-colors">
             <Radio className="w-5 h-5" />
             <span className="font-semibold text-sm">방송부 스튜디오</span>
           </Link>
         )}
 
         {user?.role === "ADMIN" && (
-          <Link href="/admin" className="flex items-center gap-3 px-4 py-2.5 rounded-xl text-indigo-400 hover:bg-indigo-900/20 transition-colors">
+          <Link href="/admin" className="flex items-center gap-3 px-4 py-2.5 rounded-xl text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/20 transition-colors">
             <ShieldCheck className="w-5 h-5" />
             <span className="font-semibold text-sm">관리자 페이지</span>
           </Link>

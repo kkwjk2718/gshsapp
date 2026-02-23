@@ -197,7 +197,7 @@ export default async function Home() {
                                 )}
                             </Link>
                         ) : (
-                            <div className="flex-1 flex flex-col items-center justify-center text-slate-500 gap-2 bg-white/5 rounded-2xl border border-white/5">
+                            <div className="flex-1 flex flex-col items-center justify-center text-slate-500 dark:text-slate-400 gap-2 bg-slate-100 dark:bg-white/5 rounded-2xl border border-slate-200 dark:border-white/5">
                                 <Clock className="w-8 h-8 opacity-20" />
                                 <span className="text-xs">로그인 후 내 시간표를 확인하세요</span>
                             </div>

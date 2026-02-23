@@ -24,12 +24,12 @@
 :root {
   --background: #f8fafc;
   /* slate-50 */
-  --foreground: #1e293b;
-  /* slate-800 */
+  --foreground: #0f172a;
+  /* slate-900 */
 
   /* Gradients */
-  --bg-gradient-start: #f1f5f9;
-  /* slate-100 */
+  --bg-gradient-start: #eef2ff;
+  /* indigo-50 */
   --bg-gradient-end: #e2e8f0;
   /* slate-200 */
   --accent-glow: rgba(99, 102, 241, 0.1);
@@ -110,6 +110,6 @@ body {
 
   /* Secondary/Glass Button */
   .btn-glass {
-    @apply bg-white/5 text-slate-200 font-medium py-3 px-6 rounded-xl hover:bg-white/10 border border-white/5 transition-all duration-300 active:scale-95 flex items-center justify-center gap-2;
+    @apply bg-white text-slate-700 dark:bg-white/5 dark:text-slate-200 font-medium py-3 px-6 rounded-xl hover:bg-slate-100 dark:hover:bg-white/10 border border-slate-200 dark:border-white/5 transition-all duration-300 active:scale-95 flex items-center justify-center gap-2;
   }
 }

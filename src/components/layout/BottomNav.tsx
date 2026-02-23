@@ -10,7 +10,7 @@ export function BottomNav() {
   const pathname = usePathname();
 
   return (
-    <div className="md:hidden fixed bottom-0 left-0 right-0 border-t border-slate-800/50 bg-slate-950/90 backdrop-blur-xl z-50 pb-safe safe-area-bottom shadow-lg shadow-black/20">
+    <div className="md:hidden fixed bottom-0 left-0 right-0 border-t border-slate-200 dark:border-slate-800/50 bg-white/95 dark:bg-slate-950/90 backdrop-blur-xl z-50 pb-safe safe-area-bottom shadow-lg shadow-slate-300/30 dark:shadow-black/20">
       <nav className="flex items-center justify-around p-2">
         {bottomNavItems.map((item) => {
           const isActive = pathname === item.href;

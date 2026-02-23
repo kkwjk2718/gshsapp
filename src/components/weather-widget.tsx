@@ -5,8 +5,8 @@ export async function WeatherWidget() {
     const weather = await getWeather();
 
     if (!weather) return (
-        <div className="flex items-center gap-2 text-slate-400 glass px-3 py-2 rounded-xl h-[40px]">
-            <div className="w-4 h-4 rounded-full bg-slate-700/50" />
+        <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400 glass px-3 py-2 rounded-xl h-[40px]">
+            <div className="w-4 h-4 rounded-full bg-slate-300 dark:bg-slate-700/50" />
             <span className="text-xs">Unavailable</span>
         </div>
     );
@@ -27,7 +27,7 @@ export async function WeatherWidget() {
     return (
         <div className="flex items-center gap-2 glass px-3 py-2 rounded-xl">
             {getWeatherIcon(weather.code)}
-            <div className="text-sm font-bold text-slate-200">{weather.temp}°</div>
+            <div className="text-sm font-bold text-slate-800 dark:text-slate-200">{weather.temp}°</div>
         </div>
     );
 }
