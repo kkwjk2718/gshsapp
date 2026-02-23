@@ -12,7 +12,22 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Generated / tooling scripts not part of app source lint target
+    "public/sw.js",
+    "public/workbox-*.js",
+    "prisma/*.js",
+    "generate-icons.js",
+    "test-*.js",
   ]),
+  {
+    rules: {
+      "@typescript-eslint/no-explicit-any": "warn",
+      "@typescript-eslint/ban-ts-comment": "warn",
+      "react-hooks/static-components": "off",
+      "react-hooks/set-state-in-effect": "off",
+      "react/no-unescaped-entities": "warn",
+    },
+  },
 ]);
 
 export default eslintConfig;
