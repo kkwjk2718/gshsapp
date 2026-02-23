@@ -3,7 +3,7 @@
 import { useActionState, useState } from "react";
 import { importUsersBackup } from "./actions";
 
-const initialState = { success: "", error: "" };
+const initialState = { error: "" };
 
 export function UserBackupTools() {
   const [fileName, setFileName] = useState("");
@@ -36,8 +36,8 @@ export function UserBackupTools() {
         </div>
       </form>
 
-      {state?.success && <p className="text-xs" style={{ color: "#22c55e" }}>{state.success}</p>}
-      {state?.error && <p className="text-xs" style={{ color: "#ef4444" }}>{state.error}</p>}
+      {("success" in state) && state.success && <p className="text-xs" style={{ color: "#22c55e" }}>{state.success}</p>}
+      {("error" in state) && state.error && <p className="text-xs" style={{ color: "#ef4444" }}>{state.error}</p>}
     </div>
   );
 }

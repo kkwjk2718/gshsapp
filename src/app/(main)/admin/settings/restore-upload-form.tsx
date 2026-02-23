@@ -49,7 +49,7 @@ export function RestoreUploadForm() {
         </div>
       )}
 
-      {state.ok && state.summary?.length > 0 && (
+      {state.ok && Array.isArray(state.summary) && state.summary.length > 0 && (
         <div className="rounded-lg border px-3 py-2" style={{ borderColor: "var(--border)" }}>
           <p className="text-xs font-semibold mb-1" style={{ color: "var(--muted)" }}>복원 전/후 요약</p>
           <ul className="text-xs space-y-1" style={{ color: "var(--foreground)" }}>
