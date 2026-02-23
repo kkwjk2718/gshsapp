@@ -44,4 +44,4 @@
 
 ## Commits
 - `c2f4396` — Improve core mobile UX: safe-area spacing, tap targets, responsive key layouts
-- `90a6354` — Add mobile audit checklist/report and iPhone 14 screenshot capture scripts
+- `c39b680` — Add mobile audit checklist/report and iPhone 14 screenshot capture scripts
