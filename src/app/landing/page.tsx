@@ -1,211 +1,159 @@
-"use client"
-
+import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowRight, Sparkles, Zap, Shield, Calendar, BookOpen, Utensils } from "lucide-react";
-import { motion } from "framer-motion";
+import { ArrowRight, Calendar, Utensils, Bell, Wrench, Shield } from "lucide-react";
+
+export const metadata: Metadata = {
+  title: "GSHS.app 소개",
+  description: "경남과학고 학생 통합 플랫폼 소개 페이지입니다.",
+  alternates: { canonical: "/landing" },
+};
+
+const features = [
+  {
+    icon: Utensils,
+    title: "급식",
+    desc: "조식/중식/석식과 알레르기 정보를 빠르게 확인합니다.",
+  },
+  {
+    icon: Calendar,
+    title: "학사일정",
+    desc: "시험, 행사, 휴일을 한 화면에서 정리해 보여줍니다.",
+  },
+  {
+    icon: Bell,
+    title: "공지",
+    desc: "중요한 공지를 놓치지 않도록 앱 안에서 바로 확인합니다.",
+  },
+  {
+    icon: Wrench,
+    title: "도구",
+    desc: "학교 생활에서 자주 쓰는 유틸리티를 모아 제공합니다.",
+  },
+  {
+    icon: Shield,
+    title: "권한 기반",
+    desc: "학생/교사/방송부/관리자 권한에 맞는 화면을 제공합니다.",
+  },
+];
 
 export default function LandingPage() {
-    const container = {
-        hidden: { opacity: 0 },
-        show: {
-            opacity: 1,
-            transition: {
-                staggerChildren: 0.1
-            }
-        }
-    };
+  const websiteJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    name: "GSHS.app",
+    url: process.env.NEXT_PUBLIC_APP_URL || "https://gshs.app",
+    inLanguage: "ko-KR",
+    description: "경남과학고 학생 통합 플랫폼",
+  };
 
-    const item = {
-        hidden: { opacity: 0, y: 20 },
-        show: { opacity: 1, y: 0 }
-    };
+  return (
+    <div className="min-h-screen bg-[#090a0b] text-[#f5f7fa]">
+      <div className="mx-auto max-w-6xl px-5 sm:px-8">
+        <header className="sticky top-0 z-40 border-b border-white/10 bg-[#090a0b]/80 backdrop-blur-md">
+          <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-1">
+            <div className="text-sm font-semibold tracking-wide text-white/90">GSHS.app</div>
+            <Link
+              href="/"
+              className="rounded-md border border-white/15 bg-white/5 px-4 py-2 text-sm font-medium text-white/90 hover:bg-white/10 transition-colors"
+            >
+              앱 열기
+            </Link>
+          </div>
+        </header>
 
-    return (
-        <div className="min-h-screen bg-[#0f172a] text-slate-100 overflow-hidden selection:bg-indigo-500/30">
-            {/* Background Gradients */}
-            <div className="fixed inset-0 z-0 pointer-events-none">
-                <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-indigo-500/10 rounded-full blur-[120px] animate-pulse-slow" />
-                <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-violet-500/10 rounded-full blur-[120px] animate-pulse-slow delay-1000" />
+        <main className="py-16 sm:py-24">
+          <section className="mx-auto max-w-4xl text-center">
+            <p className="mb-5 inline-flex rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs text-white/70">
+              경남과학고 생활을 위한 심플한 플랫폼
+            </p>
+            <h1 className="text-4xl sm:text-6xl font-semibold tracking-tight leading-tight">
+              학교 생활,
+              <br className="hidden sm:block" />
+              <span className="text-white/80">더 단순하고 빠르게</span>
+            </h1>
+            <p className="mx-auto mt-6 max-w-2xl text-sm sm:text-base text-white/60 leading-relaxed">
+              급식, 시간표, 공지, 학사일정, 유틸리티를 한곳에 모았습니다.
+              복잡한 정보는 줄이고, 필요한 기능만 빠르게 접근하도록 구성했습니다.
+            </p>
+            <div className="mt-10 flex items-center justify-center">
+              <Link
+                href="/"
+                className="inline-flex items-center justify-center gap-2 rounded-lg bg-white text-[#090a0b] px-6 py-3 text-sm font-semibold hover:bg-white/90 transition-colors"
+              >
+                시작하기 <ArrowRight className="w-4 h-4" />
+              </Link>
             </div>
+          </section>
 
-            {/* Navbar */}
-            <nav className="relative z-10 container mx-auto px-6 py-6 flex justify-between items-center">
-                <div className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 to-violet-400">
-                    GSHS LIFE
+          <section className="mt-16 sm:mt-24">
+            <div className="rounded-2xl border border-white/15 bg-gradient-to-b from-[#17191d] to-[#101215] p-5 sm:p-8 shadow-[0_20px_70px_rgba(0,0,0,0.35)]">
+              <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 mb-5">
+                <div>
+                  <p className="text-xs text-white/55 mb-2">오늘의 요약</p>
+                  <h2 className="text-2xl sm:text-3xl font-semibold tracking-tight">오늘 필요한 정보만 빠르게</h2>
                 </div>
-                <Link
-                    href="/"
-                    className="px-5 py-2 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 transition-all text-sm font-medium backdrop-blur-md"
-                >
-                    앱 실행하기
+                <Link href="/" className="text-sm text-white/70 hover:text-white transition-colors">
+                  바로 확인하기 →
                 </Link>
-            </nav>
+              </div>
 
-            {/* Hero Section */}
-            <main className="relative z-10 container mx-auto px-6 pt-20 pb-32 flex flex-col items-center text-center">
-                <motion.div
-                    variants={container}
-                    initial="hidden"
-                    animate="show"
-                    className="max-w-4xl mx-auto space-y-8"
-                >
-                    <motion.div variants={item}>
-                        <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 text-xs font-medium mb-4">
-                            <Sparkles className="w-3 h-3" />
-                            경남과학고등학교 학생을 위한 올인원 플랫폼
-                        </span>
-                    </motion.div>
-
-                    <motion.h1 variants={item} className="text-5xl md:text-7xl font-bold tracking-tight leading-tight">
-                        학교 생활의 모든 것,<br />
-                        <span className="bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 via-violet-400 to-indigo-400">
-                            더 스마트하게.
-                        </span>
-                    </motion.h1>
-
-                    <motion.p variants={item} className="text-lg md:text-xl text-slate-400 max-w-2xl mx-auto leading-relaxed">
-                        급식 정보부터 공지사항, 그리고 편리한 유틸리티까지.
-                        <br className="hidden md:block" />
-                        복잡한 학교 생활을 하나의 앱으로 단순화하세요.
-                    </motion.p>
-
-                    <motion.div variants={item} className="flex flex-col sm:flex-row gap-4 justify-center pt-8">
-                        <Link
-                            href="/"
-                            className="group px-8 py-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl font-bold text-lg transition-all shadow-lg shadow-indigo-500/25 flex items-center justify-center gap-2"
-                        >
-                            시작하기
-                            <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                        </Link>
-                        <button className="px-8 py-4 bg-white/5 hover:bg-white/10 text-slate-300 rounded-2xl font-bold text-lg transition-all border border-white/10 backdrop-blur-md">
-                            더 알아보기
-                        </button>
-                    </motion.div>
-                </motion.div>
-
-                {/* Floating Mockup / Visual */}
-                <motion.div
-                    initial={{ opacity: 0, y: 100 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.5, duration: 0.8 }}
-                    className="mt-24 relative w-full max-w-5xl"
-                >
-                    <div className="absolute inset-0 bg-gradient-to-t from-[#0f172a] via-transparent to-transparent z-10" />
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 opacity-80 perspective-1000">
-                        {/* Feature Cards as Visuals */}
-                        <div className="transform rotate-y-12 translate-y-12 bg-slate-800/50 border border-slate-700/50 p-6 rounded-3xl h-64 backdrop-blur-sm">
-                            <Utensils className="w-10 h-10 text-orange-400 mb-4" />
-                            <div className="text-sm font-bold text-slate-300 mb-3">오늘의 중식</div>
-                            <div className="space-y-1.5 text-xs text-slate-400">
-                                <div>• 잡곡밥</div>
-                                <div>• 된장찌개</div>
-                                <div>• 불고기</div>
-                                <div>• 시금치나물</div>
-                                <div>• 배추김치</div>
-                            </div>
-                        </div>
-                        <div className="transform translate-y-0 bg-slate-800/80 border border-indigo-500/30 p-6 rounded-3xl h-64 z-20 shadow-2xl shadow-indigo-500/20 backdrop-blur-md">
-                            <div className="flex items-center justify-between mb-6">
-                                <div className="text-xl font-bold">Today</div>
-                                <div className="px-3 py-1 bg-indigo-500/20 text-indigo-300 rounded-full text-xs">Active</div>
-                            </div>
-                            <div className="space-y-3">
-                                <div className="h-12 w-full bg-indigo-500/10 border border-indigo-500/20 rounded-xl flex items-center px-4 gap-3">
-                                    <div className="w-2 h-2 rounded-full bg-indigo-400" />
-                                    <span className="text-sm text-slate-300">1교시 국어</span>
-                                </div>
-                                <div className="h-12 w-full bg-emerald-500/10 border border-emerald-500/20 rounded-xl flex items-center px-4 gap-3">
-                                    <div className="w-2 h-2 rounded-full bg-emerald-400" />
-                                    <span className="text-sm text-slate-300">2교시 수학</span>
-                                </div>
-                                <div className="h-12 w-full bg-orange-500/10 border border-orange-500/20 rounded-xl flex items-center px-4 gap-3">
-                                    <div className="w-2 h-2 rounded-full bg-orange-400" />
-                                    <span className="text-sm text-slate-300">3교시 영어</span>
-                                </div>
-                            </div>
-                        </div>
-                        <div className="transform -rotate-y-12 translate-y-12 bg-slate-800/50 border border-slate-700/50 p-6 rounded-3xl h-64 backdrop-blur-sm">
-                            <BookOpen className="w-10 h-10 text-emerald-400 mb-4" />
-                            <div className="text-sm font-bold text-slate-300 mb-3">최신 공지사항</div>
-                            <div className="space-y-2 text-xs text-slate-400">
-                                <div className="flex items-start gap-2">
-                                    <div className="w-1 h-1 rounded-full bg-emerald-400 mt-1.5 flex-shrink-0" />
-                                    <span>2026학년도 1학기 중간고사 일정 안내</span>
-                                </div>
-                                <div className="flex items-start gap-2">
-                                    <div className="w-1 h-1 rounded-full bg-emerald-400 mt-1.5 flex-shrink-0" />
-                                    <span>과학축전 참가 신청 마감 공지</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </motion.div>
-            </main>
-
-            {/* Features Grid */}
-            <section className="relative z-10 container mx-auto px-6 py-24 border-t border-slate-800/50">
-                <div className="text-center mb-16">
-                    <h2 className="text-3xl font-bold mb-4">강력한 기능들</h2>
-                    <p className="text-slate-400">학생들의 피드백을 반영하여 꼭 필요한 기능만 담았습니다.</p>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="rounded-lg border border-white/10 bg-black/20 px-4 py-4">
+                  <p className="text-[11px] text-white/50 mb-1">급식</p>
+                  <p className="text-sm sm:text-base font-medium text-white/90">중식 / 석식 메뉴 확인</p>
                 </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                    <FeatureCard
-                        icon={<Utensils className="w-6 h-6 text-orange-400" />}
-                        title="오늘의 급식"
-                        desc="맛있는 점심, 저녁 메뉴를 실시간으로 확인하고 칼로리 정보까지 얻으세요."
-                    />
-                    <FeatureCard
-                        icon={<Calendar className="w-6 h-6 text-blue-400" />}
-                        title="학사 일정"
-                        desc="시험 기간, 축제, 휴일 등 중요한 학교 일정을 놓치지 마세요."
-                    />
-                    <FeatureCard
-                        icon={<BookOpen className="w-6 h-6 text-emerald-400" />}
-                        title="공지사항 알림"
-                        desc="가정통신문과 학교 공지사항을 앱에서 바로 확인하세요."
-                    />
-                    <FeatureCard
-                        icon={<Zap className="w-6 h-6 text-yellow-400" />}
-                        title="유틸리티 도구"
-                        desc="랜덤 번호 추첨, 자리 배치 등 학급 운영에 유용한 도구를 제공합니다."
-                    />
-                    <FeatureCard
-                        icon={<Shield className="w-6 h-6 text-rose-400" />}
-                        title="학생 인증"
-                        desc="오직 경남과학고 학생들만 접근할 수 있는 안전한 커뮤니티입니다."
-                    />
-                    <FeatureCard
-                        icon={<Sparkles className="w-6 h-6 text-purple-400" />}
-                        title="모던 디자인"
-                        desc="최신 트렌드를 반영한 깔끔하고 아름다운 UI/UX를 경험하세요."
-                    />
+                <div className="rounded-lg border border-white/10 bg-black/20 px-4 py-4">
+                  <p className="text-[11px] text-white/50 mb-1">시간표</p>
+                  <p className="text-sm sm:text-base font-medium text-white/90">학년·반 기준 즉시 조회</p>
                 </div>
-            </section>
-
-            {/* Footer */}
-            <footer className="relative z-10 border-t border-slate-800 bg-[#020617] py-12">
-                <div className="container mx-auto px-6 text-center text-slate-500 text-sm">
-                    <p className="mb-4">© 2026 GSHS LIFE. All rights reserved.</p>
-                    <div className="flex justify-center gap-6">
-                        <a href="#" className="hover:text-slate-300 transition-colors">이용약관</a>
-                        <a href="#" className="hover:text-slate-300 transition-colors">개인정보처리방침</a>
-                        <a href="#" className="hover:text-slate-300 transition-colors">문의하기</a>
-                    </div>
+                <div className="rounded-lg border border-white/10 bg-black/20 px-4 py-4">
+                  <p className="text-[11px] text-white/50 mb-1">공지</p>
+                  <p className="text-sm sm:text-base font-medium text-white/90">최신 공지 빠른 접근</p>
                 </div>
-            </footer>
-        </div>
-    );
-}
+              </div>
 
-function FeatureCard({ icon, title, desc }: { icon: React.ReactNode, title: string, desc: string }) {
-    return (
-        <div className="p-6 rounded-2xl bg-slate-800/30 border border-slate-700/50 hover:bg-slate-800/50 hover:border-indigo-500/30 transition-all group">
-            <div className="w-12 h-12 rounded-xl bg-slate-800/80 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                {icon}
             </div>
-            <h3 className="text-xl font-bold mb-2 group-hover:text-indigo-300 transition-colors">{title}</h3>
-            <p className="text-slate-400 leading-relaxed text-sm">{desc}</p>
-        </div>
-    )
+          </section>
+
+          <section className="mt-16 sm:mt-24">
+            <h2 className="text-xl sm:text-2xl font-semibold mb-6">핵심 기능</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {features.map((f) => (
+                <div key={f.title} className="rounded-2xl border border-white/10 bg-[#111216] p-5">
+                  <div className="mb-4 inline-flex h-10 w-10 items-center justify-center rounded-lg border border-white/10 bg-white/5">
+                    <f.icon className="w-5 h-5 text-white/80" />
+                  </div>
+                  <h3 className="text-base font-semibold text-white/90">{f.title}</h3>
+                  <p className="mt-2 text-sm text-white/60 leading-relaxed">{f.desc}</p>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section className="mt-8 sm:mt-10" aria-label="회원가입 안내">
+            <div className="rounded-xl border border-white/10 bg-[#111216] px-5 py-4 sm:px-6 sm:py-5">
+              <p className="text-[11px] text-white/50 mb-1">회원가입 안내</p>
+              <p className="text-sm sm:text-base text-white/85 leading-relaxed">
+                회원가입은 <span className="font-semibold">관리자가 발급한 초대 토큰</span>으로 진행됩니다.
+                <span className="text-white/65"> /signup → 토큰 입력 → 계정 정보 작성</span>
+                {' '}순서로 가입을 완료할 수 있어요.
+              </p>
+            </div>
+          </section>
+        </main>
+
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteJsonLd) }} />
+
+        <footer className="border-t border-white/10 py-8 text-xs text-white/45">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+            <p>© 2026 GSHS.app</p>
+            <div className="flex items-center gap-4">
+              <Link href="/privacy" className="hover:text-white/70 transition-colors">개인정보처리방침</Link>
+              <Link href="/help" className="hover:text-white/70 transition-colors">도움말</Link>
+            </div>
+          </div>
+        </footer>
+      </div>
+    </div>
+  );
 }

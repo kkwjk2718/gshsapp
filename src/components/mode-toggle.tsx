@@ -6,7 +6,7 @@ import { useTheme } from "next-themes"
 import { cn } from "@/lib/utils"
 
 export function ModeToggle({ className }: { className?: string }) {
-  const { setTheme, theme, resolvedTheme } = useTheme()
+  const { setTheme, resolvedTheme } = useTheme()
   const [mounted, setMounted] = React.useState(false)
 
   React.useEffect(() => {
@@ -16,14 +16,15 @@ export function ModeToggle({ className }: { className?: string }) {
   if (!mounted) {
     return (
       <div className={cn("relative p-2 w-9 h-9", className)}>
-        <div className="w-5 h-5 bg-slate-200 dark:bg-slate-800 rounded-full" />
+        <div className="w-5 h-5 rounded-full" style={{ backgroundColor: "var(--border)" }} />
       </div>
     )
   }
 
   return (
     <button
-      className={cn("relative p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors", className)}
+      className={cn("relative p-2 rounded-full transition-colors", className)}
+      style={{ color: "var(--foreground)", backgroundColor: "transparent" }}
       onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
       title="테마 변경"
     >

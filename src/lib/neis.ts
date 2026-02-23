@@ -9,6 +9,7 @@ export interface MealInfo {
   DDISH_NM: string; // 급식 내용 (HTML tags included)
   CAL_INFO: string;
   NTR_INFO: string;
+  MLSV_YMD: string;
 }
 
 export interface TimetableInfo {

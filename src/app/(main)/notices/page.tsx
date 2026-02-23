@@ -8,10 +8,20 @@ import { Metadata } from "next";
 export const metadata: Metadata = {
    title: "공지사항",
    description: "학교의 주요 공지사항과 소식을 확인하세요.",
+   alternates: { canonical: "/notices" },
 };
 
 export default async function NoticesPage() {
    const user = await getCurrentUser();
+   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://gshs.app";
+   const breadcrumbJsonLd = {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      itemListElement: [
+         { "@type": "ListItem", position: 1, name: "홈", item: `${baseUrl}/` },
+         { "@type": "ListItem", position: 2, name: "공지사항", item: `${baseUrl}/notices` },
+      ],
+   };
 
    const notices = await prisma.notice.findMany({
       orderBy: { createdAt: "desc" },
@@ -28,21 +38,23 @@ export default async function NoticesPage() {
 
    return (
       <div className="mobile-page mobile-safe-bottom space-y-6">
+         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }} />
          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
             <div className="flex items-center gap-3">
-               <div className="p-3 bg-indigo-100 dark:bg-indigo-900/30 rounded-full text-indigo-600">
+               <div className="p-3 rounded-full" style={{ backgroundColor: "var(--surface-2)", color: "var(--accent)" }}>
                   <Megaphone className="w-6 h-6" />
                </div>
                <div>
                   <h1 className="text-2xl font-bold">공지사항</h1>
-                  <p className="text-slate-500">학교의 주요 소식을 확인하세요.</p>
+                  <p style={{ color: "var(--muted)" }}>학교의 주요 소식을 확인하세요.</p>
                </div>
             </div>
 
             {canWrite && (
                <Link
                   href="/admin/notices/new"
-                  className="flex items-center justify-center gap-2 px-4 py-2.5 tap-target bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition-colors w-full sm:w-auto"
+                  className="flex items-center justify-center gap-2 px-4 py-2.5 tap-target font-bold rounded-xl transition-colors w-full sm:w-auto"
+                  style={{ backgroundColor: "var(--accent)", color: "var(--brand-sub)" }}
                >
                   <PlusCircle className="w-4 h-4" />
                   새 공지 작성
@@ -65,29 +77,30 @@ export default async function NoticesPage() {
                      className="block"
                   >
                      <div
-                        className={`glass p-6 rounded-3xl hover:scale-[1.01] transition-all border-l-4 cursor-pointer ${isAdmin ? "border-indigo-500 bg-indigo-50/50 dark:bg-indigo-900/10" : "border-transparent"}`}
+                        className="glass p-6 rounded-3xl hover:scale-[1.01] transition-all border-l-4 cursor-pointer"
+                        style={{ borderLeftColor: isAdmin ? "var(--accent)" : "var(--border)", backgroundColor: "var(--surface)" }}
                      >
                         <div className="flex items-center gap-2 mb-2">
-                           <span className={`px-2 py-1 rounded-md text-xs font-bold ${isAdmin ? "bg-indigo-100 text-indigo-600 dark:bg-indigo-900 dark:text-indigo-300" : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400"}`}>
+                           <span className="px-2 py-1 rounded-md text-xs font-bold" style={{ backgroundColor: "var(--surface-2)", color: isAdmin ? "var(--accent)" : "var(--muted)" }}>
                               {notice.category}
                            </span>
-                           {isAdmin && <ShieldCheck className="w-4 h-4 text-indigo-500" />}
-                           <span className="text-xs text-slate-400">
+                           {isAdmin && <ShieldCheck className="w-4 h-4" style={{ color: "var(--accent)" }} />}
+                           <span className="text-xs" style={{ color: "var(--muted)" }}>
                               {format(notice.createdAt, "yyyy.MM.dd")}
                            </span>
                         </div>
                         <h2 className="text-xl font-bold mb-2">{notice.title}</h2>
-                        <p className="text-slate-600 dark:text-slate-300 leading-relaxed mb-2">
+                        <p className="leading-relaxed mb-2" style={{ color: "var(--muted)" }}>
                            {truncatedContent}
                         </p>
                         {showMoreLink && (
-                           <span className="text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:underline">
+                           <span className="text-sm font-medium hover:underline" style={{ color: "var(--accent)" }}>
                               더 보기 →
                            </span>
                         )}
-                        <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between text-sm text-slate-500">
+                        <div className="mt-4 pt-4 border-t flex items-center justify-between text-sm" style={{ borderColor: "var(--border)", color: "var(--muted)" }}>
                            <span>작성자: {notice.writer.name} {isAdmin ? "(관리자)" : ""}</span>
-                           {!notice.expiresAt && <span className="text-xs bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded">상시 공지</span>}
+                           {!notice.expiresAt && <span className="text-xs px-2 py-1 rounded" style={{ backgroundColor: "var(--surface-2)", color: "var(--muted)" }}>상시 공지</span>}
                         </div>
                      </div>
                   </Link>

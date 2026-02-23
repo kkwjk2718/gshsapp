@@ -62,17 +62,17 @@ export default async function TimetablePage({ searchParams }: { searchParams: Pr
           {timetable && timetable.length > 0 ? (
             timetable.map((t, i) => (
                 <div key={i} className="glass p-4 rounded-2xl flex items-center gap-6 hover:scale-[1.01] transition-transform">
-                    <div className="w-12 h-12 flex items-center justify-center rounded-2xl bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 font-bold text-lg">
+                    <div className="w-12 h-12 flex items-center justify-center rounded-2xl font-bold text-lg" style={{ backgroundColor: "var(--surface-2)", color: "var(--accent)" }}>
                         {t.PERIO}
                     </div>
                     <div className="flex-1">
-                        <div className="text-lg font-bold text-slate-800 dark:text-slate-100">{t.ITRT_CNTNT}</div>
+                        <div className="text-lg font-bold" style={{ color: "var(--foreground)" }}>{t.ITRT_CNTNT}</div>
                     </div>
-                    <Clock className="w-5 h-5 text-slate-300" />
+                    <Clock className="w-5 h-5" style={{ color: "var(--muted)" }} />
                 </div>
             ))
           ) : (
-             <div className="text-center py-12 text-slate-500">
+             <div className="text-center py-12" style={{ color: "var(--muted)" }}>
                 수업 정보가 없습니다. (주말 또는 휴일)
              </div>
           )}

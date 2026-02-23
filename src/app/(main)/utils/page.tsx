@@ -30,7 +30,7 @@ const tools = [
 
 export default function UtilsPage() {
    return (
-      <div className="p-4 md:p-8 space-y-8">
+      <div className="mobile-page mobile-safe-bottom space-y-8">
          <div className="flex items-center gap-3">
             <div className="p-3 bg-indigo-100 dark:bg-indigo-900/30 rounded-full text-indigo-600">
                <Wrench className="w-6 h-6" />

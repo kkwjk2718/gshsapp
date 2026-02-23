@@ -45,3 +45,7 @@ next-env.d.ts
 # large files
 *.tar
 gshsapp-web.tar
+
+# local runtime database
+/dev.db
+/prisma/dev.db

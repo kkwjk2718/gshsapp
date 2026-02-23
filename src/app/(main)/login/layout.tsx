@@ -3,6 +3,8 @@ import { Metadata } from "next";
 export const metadata: Metadata = {
   title: "로그인",
   description: "GSHS.app에 로그인하여 개인화된 서비스를 이용하세요.",
+  robots: { index: false, follow: false },
+  alternates: { canonical: "/login" },
 };
 
 export default function LoginLayout({

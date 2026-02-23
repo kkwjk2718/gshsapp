@@ -42,11 +42,8 @@ export function CalendarView({ schedules }: { schedules: ScheduleItem[] }) {
     ).sort((a, b) => (a.isExternal ? 1 : -1));
 
     const getEventStyle = (s: ScheduleItem) => {
-        if (s.isNEIS) return { dot: 'bg-amber-400', card: 'border-amber-500 bg-amber-50 dark:bg-amber-900/20', cellBg: 'bg-amber-50 dark:bg-amber-900/10' };
-        if (s.isExternal) return { dot: 'bg-slate-400', card: 'border-slate-500 bg-slate-50 dark:bg-slate-800/20', cellBg: 'bg-slate-50 dark:bg-slate-800/50' };
-        if (s.category === 'HOLIDAY') return { dot: 'bg-rose-400', card: 'border-rose-500 bg-rose-50 dark:bg-rose-900/20', cellBg: 'bg-rose-50 dark:bg-rose-900/10' };
-        if (s.category === 'PERSONAL') return { dot: 'bg-emerald-400', card: 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20', cellBg: 'bg-emerald-50 dark:bg-emerald-900/10' };
-        return { dot: 'bg-indigo-400', card: 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20', cellBg: 'bg-indigo-50 dark:bg-indigo-900/10' };
+        if (s.isExternal) return { dot: 'var(--muted)', cardBorder: 'var(--border)', cardBg: 'var(--surface)', cellBg: 'var(--surface)', text: 'var(--muted)' };
+        return { dot: 'var(--accent)', cardBorder: 'var(--accent)', cardBg: 'var(--surface-2)', cellBg: 'var(--surface-2)', text: 'var(--foreground)' };
     };
 
     return (
@@ -57,26 +54,26 @@ export function CalendarView({ schedules }: { schedules: ScheduleItem[] }) {
                 <div className="flex flex-col gap-3 mb-6">
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
-                            <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100">{format(currentDate, "yyyy년 M월")}</h2>
+                            <h2 className="text-2xl font-bold" style={{ color: "var(--foreground)" }}>{format(currentDate, "yyyy년 M월")}</h2>
                             <CalendarInfoTooltip />
                         </div>
                         <div className="flex items-center gap-2">
-                            <button onClick={goToday} className="px-3 py-2 text-xs font-bold bg-indigo-100 text-indigo-600 rounded-xl hover:bg-indigo-200 transition-colors mr-2">오늘</button>
-                            <button onClick={prevMonth} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors"><ChevronLeft className="w-5 h-5" /></button>
-                            <button onClick={nextMonth} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors"><ChevronRight className="w-5 h-5" /></button>
+                            <button onClick={goToday} className="px-3 py-2 text-xs font-bold rounded-xl transition-colors mr-2" style={{ backgroundColor: "var(--surface-2)", color: "var(--accent)" }}>오늘</button>
+                            <button onClick={prevMonth} className="p-2 rounded-full transition-colors" style={{ backgroundColor: "var(--surface-2)", color: "var(--foreground)" }}><ChevronLeft className="w-5 h-5" /></button>
+                            <button onClick={nextMonth} className="p-2 rounded-full transition-colors" style={{ backgroundColor: "var(--surface-2)", color: "var(--foreground)" }}><ChevronRight className="w-5 h-5" /></button>
                         </div>
                     </div>
-                    <div className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1">
-                        <span className="inline-block w-2 h-2 rounded-full bg-amber-400"></span>
-                        NEIS 학사일정
+                    <div className="text-xs flex items-center gap-1" style={{ color: "var(--muted)" }}>
+                        <span className="inline-block w-2 h-2 rounded-full" style={{ backgroundColor: "var(--accent)" }}></span>
+                        학사일정
                         <span className="mx-2">•</span>
-                        <span className="inline-block w-2 h-2 rounded-full bg-slate-400"></span>
+                        <span className="inline-block w-2 h-2 rounded-full" style={{ backgroundColor: "var(--muted)" }}></span>
                         외부 일정
                     </div>
                 </div>
                 {/* Days of Week */}
-                <div className="grid grid-cols-7 text-center text-xs font-bold text-slate-500 mb-2">
-                    <div className="text-rose-500">일</div><div>월</div><div>화</div><div>수</div><div>목</div><div>금</div><div className="text-blue-500">토</div>
+                <div className="grid grid-cols-7 text-center text-xs font-bold mb-2" style={{ color: "var(--muted)" }}>
+                    <div>일</div><div>월</div><div>화</div><div>수</div><div>목</div><div>금</div><div>토</div>
                 </div>
                 {/* Day Cells */}
                 <div className="grid grid-cols-7 auto-rows-fr gap-1">
@@ -86,21 +83,25 @@ export function CalendarView({ schedules }: { schedules: ScheduleItem[] }) {
                             <div
                                 key={idx}
                                 onClick={() => setSelectedDate(day)}
-                                className={`relative p-1.5 sm:p-2 rounded-xl cursor-pointer transition-all border flex flex-col items-center min-h-16 sm:min-h-20 
-                            ${!isSameMonth(day, monthStart) ? "text-slate-300 dark:text-slate-700 bg-slate-50/50 dark:bg-slate-900/30 border-transparent" : "bg-white dark:bg-slate-900/50 border-slate-100 dark:border-slate-800"}
-                            ${isSameDay(day, selectedDate) ? "ring-2 ring-indigo-500 z-10" : "hover:bg-slate-50 dark:hover:bg-slate-800"}`}
+                                className={`relative p-1.5 sm:p-2 rounded-xl cursor-pointer transition-all border flex flex-col items-center min-h-16 sm:min-h-20 ${isSameDay(day, selectedDate) ? "ring-2 ring-[color:var(--accent)] z-10" : ""}`}
+                                style={{
+                                  color: isSameMonth(day, monthStart) ? "var(--foreground)" : "var(--muted)",
+                                  backgroundColor: isSameMonth(day, monthStart) ? "var(--surface)" : "var(--surface-2)",
+                                  borderColor: "var(--border)",
+                                }}
                             >
-                                <div className={`text-sm font-bold mb-1 flex justify-center items-center w-6 h-6 rounded-full mx-auto ${isToday(day) ? "bg-indigo-600 text-white" : ""}`}>
+                                <div className={`text-sm font-bold mb-1 flex justify-center items-center w-6 h-6 rounded-full mx-auto`} style={isToday(day) ? { backgroundColor: "var(--accent)", color: "var(--brand-sub)" } : {}}>
                                     {format(day, "d")}
                                 </div>
                                 <div className="flex flex-col gap-0.5 items-start text-left w-full overflow-hidden px-0.5">
                                     {dayEvents.slice(0, 2).map(evt => (
-                                        <p key={evt.id} className={`text-[8px] leading-snug px-1 py-0.5 rounded-md w-full font-medium truncate ${getEventStyle(evt).cellBg} ${evt.isExternal ? 'text-slate-600 dark:text-slate-400' : 'text-slate-800 dark:text-slate-200'}`}>
+                                        <p key={evt.id} className="text-[8px] leading-snug px-1 py-0.5 rounded-md w-full font-medium truncate"
+                                           style={{ backgroundColor: getEventStyle(evt).cellBg, color: getEventStyle(evt).text }}>
                                             {evt.title}
                                         </p>
                                     ))}
                                     {dayEvents.length > 2 && (
-                                        <div className="text-[7px] text-center text-slate-400 w-full px-1">+{dayEvents.length - 2}개</div>
+                                        <div className="text-[7px] text-center w-full px-1" style={{ color: "var(--muted)" }}>+{dayEvents.length - 2}개</div>
                                     )}
                                 </div>
                             </div>
@@ -111,27 +112,27 @@ export function CalendarView({ schedules }: { schedules: ScheduleItem[] }) {
             {/* Detail Panel */}
             <div className="lg:w-80 glass p-6 rounded-3xl h-fit">
                 <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
-                    <CalendarIcon className="w-5 h-5 text-indigo-500" />
+                    <CalendarIcon className="w-5 h-5" style={{ color: "var(--accent)" }} />
                     {format(selectedDate, "M월 d일 (EEE)", { locale: ko })}
                 </h3>
                 <div className="space-y-3">
                     {dailySchedules.length > 0 ? dailySchedules.map(schedule => (
-                        <div key={schedule.id} className={`p-4 rounded-2xl border-l-4 ${getEventStyle(schedule).card}`}>
+                        <div key={schedule.id} className="p-4 rounded-2xl border-l-4" style={{ borderColor: getEventStyle(schedule).cardBorder, backgroundColor: getEventStyle(schedule).cardBg }}>
                             <div className="font-bold text-sm flex items-center gap-2">
-                                {schedule.isExternal && <ExternalLink className="w-3 h-3 text-slate-400" />}
+                                {schedule.isExternal && <ExternalLink className="w-3 h-3" style={{ color: "var(--muted)" }} />}
                                 {schedule.title}
                             </div>
-                            <div className="text-xs text-slate-500 mt-1">
+                            <div className="text-xs mt-1" style={{ color: "var(--muted)" }}>
                                 {schedule.isNEIS ? "NEIS 학사일정" : schedule.isExternal ? "외부 일정 (Google)" : schedule.category}
                             </div>
                             {schedule.description && (
-                                <div className="text-xs text-slate-600 dark:text-slate-400 mt-1">
+                                <div className="text-xs mt-1" style={{ color: "var(--muted)" }}>
                                     {schedule.description}
                                 </div>
                             )}
                         </div>
                     )) : (
-                        <div className="text-center text-slate-500 py-12">일정이 없습니다.</div>
+                        <div className="text-center py-12" style={{ color: "var(--muted)" }}>일정이 없습니다.</div>
                     )}
                 </div>
             </div>

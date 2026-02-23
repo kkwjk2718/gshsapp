@@ -116,9 +116,9 @@ export default function RandomNumberPage() {
     };
 
     return (
-        <div className="p-4 md:p-8 max-w-4xl mx-auto space-y-6">
+        <div className="mobile-page mobile-safe-bottom max-w-4xl mx-auto space-y-6">
             <div className="flex items-center gap-3 mb-6">
-                <Link href="/utils" className="p-2 -ml-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors mr-2">
+                <Link href="/utils" aria-label="도구 모음으로 돌아가기" className="tap-target p-2 -ml-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors mr-2">
                     <ArrowLeft className="w-5 h-5 text-slate-500" />
                 </Link>
                 <div className="p-3 bg-purple-100 dark:bg-purple-900/30 rounded-full text-purple-600">

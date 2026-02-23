@@ -24,40 +24,48 @@
 /* Light Mode (Default) */
 :root {
   color-scheme: light;
-  --background: #f8fafc;
-  /* slate-50 */
-  --foreground: #0f172a;
-  /* slate-900 */
+  --brand-main: #dce0d9;
+  --brand-sub: #fbf6ef;
+  --brand-third: #ead7c3;
 
-  /* Gradients */
-  --bg-gradient-start: #eef2ff;
-  /* indigo-50 */
-  --bg-gradient-end: #e2e8f0;
-  /* slate-200 */
-  --accent-glow: rgba(99, 102, 241, 0.1);
-  /* indigo-500 light */
+  --background: #fbf6ef;
+  --foreground: #0d3b66;
+  --surface: #fbf6ef;
+  --surface-2: #dce0d9;
+  --border: #ead7c3;
+  --muted: #0d3b66;
+  --accent: #0d3b66;
+
+  --bg-gradient-start: #dce0d9;
+  --bg-gradient-end: #fbf6ef;
+  --accent-glow: #ead7c3;
 }
 
-/* Dark Mode */
+/* Dark Mode - Linear inspired */
 .dark {
   color-scheme: dark;
-  --background: #030712;
-  /* gray-950 */
-  --foreground: #f8fafc;
-  /* slate-50 */
+  --brand-main: #0b0d10;
+  --brand-sub: #f5f7fa;
+  --brand-third: #5e6ad2;
 
-  /* Gradients */
-  --bg-gradient-start: #0f172a;
-  /* slate-900 */
-  --bg-gradient-end: #020617;
-  /* slate-950 */
-  --accent-glow: rgba(99, 102, 241, 0.15);
-  /* indigo-500 dark */
+  --background: #08090a;
+  --foreground: #f5f7fa;
+  --surface: #111216;
+  --surface-2: #171a21;
+  --border: #252935;
+  --muted: #a9afbd;
+  --accent: #5e6ad2;
+
+  --bg-gradient-start: #08090a;
+  --bg-gradient-end: #08090a;
+  --accent-glow: #1a1f30;
 }
 
 body {
   color: var(--foreground);
-  background: radial-gradient(circle at 50% 0%, var(--bg-gradient-start), var(--background) 100%);
+  background:
+    radial-gradient(1200px 500px at 50% -220px, var(--accent-glow), transparent 70%),
+    var(--background);
   background-attachment: fixed;
   font-family: var(--font-sans);
   transition: background-color 0.3s ease, color 0.3s ease;
@@ -78,11 +86,13 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  @apply bg-slate-300 dark:bg-slate-800/50 rounded-full hover:bg-slate-400 dark:hover:bg-slate-700/80 transition-colors;
+  background: var(--border);
+  border-radius: 9999px;
 }
 
 ::selection {
-  @apply bg-indigo-200 dark:bg-indigo-500/40 text-indigo-900 dark:text-indigo-50;
+  background: var(--brand-third);
+  color: var(--brand-main);
 }
 
 @layer utilities {
@@ -102,31 +112,106 @@ body {
 
   /* Premium Glass Effect */
   .glass {
-    @apply bg-white dark:bg-slate-900/40 dark:backdrop-blur-xl border border-slate-200 dark:border-white/5 shadow-lg shadow-slate-300/20 dark:shadow-black/20;
+    @apply border rounded-xl;
+    background: var(--surface);
+    border-color: var(--border);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
   }
 
-  /* Lighter Glass for Cards */
   .glass-card {
-    @apply bg-white dark:bg-slate-900/40 dark:backdrop-blur-lg border border-slate-200 dark:border-white/5 rounded-3xl transition-all duration-300;
+    @apply border rounded-2xl transition-all duration-300;
+    background: var(--surface);
+    border-color: var(--border);
   }
 
-  /* Hover effect for cards */
   .glass-card-hover {
-    @apply hover:bg-white dark:hover:bg-slate-800/40 hover:border-slate-300 dark:hover:border-white/10 hover:shadow-xl hover:shadow-indigo-300/20 dark:hover:shadow-indigo-500/5 hover:-translate-y-1;
+    @apply hover:-translate-y-0.5 hover:shadow-lg;
+    box-shadow: 0 4px 12px var(--accent-glow);
   }
 
   /* Gradient Text */
   .text-gradient {
-    @apply bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 via-violet-600 to-indigo-600 dark:from-indigo-400 dark:via-violet-400 dark:to-indigo-400;
+    background: linear-gradient(90deg, var(--foreground), var(--accent));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  .text-brand {
+    color: var(--brand-main);
+  }
+
+  .text-brand-sub {
+    color: var(--brand-sub);
+  }
+
+  .bg-brand {
+    background-color: var(--brand-main);
+  }
+
+  .bg-brand-sub {
+    background-color: var(--brand-sub);
+  }
+
+  .bg-brand-third {
+    background-color: var(--brand-third);
   }
 
   /* Primary Button */
   .btn-primary {
-    @apply bg-indigo-600 text-white font-bold py-3 px-6 rounded-xl hover:bg-indigo-500 transition-all duration-300 shadow-lg shadow-indigo-500/20 active:scale-95 flex items-center justify-center gap-2;
+    @apply font-bold py-3 px-6 rounded-lg transition-all duration-300 active:scale-95 flex items-center justify-center gap-2;
+    background: var(--brand-main);
+    color: var(--brand-sub);
+    box-shadow: 0 10px 22px var(--brand-third);
+  }
+
+  .btn-primary:hover {
+    filter: none;
   }
 
   /* Secondary/Glass Button */
   .btn-glass {
-    @apply bg-white text-slate-700 dark:bg-white/5 dark:text-slate-200 font-medium py-3 px-6 rounded-xl hover:bg-slate-100 dark:hover:bg-white/10 border border-slate-200 dark:border-white/5 transition-all duration-300 active:scale-95 flex items-center justify-center gap-2;
+    @apply font-medium py-3 px-6 rounded-lg transition-all duration-300 active:scale-95 flex items-center justify-center gap-2;
+    background: var(--brand-sub);
+    color: var(--brand-main);
+    border: 1px solid var(--brand-third);
+  }
+
+  /* Admin area normalization */
+  .admin-theme button {
+    border-radius: 0.75rem;
+  }
+
+  .admin-theme input,
+  .admin-theme select,
+  .admin-theme textarea {
+    background: var(--surface) !important;
+    color: var(--foreground) !important;
+    border: 1px solid var(--border) !important;
+  }
+
+  .admin-theme input:focus,
+  .admin-theme select:focus,
+  .admin-theme textarea:focus {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+  }
+
+  .admin-theme button:not(:disabled),
+  .admin-theme a[role="button"],
+  .admin-theme a[class*="bg-"] {
+    background: var(--surface-2) !important;
+    color: var(--foreground) !important;
+    border: 1px solid var(--border) !important;
+  }
+
+  .admin-theme button:not(:disabled):hover,
+  .admin-theme a[role="button"]:hover,
+  .admin-theme a[class*="bg-"]:hover {
+    filter: brightness(1.04);
+  }
+
+  .admin-theme button:disabled {
+    opacity: 0.55;
   }
 }

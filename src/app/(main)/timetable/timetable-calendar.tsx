@@ -45,10 +45,11 @@ export function TimetableCalendar({ currentDate }: TimetableCalendarProps) {
             <button
                 onClick={handleButtonClick}
                 className={cn(
-                    "flex items-center gap-2 text-lg font-semibold px-4 py-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors outline-none cursor-pointer"
+                    "flex items-center gap-2 text-lg font-semibold px-4 py-2 rounded-xl transition-colors outline-none cursor-pointer"
                 )}
+                style={{ backgroundColor: "var(--surface-2)", color: "var(--foreground)" }}
             >
-                <CalendarIcon className="w-5 h-5 text-indigo-500" />
+                <CalendarIcon className="w-5 h-5" style={{ color: "var(--accent)" }} />
                 <span>{format(currentDate, "M월 d일 (EEE)", { locale: ko })}</span>
             </button>
 

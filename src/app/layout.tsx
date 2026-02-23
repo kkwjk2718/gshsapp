@@ -5,6 +5,7 @@ import Script from 'next/script';
 import { Analytics } from "@/components/analytics";
 import { Noto_Sans_KR } from "next/font/google";
 import { Toaster } from "sonner";
+import { DevServiceWorkerReset } from "@/components/dev-sw-reset";
 
 const notoSansKr = Noto_Sans_KR({
   subsets: ["latin"],
@@ -14,6 +15,7 @@ const notoSansKr = Noto_Sans_KR({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || "https://gshs.app"),
   title: {
     default: "GSHS.app - 경남과학고등학교 학생 통합 플랫폼",
     template: "%s | GSHS.app",
@@ -76,6 +78,30 @@ export default function RootLayout({
   return (
     <html lang="ko" suppressHydrationWarning>
       <body className={`antialiased bg-slate-50 dark:bg-slate-950 transition-colors duration-300 ${notoSansKr.className} ${notoSansKr.variable}`}>
+        <Script
+          id="theme-migrate"
+          strategy="beforeInteractive"
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function() {
+                try {
+                  var params = new URLSearchParams(location.search);
+                  var forced = params.get('theme');
+                  if (forced === 'light' || forced === 'dark') {
+                    localStorage.setItem('theme', forced);
+                  }
+                  var t = localStorage.getItem('theme');
+                  var dark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+                  var effective = (t === 'dark' || t === 'light') ? t : (dark ? 'dark' : 'light');
+                  var root = document.documentElement;
+                  root.classList.remove('light', 'dark');
+                  root.classList.add(effective);
+                  root.style.colorScheme = effective;
+                } catch (e) {}
+              })();
+            `,
+          }}
+        />
         {gaId && (
           <>
             <Script
@@ -101,9 +127,10 @@ export default function RootLayout({
         <ThemeProvider
           attribute="class"
           defaultTheme="system"
-          enableSystem={true}
+          enableSystem
           disableTransitionOnChange
         >
+          <DevServiceWorkerReset />
           <Analytics />
           {children}
           <Toaster />

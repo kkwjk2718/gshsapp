@@ -3,12 +3,17 @@
 import { Sidebar } from "@/components/layout/Sidebar";
 import { BottomNav } from "@/components/layout/BottomNav";
 import { Footer } from "@/components/layout/Footer";
+import { getCurrentUser } from "@/lib/session";
+import { maybeRunScheduledBackup } from "@/lib/backup";
 
-export default function MainLayout({
+export default async function MainLayout({
     children,
 }: Readonly<{
     children: React.ReactNode;
 }>) {
+    const user = await getCurrentUser();
+    await maybeRunScheduledBackup();
+
     return (
         <div className="flex min-h-screen">
             <Sidebar />
@@ -18,7 +23,7 @@ export default function MainLayout({
                 </div>
                 <Footer />
             </main>
-            <BottomNav />
+            <BottomNav role={user?.role} />
         </div>
     );
 }

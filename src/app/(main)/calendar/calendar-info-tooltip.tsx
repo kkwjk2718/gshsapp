@@ -13,7 +13,7 @@ export function CalendarInfoTooltip() {
         <TooltipProvider delayDuration={0}>
             <Tooltip>
                 <TooltipTrigger asChild>
-                    <button className="p-1.5 text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300 transition-colors rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer">
+                    <button className="p-1.5 transition-colors rounded-full cursor-pointer" style={{ color: "var(--muted)", backgroundColor: "var(--surface-2)" }}>
                         <Info className="w-4 h-4" />
                         <span className="sr-only">학사일정 정보 안내</span>
                     </button>

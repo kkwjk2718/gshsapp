@@ -35,36 +35,36 @@ export function SignupForm({ token }: SignupFormProps) {
             <input type="hidden" name="token" value={token} />
 
             <div>
-                <label className="text-xs font-bold text-slate-500 mb-1 block">아이디</label>
-                <input name="userId" required className="w-full px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 border-transparent focus:border-indigo-500 focus:ring-indigo-500" />
+                <label className="text-xs font-bold mb-1 block" style={{ color: "var(--muted)" }}>아이디</label>
+                <input name="userId" required className="w-full px-3 py-2 rounded-xl border" style={{ backgroundColor: "var(--surface)", borderColor: "var(--border)", color: "var(--foreground)" }} />
             </div>
             <div>
-                <label className="text-xs font-bold text-slate-500 mb-1 block">비밀번호</label>
-                <input name="password" type="password" required value={password} onChange={(e) => setPassword(e.target.value)} className="w-full px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 border-transparent focus:border-indigo-500 focus:ring-indigo-500" />
+                <label className="text-xs font-bold mb-1 block" style={{ color: "var(--muted)" }}>비밀번호</label>
+                <input name="password" type="password" required value={password} onChange={(e) => setPassword(e.target.value)} className="w-full px-3 py-2 rounded-xl border" style={{ backgroundColor: "var(--surface)", borderColor: "var(--border)", color: "var(--foreground)" }} />
             </div>
             <div>
-                <label className="text-xs font-bold text-slate-500 mb-1 block">비밀번호 확인</label>
-                <input name="confirmPassword" type="password" required value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className={`w-full px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 border-2 ${!passwordsMatch ? 'border-rose-500' : 'border-transparent'}`} />
-                {!passwordsMatch && <p className="text-xs text-rose-500 mt-1">비밀번호가 일치하지 않습니다.</p>}
+                <label className="text-xs font-bold mb-1 block" style={{ color: "var(--muted)" }}>비밀번호 확인</label>
+                <input name="confirmPassword" type="password" required value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className="w-full px-3 py-2 rounded-xl border-2" style={{ backgroundColor: "var(--surface)", borderColor: !passwordsMatch ? '#ef4444' : 'var(--border)', color: "var(--foreground)" }} />
+                {!passwordsMatch && <p className="text-xs mt-1" style={{ color: "#ef4444" }}>비밀번호가 일치하지 않습니다.</p>}
             </div>
 
-            <hr className="border-slate-200 dark:border-slate-800" />
+            <hr style={{ borderColor: "var(--border)" }} />
 
             <div>
-                <label className="text-xs font-bold text-slate-500 mb-1 block">이름</label>
-                <input name="name" required className="w-full px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 border-transparent focus:border-indigo-500 focus:ring-indigo-500" />
+                <label className="text-xs font-bold mb-1 block" style={{ color: "var(--muted)" }}>이름</label>
+                <input name="name" required className="w-full px-3 py-2 rounded-xl border" style={{ backgroundColor: "var(--surface)", borderColor: "var(--border)", color: "var(--foreground)" }} />
             </div>
             <div>
-                <label className="text-xs font-bold text-slate-500 mb-1 block">학번 (예: 42101)</label>
-                <input name="studentId" placeholder="선생님은 비워두세요" className="w-full px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 border-transparent focus:border-indigo-500 focus:ring-indigo-500" />
+                <label className="text-xs font-bold mb-1 block" style={{ color: "var(--muted)" }}>학번 (예: 42101)</label>
+                <input name="studentId" placeholder="선생님은 비워두세요" className="w-full px-3 py-2 rounded-xl border" style={{ backgroundColor: "var(--surface)", borderColor: "var(--border)", color: "var(--foreground)" }} />
             </div>
             <div>
-                <label className="text-xs font-bold text-slate-500 mb-1 block">이메일</label>
-                <input name="email" type="email" required className="w-full px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 border-transparent focus:border-indigo-500 focus:ring-indigo-500" />
+                <label className="text-xs font-bold mb-1 block" style={{ color: "var(--muted)" }}>이메일</label>
+                <input name="email" type="email" required className="w-full px-3 py-2 rounded-xl border" style={{ backgroundColor: "var(--surface)", borderColor: "var(--border)", color: "var(--foreground)" }} />
             </div>
 
             {result?.error && (
-                <div className="flex items-center gap-2 text-sm text-rose-600 bg-rose-50 dark:bg-rose-900/20 p-3 rounded-lg">
+                <div className="flex items-center gap-2 text-sm p-3 rounded-lg" style={{ color: "#ef4444", backgroundColor: "var(--surface-2)" }}>
                     <AlertTriangle className="w-4 h-4" />
                     {result.error}
                 </div>
@@ -73,7 +73,8 @@ export function SignupForm({ token }: SignupFormProps) {
             <button
                 type="submit"
                 disabled={isPending || !passwordsMatch}
-                className="w-full py-3 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full py-3 font-bold rounded-xl transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                style={{ backgroundColor: "var(--accent)", color: "var(--brand-sub)" }}
             >
                 {isPending ? "가입 중..." : "가입하기"}
                 {!isPending && <ArrowRight className="w-4 h-4" />}

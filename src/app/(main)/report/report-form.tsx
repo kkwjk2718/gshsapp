@@ -38,7 +38,7 @@ export function ReportForm() {
 
     return (
         <div className="max-w-2xl mx-auto">
-            <div className="glass p-8 rounded-3xl">
+            <div className="glass p-5 md:p-8 rounded-3xl">
                 <div className="mb-6">
                     <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-2">오류 신고</h2>
                     <p className="text-sm text-slate-600 dark:text-slate-400">

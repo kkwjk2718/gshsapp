@@ -22,20 +22,20 @@ export function LinkCard({ link, canEdit }: { link: LinkItem, canEdit: boolean }
             await updateLink(formData);
             setIsEditing(false);
         }}
-        className="glass p-6 rounded-3xl border-2 border-indigo-500 flex flex-col gap-3 relative z-10"
+        className="glass p-6 rounded-3xl border-2 flex flex-col gap-3 relative z-10" style={{ borderColor: "var(--accent)" }}
       >
         <input type="hidden" name="id" value={link.id} />
-        <input name="title" defaultValue={link.title} placeholder="제목" required className="px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-sm font-bold" />
-        <input name="url" defaultValue={link.url} placeholder="URL" required className="px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs" />
+        <input name="title" defaultValue={link.title} placeholder="제목" required className="px-3 py-2 rounded-lg border text-sm font-bold" style={{ backgroundColor: "var(--surface)", borderColor: "var(--border)", color: "var(--foreground)" }} />
+        <input name="url" defaultValue={link.url} placeholder="URL" required className="px-3 py-2 rounded-lg border text-xs" style={{ backgroundColor: "var(--surface)", borderColor: "var(--border)", color: "var(--foreground)" }} />
         {/* Hidden category input with default value */}
         <input type="hidden" name="category" value="GENERAL" />
-        <input name="description" defaultValue={link.description || ""} placeholder="설명" className="px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs" />
+        <input name="description" defaultValue={link.description || ""} placeholder="설명" className="px-3 py-2 rounded-lg border text-xs" style={{ backgroundColor: "var(--surface)", borderColor: "var(--border)", color: "var(--foreground)" }} />
         
         <div className="flex items-center justify-end gap-2 mt-2">
-            <button type="button" onClick={() => setIsEditing(false)} className="p-2 text-slate-400 hover:text-slate-600">
+            <button type="button" onClick={() => setIsEditing(false)} className="tap-target p-2" style={{ color: "var(--muted)" }}>
                 <X className="w-4 h-4" />
             </button>
-            <button type="submit" className="p-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">
+            <button type="submit" className="tap-target p-2 rounded-lg" style={{ backgroundColor: "var(--accent)", color: "var(--brand-sub)" }}>
                 <Save className="w-4 h-4" />
             </button>
         </div>
@@ -48,9 +48,9 @@ export function LinkCard({ link, canEdit }: { link: LinkItem, canEdit: boolean }
         <div className="relative z-10 pointer-events-none">
             <h3 className="text-lg font-bold flex items-center gap-2 mb-2">
                 {link.title}
-                <ExternalLink className="w-4 h-4 text-slate-400" />
+                <ExternalLink className="w-4 h-4" style={{ color: "var(--muted)" }} />
             </h3>
-            <p className="text-sm text-slate-500 line-clamp-2">{link.description}</p>
+            <p className="text-sm line-clamp-2" style={{ color: "var(--muted)" }}>{link.description}</p>
         </div>
         
         {/* Clickable area for the link */}
@@ -58,16 +58,16 @@ export function LinkCard({ link, canEdit }: { link: LinkItem, canEdit: boolean }
 
         {/* Admin Controls - Higher z-index to be clickable */}
         {canEdit && (
-            <div className="relative z-20 flex justify-end gap-2 mt-4 pt-4 border-t border-slate-100 dark:border-slate-800 opacity-0 group-hover:opacity-100 transition-opacity">
+            <div className="relative z-20 flex justify-end gap-2 mt-4 pt-4 border-t border-slate-100 dark:border-slate-800 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                 <button 
                     onClick={() => setIsEditing(true)}
-                    className="p-2 text-slate-400 hover:text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition-colors"
+                    className="tap-target p-2 text-slate-400 hover:text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition-colors"
                 >
                     <Edit2 className="w-4 h-4" />
                 </button>
                 <form action={deleteLink}>
                     <input type="hidden" name="id" value={link.id} />
-                    <button type="submit" className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 rounded-lg transition-colors">
+                    <button type="submit" className="tap-target p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 rounded-lg transition-colors">
                         <Trash2 className="w-4 h-4" />
                     </button>
                 </form>

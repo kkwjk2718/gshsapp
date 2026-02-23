@@ -8,12 +8,12 @@ import { motion, AnimatePresence } from "framer-motion";
 export default function HelpPage() {
     const faqs = [
         {
-            question: "아이디/비밀번호를 분실했어요.",
-            answer: "구글 계정(@gshs.gne.go.kr)의 비밀번호를 분실하셨다면, 정보부 학생에게 비밀번호 초기화를 요청해주세요."
+            question: "비밀번호를 분실했어요.",
+            answer: "비밀번호를 분실하셨다면, 정보부 학생에게 비밀번호 초기화를 요청해주세요."
         },
         {
             question: "기상곡 신청은 언제 할 수 있나요?",
-            answer: "기상곡 신청은 매주 정해진 기간(보통 일요일 저녁 6시 ~ 수요일 밤 12시)에만 가능합니다. 방송부원이나 관리자가 신청 기간을 설정합니다."
+            answer: "기상곡 신청은 학년별로 정해진 요일에만 가능합니다. 방송부원이나 관리자가 신청 기간을 설정합니다."
         },
         {
             question: "급식 정보가 안 나와요.",
@@ -30,7 +30,7 @@ export default function HelpPage() {
     ];
 
     return (
-        <div className="max-w-3xl mx-auto p-6 md:p-12 space-y-12">
+        <div className="mobile-page mobile-safe-bottom max-w-3xl mx-auto space-y-12">
             <header className="text-center space-y-4">
                 <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-indigo-500/10 text-indigo-500 mb-4">
                     <HelpCircle className="w-8 h-8" />
@@ -83,7 +83,7 @@ export default function HelpPage() {
                             기능 제안이나 기타 문의사항이 있으신가요?
                         </p>
                         <a
-                            href="mailto:gshs.app.team@gmail.com"
+                            href="mailto:kkwjk9534@naver.com"
                             className="inline-flex items-center gap-2 text-sm font-bold text-indigo-500 hover:text-indigo-600 transition-colors"
                         >
                             이메일 보내기 &rarr;
@@ -102,7 +102,7 @@ function FaqItem({ question, answer }: { question: string, answer: string }) {
         <div className="glass rounded-xl overflow-hidden transition-all duration-200 border border-transparent hover:border-slate-200 dark:hover:border-slate-700">
             <button
                 onClick={() => setIsOpen(!isOpen)}
-                className="w-full px-6 py-4 flex items-center justify-between text-left font-medium hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors"
+                className="tap-target w-full px-6 py-4 flex items-center justify-between text-left font-medium hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors"
             >
                 <span>{question}</span>
                 {isOpen ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}

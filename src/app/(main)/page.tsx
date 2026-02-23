@@ -12,6 +12,13 @@ import { getUserGrade } from "@/lib/grade-utils";
 import { NotificationBadge } from "@/components/layout/notification-badge";
 
 import { MealViewTracker } from "@/components/meal-view-tracker";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+    title: "홈",
+    description: "경남과학고 학생 생활 정보를 한 곳에서 확인하세요.",
+    alternates: { canonical: "/" },
+};
 
 export default async function Home() {
     const today = new Date();
@@ -118,8 +125,8 @@ export default async function Home() {
             {/* Header */}
             <header className="flex items-center justify-between mb-6">
                 <div>
-                    <h1 className="text-xl font-bold text-indigo-600 dark:text-indigo-400">GSHS.app</h1>
-                    <div className="text-xs text-slate-600 dark:text-slate-600 flex items-center gap-2 mt-1">
+                    <h1 className="text-xl font-bold" style={{ color: "var(--foreground)" }}>GSHS.app</h1>
+                    <div className="text-xs flex items-center gap-2 mt-1" style={{ color: "var(--muted)" }}>
                         <RealtimeClock compact />
                         {user && (
                             <>
@@ -131,7 +138,7 @@ export default async function Home() {
                 </div>
                 <div className="flex items-center gap-2">
                     <WeatherWidget />
-                    <Link href="/notifications" className="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors cursor-pointer relative">
+                    <Link href="/notifications" className="p-2 rounded-full transition-colors cursor-pointer relative" style={{ backgroundColor: "var(--surface-2)" }}>
                         <Bell className="w-5 h-5" />
                         <NotificationBadge className="w-2.5 h-2.5 top-2 right-2 border-slate-50 dark:border-slate-900" />
                     </Link>
@@ -145,26 +152,26 @@ export default async function Home() {
                 <div className="flex flex-col gap-4">
                     {/* Welcome & D-Day */}
                     <div className="glass-card p-6 relative overflow-hidden flex items-center justify-between gap-4 group">
-                        <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/5 to-purple-500/5 transition-all group-hover:scale-105" />
+                        <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/[0.03] to-purple-500/[0.03] transition-all" />
 
                         {user ? (
                             <>
                                 <div className="relative z-10">
-                                    <h2 className="text-xl font-bold mb-1 text-slate-900 dark:text-white">
+                                    <h2 className="text-xl font-bold mb-1" style={{ color: "var(--foreground)" }}>
                                         안녕하세요, {user.name}님!
                                     </h2>
-                                    <p className="text-slate-600 dark:text-slate-400 text-xs">
-                                        <span className="font-bold text-indigo-600 dark:text-indigo-400">{dDayTitle}</span>{dDayPrefix} <span className="text-rose-600 dark:text-rose-400 font-bold">{dDayCount}</span> {dDayText}
+                                    <p className="text-xs" style={{ color: "var(--muted)" }}>
+                                        <span className="font-bold" style={{ color: "var(--accent)" }}>{dDayTitle}</span>{dDayPrefix} <span className="font-bold" style={{ color: "var(--foreground)" }}>{dDayCount}</span> {dDayText}
                                     </p>
                                 </div>
-                                <div className="relative z-10 w-12 h-12 rounded-full bg-indigo-100 dark:bg-indigo-500/20 flex items-center justify-center text-indigo-600 dark:text-indigo-400 ring-1 ring-indigo-300 dark:ring-indigo-500/30">
+                                <div className="relative z-10 w-12 h-12 rounded-full flex items-center justify-center ring-1" style={{ backgroundColor: "var(--surface-2)", color: "var(--accent)", borderColor: "var(--border)" }}>
                                     <Calendar className="w-6 h-6" />
                                 </div>
                             </>
                         ) : (
                             <div className="relative z-10 w-full flex flex-col items-center text-center py-2">
-                                <h2 className="text-lg font-bold mb-2 text-slate-900 dark:text-white">로그인이 필요합니다</h2>
-                                <p className="text-xs text-slate-600 dark:text-slate-400 mb-4">개인화된 서비스를 이용하려면 로그인하세요.</p>
+                                <h2 className="text-lg font-bold mb-2" style={{ color: "var(--foreground)" }}>로그인이 필요합니다</h2>
+                                <p className="text-xs mb-4" style={{ color: "var(--muted)" }}>개인화된 서비스를 이용하려면 로그인하세요.</p>
                                 <Link href="/login" className="btn-primary text-sm py-2 px-6">
                                     <LogIn className="w-4 h-4" />
                                     로그인 하러가기
@@ -238,22 +245,22 @@ export default async function Home() {
                     {/* Quick Links */}
                     <div className="grid grid-cols-3 gap-4">
                         <Link href="/songs" className="glass-card glass-card-hover p-4 flex flex-col items-center justify-center gap-2 text-center">
-                            <div className="w-10 h-10 rounded-full bg-rose-100 dark:bg-rose-500/20 border border-rose-300 dark:border-rose-500/20 flex items-center justify-center text-rose-600 dark:text-rose-400">
+                            <div className="w-10 h-10 rounded-full border flex items-center justify-center" style={{ backgroundColor: "var(--surface-2)", borderColor: "var(--border)", color: "var(--accent)" }}>
                                 <Music className="w-5 h-5" />
                             </div>
-                            <span className="text-xs font-bold text-slate-800 dark:text-slate-300">기상곡</span>
+                            <span className="text-xs font-bold" style={{ color: "var(--foreground)" }}>기상곡</span>
                         </Link>
                         <Link href="/calendar" className="glass-card glass-card-hover p-4 flex flex-col items-center justify-center gap-2 text-center">
-                            <div className="w-10 h-10 rounded-full bg-emerald-100 dark:bg-emerald-500/20 border border-emerald-300 dark:border-emerald-500/20 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
+                            <div className="w-10 h-10 rounded-full border flex items-center justify-center" style={{ backgroundColor: "var(--surface-2)", borderColor: "var(--border)", color: "var(--accent)" }}>
                                 <Calendar className="w-5 h-5" />
                             </div>
-                            <span className="text-xs font-bold text-slate-800 dark:text-slate-300">학사일정</span>
+                            <span className="text-xs font-bold" style={{ color: "var(--foreground)" }}>학사일정</span>
                         </Link>
                         <Link href="/links" className="glass-card glass-card-hover p-4 flex flex-col items-center justify-center gap-2 text-center">
-                            <div className="w-10 h-10 rounded-full bg-sky-100 dark:bg-sky-500/20 border border-sky-300 dark:border-sky-500/20 flex items-center justify-center text-sky-600 dark:text-sky-400">
+                            <div className="w-10 h-10 rounded-full border flex items-center justify-center" style={{ backgroundColor: "var(--surface-2)", borderColor: "var(--border)", color: "var(--accent)" }}>
                                 <BookOpen className="w-5 h-5" />
                             </div>
-                            <span className="text-xs font-bold text-slate-800 dark:text-slate-300">바로가기</span>
+                            <span className="text-xs font-bold" style={{ color: "var(--foreground)" }}>바로가기</span>
                         </Link>
                     </div>
                 </div>

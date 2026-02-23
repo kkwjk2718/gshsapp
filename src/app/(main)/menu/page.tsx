@@ -3,21 +3,21 @@ import { User, Settings, BookOpen, Music, Utensils, Clock, Calendar } from "luci
 
 export default function MenuPage() {
   const menuItems = [
-    { name: "내 정보", href: "/me", icon: User, color: "text-indigo-600", bg: "bg-indigo-100" },
-    { name: "급식", href: "/meals", icon: Utensils, color: "text-orange-600", bg: "bg-orange-100" },
-    { name: "시간표", href: "/timetable", icon: Clock, color: "text-emerald-600", bg: "bg-emerald-100" },
-    { name: "기상곡", href: "/songs", icon: Music, color: "text-rose-600", bg: "bg-rose-100" },
-    { name: "학사일정", href: "/calendar", icon: Calendar, color: "text-blue-600", bg: "bg-blue-100" }, // Placeholder
+    { name: "내 정보", href: "/me", icon: User, color: "text-indigo-600 dark:text-indigo-400", bg: "bg-indigo-100 dark:bg-indigo-900/30" },
+    { name: "급식", href: "/meals", icon: Utensils, color: "text-orange-600 dark:text-orange-400", bg: "bg-orange-100 dark:bg-orange-900/30" },
+    { name: "시간표", href: "/timetable", icon: Clock, color: "text-emerald-600 dark:text-emerald-400", bg: "bg-emerald-100 dark:bg-emerald-900/30" },
+    { name: "기상곡", href: "/songs", icon: Music, color: "text-rose-600 dark:text-rose-400", bg: "bg-rose-100 dark:bg-rose-900/30" },
+    { name: "학사일정", href: "/calendar", icon: Calendar, color: "text-blue-600 dark:text-blue-400", bg: "bg-blue-100 dark:bg-blue-900/30" },
   ];
 
   return (
-    <div className="p-4 space-y-6 pb-24">
+    <div className="mobile-page mobile-safe-bottom space-y-6">
       <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">전체 메뉴</h1>
       
       <div className="grid grid-cols-2 gap-4">
          {menuItems.map((item) => (
            <Link href={item.href} key={item.name} className="glass p-4 rounded-2xl flex flex-col items-center justify-center gap-3 aspect-square hover:scale-[1.02] transition-transform">
-              <div className={`p-3 rounded-full ${item.bg} dark:bg-opacity-20 ${item.color}`}>
+              <div className={`p-3 rounded-full ${item.bg} ${item.color}`}>
                  <item.icon className="w-6 h-6" />
               </div>
               <span className="font-medium">{item.name}</span>

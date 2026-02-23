@@ -33,12 +33,12 @@ export default async function MusicManagerPage() {
    return (
       <div className="p-4 md:p-8 space-y-8">
          <div className="flex items-center gap-3">
-            <div className="p-3 bg-rose-100 dark:bg-rose-900/30 rounded-full text-rose-600">
+            <div className="p-3 rounded-full" style={{ backgroundColor: "var(--surface-2)", color: "var(--accent)" }}>
                <MusicIcon className="w-6 h-6" />
             </div>
             <div>
                <h1 className="text-2xl font-bold">방송부 스튜디오</h1>
-               <p className="text-slate-500">기상곡 신청을 관리하고 규칙을 설정하세요.</p>
+               <p style={{ color: "var(--muted)" }}>기상곡 신청을 관리하고 규칙을 설정하세요.</p>
             </div>
          </div>
 
@@ -47,11 +47,59 @@ export default async function MusicManagerPage() {
             <div className="lg:col-span-2 space-y-4">
                <h2 className="text-lg font-bold flex items-center gap-2">
                   <span>🎵 신청 목록</span>
-                  <span className="text-xs font-normal text-slate-400">(우선순위 정렬됨)</span>
+                  <span className="text-xs font-normal" style={{ color: "var(--muted)" }}>(우선순위 정렬됨)</span>
                </h2>
                <div className="glass rounded-3xl overflow-hidden">
-                  <table className="w-full text-left">
-                     <thead className="bg-slate-50 dark:bg-slate-900/50 text-xs font-bold text-slate-500 border-b border-slate-200 dark:border-slate-800">
+                  {/* Mobile cards */}
+                  <div className="md:hidden p-3 space-y-3">
+                     {songs.map(song => (
+                        <div key={song.id} className="rounded-2xl border p-3 space-y-2" style={{ borderColor: "var(--border)", backgroundColor: "var(--surface)" }}>
+                           <div className="flex items-start justify-between gap-2">
+                              <div className="min-w-0">
+                                 <div className="text-xs font-mono" style={{ color: "var(--muted)" }}>점수 {song.priorityScore}</div>
+                                 <div className="font-medium truncate">{song.videoTitle}</div>
+                              </div>
+                              <div className="text-right text-xs" style={{ color: "var(--muted)" }}>
+                                 <div>{song.requester.name}</div>
+                                 <div>{format(song.createdAt, "MM.dd HH:mm")}</div>
+                              </div>
+                           </div>
+                           <a href={song.youtubeUrl} target="_blank" className="text-xs hover:underline block truncate" style={{ color: "var(--accent)" }}>
+                              {song.youtubeUrl}
+                           </a>
+
+                           <div className="flex items-center gap-2 pt-1">
+                              {song.status === 'PENDING' && (
+                                 <>
+                                    <form action={updateSongStatus.bind(null, song.id, 'APPROVED')} className="flex-1">
+                                       <button className="w-full py-2 rounded-lg text-sm font-semibold" style={{ backgroundColor: "var(--surface-2)", color: "var(--accent)" }}>승인</button>
+                                    </form>
+                                    <form action={updateSongStatus.bind(null, song.id, 'REJECTED')} className="flex-1">
+                                       <button className="w-full py-2 rounded-lg text-sm font-semibold" style={{ backgroundColor: "var(--surface-2)", color: "var(--muted)" }}>반려</button>
+                                    </form>
+                                    <BanUserButton userId={song.requester.id} userName={song.requester.name} />
+                                 </>
+                              )}
+                              {song.status === 'APPROVED' && (
+                                 <form action={updateSongStatus.bind(null, song.id, 'PLAYED')} className="flex-1">
+                                    <button className="w-full py-2 rounded-lg text-sm font-semibold" style={{ backgroundColor: "var(--surface-2)", color: "var(--accent)" }}>재생 완료</button>
+                                 </form>
+                              )}
+                              {song.status === 'REJECTED' && (
+                                 <div className="flex items-center gap-2 w-full">
+                                    <span className="text-xs font-bold" style={{ color: "var(--muted)" }}>반려됨</span>
+                                    <BanUserButton userId={song.requester.id} userName={song.requester.name} />
+                                 </div>
+                              )}
+                           </div>
+                        </div>
+                     ))}
+                     {songs.length === 0 && <div className="p-8 text-center" style={{ color: "var(--muted)" }}>대기 중인 신청곡이 없습니다.</div>}
+                  </div>
+
+                  {/* Desktop table */}
+                  <table className="hidden md:table w-full text-left">
+                     <thead className="text-xs font-bold border-b" style={{ backgroundColor: "var(--surface-2)", color: "var(--muted)", borderColor: "var(--border)" }}>
                         <tr>
                            <th className="p-4">점수</th>
                            <th className="p-4">곡 정보</th>
@@ -59,41 +107,41 @@ export default async function MusicManagerPage() {
                            <th className="p-4 text-right">관리</th>
                         </tr>
                      </thead>
-                     <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
+                     <tbody className="divide-y [--tw-divide-color:var(--border)]">
                         {songs.map(song => (
-                           <tr key={song.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
-                              <td className="p-4 font-mono text-xs text-slate-400">{song.priorityScore}</td>
+                           <tr key={song.id} className="transition-colors" style={{ backgroundColor: "transparent" }}>
+                              <td className="p-4 font-mono text-xs" style={{ color: "var(--muted)" }}>{song.priorityScore}</td>
                               <td className="p-4 max-w-[200px]">
                                  <div className="font-medium truncate">{song.videoTitle}</div>
-                                 <a href={song.youtubeUrl} target="_blank" className="text-xs text-indigo-500 hover:underline truncate block">
+                                 <a href={song.youtubeUrl} target="_blank" className="text-xs hover:underline truncate block" style={{ color: "var(--accent)" }}>
                                     {song.youtubeUrl}
                                  </a>
                               </td>
                               <td className="p-4 text-sm">
                                  <div>{song.requester.name}</div>
-                                 <div className="text-xs text-slate-400">{format(song.createdAt, "MM.dd HH:mm")}</div>
+                                 <div className="text-xs" style={{ color: "var(--muted)" }}>{format(song.createdAt, "MM.dd HH:mm")}</div>
                               </td>
                               <td className="p-4 text-right">
                                  <div className="flex justify-end gap-1">
                                     {song.status === 'PENDING' && (
                                        <>
                                           <form action={updateSongStatus.bind(null, song.id, 'APPROVED')}>
-                                             <button className="p-2 bg-emerald-100 text-emerald-600 rounded-lg hover:bg-emerald-200"><Check className="w-4 h-4" /></button>
+                                             <button className="p-2 rounded-lg" style={{ backgroundColor: "var(--surface-2)", color: "var(--accent)" }}><Check className="w-4 h-4" /></button>
                                           </form>
                                           <form action={updateSongStatus.bind(null, song.id, 'REJECTED')}>
-                                             <button className="p-2 bg-rose-100 text-rose-600 rounded-lg hover:bg-rose-200" title="반려"><X className="w-4 h-4" /></button>
+                                             <button className="p-2 rounded-lg" title="반려" style={{ backgroundColor: "var(--surface-2)", color: "var(--muted)" }}><X className="w-4 h-4" /></button>
                                           </form>
                                           <BanUserButton userId={song.requester.id} userName={song.requester.name} />
                                        </>
                                     )}
                                     {song.status === 'APPROVED' && (
                                        <form action={updateSongStatus.bind(null, song.id, 'PLAYED')}>
-                                          <button className="p-2 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200" title="재생 완료"><Play className="w-4 h-4" /></button>
+                                          <button className="p-2 rounded-lg" title="재생 완료" style={{ backgroundColor: "var(--surface-2)", color: "var(--accent)" }}><Play className="w-4 h-4" /></button>
                                        </form>
                                     )}
                                     {song.status === 'REJECTED' && (
                                        <div className="flex items-center gap-2 py-2">
-                                          <span className="text-xs text-rose-500 font-bold">반려됨</span>
+                                          <span className="text-xs font-bold" style={{ color: "var(--muted)" }}>반려됨</span>
                                           <BanUserButton userId={song.requester.id} userName={song.requester.name} />
                                        </div>
                                     )}
@@ -103,7 +151,7 @@ export default async function MusicManagerPage() {
                         ))}
                      </tbody>
                   </table>
-                  {songs.length === 0 && <div className="p-12 text-center text-slate-500">대기 중인 신청곡이 없습니다.</div>}
+                  {songs.length === 0 && <div className="hidden md:block p-12 text-center" style={{ color: "var(--muted)" }}>대기 중인 신청곡이 없습니다.</div>}
                </div>
             </div>
 
@@ -114,7 +162,7 @@ export default async function MusicManagerPage() {
                   <span>요일별 규칙</span>
                </h2>
                <div className="glass p-6 rounded-3xl space-y-4">
-                  <p className="text-xs text-slate-500 mb-4">
+                  <p className="text-xs mb-4" style={{ color: "var(--muted)" }}>
                      각 요일에 신청 가능한 학년을 설정합니다. (쉼표로 구분, 예: "1,2", 모두 허용: "ALL")
                   </p>
                   {days.map((day, idx) => {
@@ -126,13 +174,14 @@ export default async function MusicManagerPage() {
                            "use server";
                            await updateSongRule(idx, formData.get("allowedGrade") as string);
                         }} className="flex items-center gap-2">
-                           <div className="w-8 font-bold text-slate-600">{day}</div>
+                           <div className="w-8 font-bold" style={{ color: "var(--foreground)" }}>{day}</div>
                            <input
                               name="allowedGrade"
                               defaultValue={currentVal}
-                              className="flex-1 px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-sm text-center uppercase"
+                              className="flex-1 px-3 py-2 rounded-xl border text-sm text-center uppercase"
+                              style={{ backgroundColor: "var(--surface)", borderColor: "var(--border)", color: "var(--foreground)" }}
                            />
-                           <button className="text-xs text-indigo-500 hover:underline">저장</button>
+                           <button className="text-xs hover:underline" style={{ color: "var(--accent)" }}>저장</button>
                         </form>
                      )
                   })}

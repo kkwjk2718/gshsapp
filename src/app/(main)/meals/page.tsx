@@ -103,18 +103,18 @@ export default async function MealsPage({ searchParams }: { searchParams: Promis
   const lunch = getMealByType("중식");
   const dinner = getMealByType("석식");
 
-  const MealCard = ({ title, data, colorClass }: { title: string, data?: MealInfo, colorClass: string }) => {
+  const MealCard = ({ title, data }: { title: string, data?: MealInfo }) => {
     const foodAllergies = data ? parseAllergiesByFood(data.DDISH_NM) : [];
     const hasAllergyInfo = foodAllergies.some(item => item.allergies.length > 0);
 
     return (
       <div className="glass p-6 rounded-3xl flex flex-col gap-4 min-h-[250px] relative">
         <div className="flex items-center justify-between relative z-10">
-          <div className={`px-3 py-1 rounded-full text-sm font-bold ${colorClass}`}>
+          <div className="px-3 py-1 rounded-full text-sm font-bold" style={{ backgroundColor: "var(--surface-2)", color: "var(--accent)" }}>
             {title}
           </div>
           <div className="flex items-center gap-2">
-            {data && <div className="text-xs text-slate-400">열량: {data.CAL_INFO}</div>}
+            {data && <div className="text-xs" style={{ color: "var(--muted)" }}>열량: {data.CAL_INFO}</div>}
             {(hasAllergyInfo || data?.CAL_INFO) && <MealAllergyInfo foodAllergies={foodAllergies} calorie={data?.CAL_INFO} />}
           </div>
         </div>
@@ -126,13 +126,13 @@ export default async function MealsPage({ searchParams }: { searchParams: Promis
               const cleanName = dish.replace(/\([^)]*\)/g, '').trim();
               if (!cleanName) return null;
               return (
-                <div key={index} className="text-slate-700 dark:text-slate-300 text-base font-medium text-center leading-snug">
+                <div key={index} className="text-base font-medium text-center leading-snug" style={{ color: "var(--foreground)" }}>
                   {cleanName}
                 </div>
               );
             })
           ) : (
-            <div className="text-center text-slate-400">급식 정보가 없습니다.</div>
+            <div className="text-center" style={{ color: "var(--muted)" }}>급식 정보가 없습니다.</div>
           )}
         </div>
       </div>
@@ -145,17 +145,17 @@ export default async function MealsPage({ searchParams }: { searchParams: Promis
       {/* Header & Nav */}
       <div className="flex flex-col items-center justify-center gap-1 mb-8 relative">
         <div className="flex items-center gap-2">
-          <h1 className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">급식 식단</h1>
+          <h1 className="text-2xl font-bold" style={{ color: "var(--foreground)" }}>급식 식단</h1>
           <MealInfoTooltip />
         </div>
-        <div className="flex items-center gap-2 mt-4 bg-white dark:bg-slate-900 p-2 rounded-2xl shadow-sm">
-          <Link href={`/meals?date=${prevDate}`} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors">
+        <div className="flex items-center gap-2 mt-4 p-2 rounded-2xl shadow-sm" style={{ backgroundColor: "var(--surface)", border: "1px solid var(--border)" }}>
+          <Link href={`/meals?date=${prevDate}`} className="p-2 rounded-xl transition-colors" style={{ color: "var(--foreground)" }}>
             <ChevronLeft className="w-5 h-5" />
           </Link>
 
           <MealCalendar currentDate={currentDate} />
 
-          <Link href={`/meals?date=${nextDate}`} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors">
+          <Link href={`/meals?date=${nextDate}`} className="p-2 rounded-xl transition-colors" style={{ color: "var(--foreground)" }}>
             <ChevronRight className="w-5 h-5" />
           </Link>
         </div>
@@ -163,21 +163,9 @@ export default async function MealsPage({ searchParams }: { searchParams: Promis
 
       {/* Grid */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-6xl mx-auto">
-        <MealCard
-          title="조식"
-          data={breakfast}
-          colorClass="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400"
-        />
-        <MealCard
-          title="중식"
-          data={lunch}
-          colorClass="bg-orange-100 dark:bg-orange-900/30 text-orange-600"
-        />
-        <MealCard
-          title="석식"
-          data={dinner}
-          colorClass="bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600"
-        />
+        <MealCard title="조식" data={breakfast} />
+        <MealCard title="중식" data={lunch} />
+        <MealCard title="석식" data={dinner} />
       </div>
     </div>
   );

@@ -10,7 +10,7 @@ export default async function TeachersPage() {
   });
 
   return (
-    <div className="p-4 md:p-8 space-y-6">
+    <div className="mobile-page mobile-safe-bottom space-y-6">
        <div className="flex items-center gap-3 mb-6">
           <div className="p-3 bg-emerald-100 dark:bg-emerald-900/30 rounded-full text-emerald-600">
              <User className="w-6 h-6" />
@@ -39,7 +39,7 @@ export default async function TeachersPage() {
                     </div>
                     <div className="flex items-center justify-center gap-2 text-slate-600 dark:text-slate-400">
                         <Mail className="w-4 h-4" />
-                        <span>{teacher.email}</span>
+                        <span className="break-all">{teacher.email}</span>
                     </div>
                 </div>
                 
@@ -48,7 +48,7 @@ export default async function TeachersPage() {
                 )}
              </div>
           )) : (
-              <div className="col-span-full py-12 text-center text-slate-500">
+              <div className="col-span-full py-12 text-center text-slate-500 glass rounded-3xl">
                   등록된 선생님 정보가 없습니다.
               </div>
           )}

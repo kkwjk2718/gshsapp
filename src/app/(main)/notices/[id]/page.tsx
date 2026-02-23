@@ -6,7 +6,7 @@ import { ArrowLeft, Megaphone, ShieldCheck, Calendar, User } from "lucide-react"
 import { Metadata } from "next";
 
 type Props = {
-    params: { id: string };
+    params: Promise<{ id: string }>;
 };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
@@ -22,9 +22,25 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
         };
     }
 
+    const ogImage = `/notices/${id}/opengraph-image`;
+
     return {
         title: `${notice.title} | 공지사항`,
         description: notice.content.substring(0, 160),
+        alternates: { canonical: `/notices/${id}` },
+        openGraph: {
+            title: notice.title,
+            description: notice.content.substring(0, 160),
+            type: "article",
+            url: `/notices/${id}`,
+            images: [{ url: ogImage, width: 1200, height: 630, alt: notice.title }],
+        },
+        twitter: {
+            card: "summary_large_image",
+            title: notice.title,
+            description: notice.content.substring(0, 160),
+            images: [ogImage],
+        },
     };
 }
 
