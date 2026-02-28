@@ -1,8 +1,8 @@
 "use client"
 
-import { useState, useTransition, useEffect } from "react";
+import { useState, useTransition } from "react";
 import { signup } from "./actions";
-import { AlertTriangle, CheckCircle, ArrowRight } from "lucide-react";
+import { AlertTriangle, ArrowRight } from "lucide-react";
 
 interface SignupFormProps {
     token: string;
@@ -55,8 +55,15 @@ export function SignupForm({ token }: SignupFormProps) {
                 <input name="name" required className="w-full px-3 py-2 rounded-xl border" style={{ backgroundColor: "var(--surface)", borderColor: "var(--border)", color: "var(--foreground)" }} />
             </div>
             <div>
-                <label className="text-xs font-bold mb-1 block" style={{ color: "var(--muted)" }}>학번 (예: 42101)</label>
-                <input name="studentId" placeholder="선생님은 비워두세요" className="w-full px-3 py-2 rounded-xl border" style={{ backgroundColor: "var(--surface)", borderColor: "var(--border)", color: "var(--foreground)" }} />
+                <label className="text-xs font-bold mb-1 block" style={{ color: "var(--muted)" }}>학번 (4자리, 예: 1304)</label>
+                <input
+                    name="studentId"
+                    inputMode="numeric"
+                    maxLength={4}
+                    placeholder="예: 1304 (선생님은 비워두세요)"
+                    className="w-full px-3 py-2 rounded-xl border"
+                    style={{ backgroundColor: "var(--surface)", borderColor: "var(--border)", color: "var(--foreground)" }}
+                />
             </div>
             <div>
                 <label className="text-xs font-bold mb-1 block" style={{ color: "var(--muted)" }}>이메일</label>

@@ -5,6 +5,21 @@ import { redirect } from "next/navigation";
 import { differenceInDays } from "date-fns";
 import bcrypt from "bcryptjs";
 
+function isValidStudentId(studentId: string) {
+    // 4자리 고정: [학년][반][번호(2자리)]
+    // 학년: 1~3
+    // 반: 1,2학년은 1~5 / 3학년은 1~4
+    // 번호: 00~99
+    if (!/^\d{4}$/.test(studentId)) return false;
+
+    const grade = Number(studentId[0]);
+    const classNum = Number(studentId[1]);
+
+    if (grade < 1 || grade > 3) return false;
+    if (grade === 3) return classNum >= 1 && classNum <= 4;
+    return classNum >= 1 && classNum <= 5;
+}
+
 export async function signup(formData: FormData) {
     const tokenStr = formData.get("token") as string;
     const userId = formData.get("userId") as string;
@@ -12,7 +27,7 @@ export async function signup(formData: FormData) {
     const confirmPassword = formData.get("confirmPassword") as string;
     const name = formData.get("name") as string;
     const email = formData.get("email") as string;
-    const studentId = formData.get("studentId") as string;
+    const studentId = ((formData.get("studentId") as string) || "").trim();
 
     // 0. Validate Passwords
     if (password !== confirmPassword) {
@@ -37,6 +52,13 @@ export async function signup(formData: FormData) {
     const daysDiff = differenceInDays(new Date(), inviteToken.createdAt);
     if (daysDiff >= 7) {
         return { error: "만료된 초대 토큰입니다. (발급 후 1주일 경과)" };
+    }
+
+    // 학생 계정은 학번 4자리 형식 강제
+    if (inviteToken.targetRole === "STUDENT") {
+        if (!studentId || !isValidStudentId(studentId)) {
+            return { error: "학번 형식이 올바르지 않습니다. 4자리로 입력해주세요. (예: 1304)" };
+        }
     }
 
     // 2. Create User & Mark Token
