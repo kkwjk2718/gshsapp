@@ -2,6 +2,10 @@
 
 경남과학고 학생 통합 플랫폼입니다.
 
+링크:
+- GitHub: <https://github.com/kkwjk2718/gshsapp>
+- Docker Hub: <https://hub.docker.com/r/kkwjk2718git/gshsapp>
+
 주요 기능:
 - 공지사항
 - 급식
