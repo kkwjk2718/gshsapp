@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { getCurrentUser } from "@/lib/session";
 import { SidebarNav } from "./SidebarNav";
-import { LogOut, ShieldCheck, Radio } from "lucide-react";
-import { signOut } from "@/auth";
+import { ShieldCheck, Radio } from "lucide-react";
 import { ModeToggle } from "@/components/mode-toggle";
+import { LogoutButton } from "@/components/auth/logout-button";
 
 
 export async function Sidebar() {
@@ -59,18 +59,7 @@ export async function Sidebar() {
                 <div className="text-xs truncate" style={{ color: "var(--muted)" }}>{user.studentId || user.email}</div>
               </div>
             </Link>
-            <form
-              action={async () => {
-                "use server";
-                await signOut();
-              }}
-            >
-              <button className="w-full flex items-center gap-3 px-4 py-2 text-xs rounded-lg transition-colors"
-                style={{ color: "var(--foreground)" }}>
-                <LogOut className="w-3 h-3" />
-                로그아웃
-              </button>
-            </form>
+            <LogoutButton />
           </div>
         ) : (
           <Link href="/login" className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl transition-colors font-medium"
