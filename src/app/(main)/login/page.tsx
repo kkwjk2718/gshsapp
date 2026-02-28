@@ -93,9 +93,7 @@ export default function LoginPage() {
         <div className="mt-6 text-center text-sm text-slate-600 dark:text-slate-400">
           계정이 없으신가요? <Link href="/signup" className="text-indigo-600 dark:text-indigo-400 hover:underline font-semibold ml-1">회원가입하기</Link>
         </div>
-        <div className="mt-2 text-center text-xs text-slate-500 dark:text-slate-600">
-          Test ID: student / PW: password
-        </div>
+        {/* demo account hint removed */}
       </div>
     </div>
   );
