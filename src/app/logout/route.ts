@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 
 const COOKIE_NAMES = [
   "authjs.session-token",
@@ -10,8 +10,8 @@ const COOKIE_NAMES = [
   "__Secure-authjs.callback-url",
 ];
 
-export async function GET(req: NextRequest) {
-  const res = NextResponse.redirect(new URL("/login", req.url));
+export async function GET() {
+  const res = NextResponse.json({ ok: true });
 
   for (const name of COOKIE_NAMES) {
     // delete helper
