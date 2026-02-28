@@ -22,15 +22,14 @@ function shouldClear(name: string) {
 
 function expireCookie(res: NextResponse, name: string) {
   res.cookies.delete(name);
-  for (const secure of [true, false]) {
-    res.cookies.set(name, "", {
-      expires: new Date(0),
-      path: "/",
-      httpOnly: true,
-      sameSite: "lax",
-      secure,
-    });
-  }
+  const secure = name.startsWith("__Secure-") || name.startsWith("__Host-");
+  res.cookies.set(name, "", {
+    expires: new Date(0),
+    path: "/",
+    httpOnly: true,
+    sameSite: "lax",
+    secure,
+  });
 }
 
 export async function GET(req: NextRequest) {
