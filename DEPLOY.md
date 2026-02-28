@@ -61,7 +61,9 @@ docker-compose logs -f
 ## 5. 자주 묻는 질문
 
 **Q: DB 데이터는 어디에 저장되나요?**
-A: `docker-compose.yml` 설정에 의해 `./data` 폴더에 `dev.db` (SQLite) 파일로 저장됩니다. 컨테이너를 삭제해도 이 폴더만 남아있다면 데이터는 안전합니다.
+A: 반드시 `DATABASE_URL=file:/app/data/dev.db` 로 설정하고, `./data:/app/data` 볼륨을 사용하세요. 이렇게 해야 `./data/dev.db`(SQLite)에 영구 저장됩니다. 컨테이너를 삭제/재생성해도 이 파일이 남아있으면 데이터는 유지됩니다.
+
+> ⚠️ `file:/app/prisma/dev.db` 를 사용하면 DB가 컨테이너 내부에 저장되어, 재생성(`docker compose up --force-recreate`) 시 데이터가 초기화될 수 있습니다.
 
 **Q: 수정사항을 배포하려면?**
 A: 코드를 수정한 후 **2번(빌드)** 부터 다시 수행하여 이미지를 업데이트하고, 서버에서 `docker-compose up -d`를 다시 실행하면 됩니다.
