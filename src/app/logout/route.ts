@@ -34,10 +34,16 @@ function expireCookie(res: NextResponse, name: string) {
 }
 
 export async function GET(req: NextRequest) {
-  const res = NextResponse.json(
-    { ok: true },
-    { headers: { "Cache-Control": "no-store" } }
-  );
+  const requestedNext = req.nextUrl.searchParams.get("next");
+  const nextPath = requestedNext?.startsWith("/") ? requestedNext : "/login";
+
+  const res = new NextResponse(null, {
+    status: 302,
+    headers: {
+      Location: nextPath,
+      "Cache-Control": "no-store",
+    },
+  });
 
   const allCookieNames = req.cookies.getAll().map((c) => c.name);
 
