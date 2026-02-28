@@ -1,0 +1,28 @@
+name: Feature request
+about: 기능 개선/추가를 제안합니다.
+title: "[FEATURE] "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: 해결하려는 문제
+      description: 어떤 불편/문제를 해결하고 싶은지 작성해주세요.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 제안 내용
+      description: 원하는 동작/화면/흐름을 작성해주세요.
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: 완료 기준 (Acceptance Criteria)
+      placeholder: |
+        - [ ] 조건1
+        - [ ] 조건2
