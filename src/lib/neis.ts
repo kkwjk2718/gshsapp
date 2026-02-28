@@ -120,7 +120,7 @@ export const getSchoolSchedule = async (fromDate: string, toDate: string): Promi
       KEY: NEIS_API_KEY || "",
       Type: 'json',
       pIndex: '1',
-      pSize: '100',
+      pSize: '1000',
       ATPT_OFCDC_SC_CODE: OFFICE_CODE,
       SD_SCHUL_CODE: SCHOOL_CODE,
       AA_FROM_YMD: fromDate,
