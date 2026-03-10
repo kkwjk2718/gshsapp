@@ -50,3 +50,5 @@ gshsapp-web.tar
 # local runtime database
 /dev.db
 /prisma/dev.db
+/data/
+/prisma/data/
