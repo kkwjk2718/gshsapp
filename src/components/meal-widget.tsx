@@ -35,13 +35,15 @@ export function MealWidget({ breakfast, lunch, dinner, defaultMeal }: MealWidget
     const titleMap = { 조식: "오늘의 조식", 중식: "오늘의 중식", 석식: "오늘의 석식" };
 
     return (
-        <Link href="/meals" className="glass-card glass-card-hover p-6 flex flex-col flex-1 group">
+        <div className="glass-card p-6 flex flex-col flex-1 group">
             <div className="flex items-center justify-between mb-4">
                 <h3 className="font-bold flex items-center gap-2 text-slate-800 dark:text-slate-200">
                     <Utensils className="w-4 h-4 text-orange-500 dark:text-orange-400" />
                     {titleMap[selected]}
                 </h3>
-                <ChevronRight className="w-4 h-4 text-slate-500 group-hover:text-orange-400 transition-colors" />
+                <Link href="/meals">
+                    <ChevronRight className="w-4 h-4 text-slate-500 group-hover:text-orange-400 transition-colors" />
+                </Link>
             </div>
 
             <div className="flex-1 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/5 rounded-2xl p-4 flex items-center justify-center">
@@ -64,11 +66,11 @@ export function MealWidget({ breakfast, lunch, dinner, defaultMeal }: MealWidget
                 )}
             </div>
 
-            <div className="mt-4 flex gap-2" onClick={(e) => e.preventDefault()}>
+            <div className="mt-4 flex gap-2">
                 {(["조식", "중식", "석식"] as const).map((type) => (
                     <button
                         key={type}
-                        onClick={(e) => { e.preventDefault(); setSelected(type); }}
+                        onClick={() => setSelected(type)}
                         className={`flex-1 py-2 text-center rounded-xl text-xs font-bold transition-colors border ${
                             selected === type
                                 ? "bg-orange-100 dark:bg-orange-500/20 text-orange-600 dark:text-orange-400 border-orange-300 dark:border-orange-500/20"
@@ -79,6 +81,6 @@ export function MealWidget({ breakfast, lunch, dinner, defaultMeal }: MealWidget
                     </button>
                 ))}
             </div>
-        </Link>
+        </div>
     );
 }
