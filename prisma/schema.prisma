@@ -109,16 +109,17 @@ model TeacherProfile {
 }
 
 model SongRequest {
-  id            String   @id @default(uuid())
-  requesterId   String
-  youtubeUrl    String
-  videoTitle    String
-  status        String   @default("PENDING") // PENDING, APPROVED, REJECTED, PLAYED
-  priorityScore Int      @default(0)
-  isAnonymous   Boolean  @default(false)
-  createdAt     DateTime @default(now())
+  id              String   @id @default(uuid())
+  requesterId     String
+  youtubeUrl      String
+  videoTitle      String
+  status          String   @default("PENDING") // PENDING, APPROVED, REJECTED, PLAYED
+  priorityScore   Int      @default(0)
+  isAnonymous     Boolean  @default(false)
+  rejectionReason String?
+  createdAt       DateTime @default(now())
 
-  requester     User     @relation(fields: [requesterId], references: [id])
+  requester       User     @relation(fields: [requesterId], references: [id])
 }
 
 model SongRule {
