@@ -1,7 +1,7 @@
 import { getMeals, getTimetable } from "@/lib/neis";
 import { format, differenceInDays } from "date-fns";
 import { ko } from "date-fns/locale";
-import { Utensils, Calendar, Clock, Bell, BookOpen, Megaphone, ChevronRight, Music, LogIn } from "lucide-react";
+import { Calendar, Clock, Bell, BookOpen, ChevronRight, Music, LogIn } from "lucide-react";
 import Link from "next/link";
 import { getCurrentUser } from "@/lib/session";
 import { prisma } from "@/lib/db";
@@ -12,6 +12,7 @@ import { getUserGrade } from "@/lib/grade-utils";
 import { NotificationBadge } from "@/components/layout/notification-badge";
 
 import { MealViewTracker } from "@/components/meal-view-tracker";
+import { MealWidget } from "@/components/meal-widget";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
@@ -22,8 +23,10 @@ export const metadata: Metadata = {
 
 export default async function Home() {
     const today = new Date();
-    const currentHour = today.getHours();
-    const formattedDate = format(today, "yyyyMMdd");
+    // 한국 시간(KST, UTC+9) 기준으로 날짜 계산
+    const koreaToday = new Date(today.getTime() + 9 * 60 * 60 * 1000);
+    const currentHour = koreaToday.getUTCHours();
+    const formattedDate = format(koreaToday, "yyyyMMdd");
 
     const user = await getCurrentUser();
 
@@ -99,25 +102,9 @@ export default async function Home() {
     }
 
     // Meal Logic
-    const cleanMealName = (name: string) => {
-        return name.replace(/\([^)]*\)/g, '').replace(/<br\/>/g, '\n').trim();
-    };
-
     const breakfast = meals.find(m => m.MMEAL_SC_NM === "조식");
     const lunch = meals.find(m => m.MMEAL_SC_NM === "중식");
     const dinner = meals.find(m => m.MMEAL_SC_NM === "석식");
-
-    // Determine Target Meal
-    let targetMealTitle = "오늘의 중식";
-    let targetMealData = lunch;
-
-    if (currentHour >= 14) {
-        targetMealTitle = "오늘의 석식";
-        targetMealData = dinner;
-    } else if (currentHour < 8) {
-        targetMealTitle = "오늘의 조식";
-        targetMealData = breakfast;
-    }
 
     return (
         <div className="mobile-page mobile-safe-bottom md:pb-6 max-w-5xl mx-auto">
@@ -220,27 +207,12 @@ export default async function Home() {
                 {/* Right Column */}
                 <div className="flex flex-col gap-4">
                     {/* Meals (Main Feature) */}
-                    <Link href="/meals" className="glass-card glass-card-hover p-6 flex flex-col flex-1 group">
-                        <div className="flex items-center justify-between mb-4">
-                            <h3 className="font-bold flex items-center gap-2 text-slate-800 dark:text-slate-200">
-                                <Utensils className="w-4 h-4 text-orange-500 dark:text-orange-400" />
-                                {targetMealTitle}
-                            </h3>
-                            <ChevronRight className="w-4 h-4 text-slate-500 group-hover:text-orange-400 transition-colors" />
-                        </div>
-
-                        <div className="flex-1 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/5 rounded-2xl p-4 flex items-center justify-center">
-                            <p className="text-slate-800 dark:text-slate-300 whitespace-pre-wrap text-center leading-loose font-medium text-sm">
-                                {targetMealData ? cleanMealName(targetMealData.DDISH_NM) : "급식 정보가 없습니다."}
-                            </p>
-                        </div>
-
-                        <div className="mt-4 flex gap-2">
-                            <span className={`flex-1 py-2 text-center rounded-xl text-xs font-bold transition-colors ${targetMealTitle === '오늘의 조식' ? 'bg-orange-100 dark:bg-orange-500/20 text-orange-600 dark:text-orange-400 border border-orange-300 dark:border-orange-500/20' : 'bg-slate-100 dark:bg-white/5 text-slate-500 dark:text-slate-500 border border-slate-200 dark:border-white/5'}`}>조식</span>
-                            <span className={`flex-1 py-2 text-center rounded-xl text-xs font-bold transition-colors ${targetMealTitle === '오늘의 중식' ? 'bg-orange-100 dark:bg-orange-500/20 text-orange-600 dark:text-orange-400 border border-orange-300 dark:border-orange-500/20' : 'bg-slate-100 dark:bg-white/5 text-slate-500 dark:text-slate-500 border border-slate-200 dark:border-white/5'}`}>중식</span>
-                            <span className={`flex-1 py-2 text-center rounded-xl text-xs font-bold transition-colors ${targetMealTitle === '오늘의 석식' ? 'bg-orange-100 dark:bg-orange-500/20 text-orange-600 dark:text-orange-400 border border-orange-300 dark:border-orange-500/20' : 'bg-slate-100 dark:bg-white/5 text-slate-500 dark:text-slate-500 border border-slate-200 dark:border-white/5'}`}>석식</span>
-                        </div>
-                    </Link>
+                    <MealWidget
+                        breakfast={breakfast}
+                        lunch={lunch}
+                        dinner={dinner}
+                        defaultMeal={currentHour >= 14 ? "석식" : currentHour < 8 ? "조식" : "중식"}
+                    />
 
                     {/* Quick Links */}
                     <div className="grid grid-cols-3 gap-4">
