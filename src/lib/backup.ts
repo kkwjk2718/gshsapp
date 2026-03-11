@@ -66,7 +66,10 @@ export async function createBackup(reason = "manual") {
   const dbExists = fssync.existsSync(DB_PATH);
   const includeRel = [...(dbExists ? [relFromRoot(DB_PATH)] : []), ...extraPaths.map(relFromRoot)].filter(Boolean);
 
-  // macOS/Linux tar
+  if (includeRel.length === 0) {
+    throw new Error("백업할 파일이 없습니다. DB 파일이 존재하지 않습니다.");
+  }
+
   await execFileAsync("tar", ["-czf", target, ...includeRel], { cwd: ROOT });
 
   const meta = {
@@ -172,8 +175,12 @@ export async function maybeRunScheduledBackup() {
     const [days, last] = await Promise.all([getBackupIntervalDays(), getLastBackupAt()]);
     const due = !last || Date.now() - last.getTime() >= days * 24 * 60 * 60 * 1000;
     if (!due) return;
-    await createBackup("scheduled");
-    await setLastBackupAt(new Date());
+    try {
+      await createBackup("scheduled");
+      await setLastBackupAt(new Date());
+    } catch (e) {
+      console.warn("[backup] 자동 백업 실패:", e instanceof Error ? e.message : e);
+    }
   } finally {
     running = false;
   }
