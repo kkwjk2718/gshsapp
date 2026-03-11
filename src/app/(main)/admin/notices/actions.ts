@@ -42,11 +42,40 @@ export async function createNotice(formData: FormData) {
 
 export async function deleteNotice(formData: FormData) {
     const id = formData.get("id") as string;
-    // Permission check (optional but recommended)
-    // const user = await getCurrentUser();
-    // if (!user || user.role !== 'ADMIN') throw new Error("Unauthorized");
+    const user = await getCurrentUser();
+    if (!user || user.role !== 'ADMIN') throw new Error("Unauthorized");
 
     await prisma.notice.delete({ where: { id } });
     revalidatePath("/notices");
     revalidatePath("/admin/notices");
+}
+
+export async function updateNotice(formData: FormData) {
+    const id = formData.get("id") as string;
+    const title = formData.get("title") as string;
+    const content = formData.get("content") as string;
+    const category = formData.get("category") as string;
+    const durationStr = formData.get("duration") as string;
+    const unlimited = formData.get("unlimited") === "on";
+
+    const user = await getCurrentUser();
+    if (!user || !user.id || user.role !== 'ADMIN') {
+        throw new Error("Unauthorized");
+    }
+
+    let expiresAt: Date | null = null;
+    if (!unlimited) {
+        const duration = parseInt(durationStr) || 7;
+        expiresAt = addDays(new Date(), duration);
+    }
+
+    await prisma.notice.update({
+        where: { id },
+        data: { title, content, category, expiresAt },
+    });
+
+    revalidatePath("/notices");
+    revalidatePath(`/notices/${id}`);
+    revalidatePath("/admin/notices");
+    redirect("/admin/notices");
 }
