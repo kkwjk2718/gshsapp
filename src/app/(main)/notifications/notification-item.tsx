@@ -82,7 +82,7 @@ export function NotificationItem({ notification }: NotificationItemProps) {
                         </button>
                     </div>
                 </div>
-                <div className={`mt-1 text-sm leading-relaxed ${notification.isRead ? 'text-slate-400' : 'text-slate-600 dark:text-slate-400'}`}>
+                <div className={`mt-1 text-sm leading-relaxed whitespace-pre-wrap ${notification.isRead ? 'text-slate-400' : 'text-slate-600 dark:text-slate-400'}`}>
                     {notification.content}
                 </div>
 
