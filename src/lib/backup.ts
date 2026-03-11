@@ -63,7 +63,8 @@ export async function createBackup(reason = "manual") {
   const target = path.join(BACKUP_DIR, file);
 
   const extraPaths = await getExtraPaths();
-  const includeRel = [relFromRoot(DB_PATH), ...extraPaths.map(relFromRoot)].filter(Boolean);
+  const dbExists = fssync.existsSync(DB_PATH);
+  const includeRel = [...(dbExists ? [relFromRoot(DB_PATH)] : []), ...extraPaths.map(relFromRoot)].filter(Boolean);
 
   // macOS/Linux tar
   await execFileAsync("tar", ["-czf", target, ...includeRel], { cwd: ROOT });
