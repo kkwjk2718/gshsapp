@@ -48,7 +48,7 @@ export function MealWidget({ breakfast, lunch, dinner, defaultMeal }: MealWidget
 
             <div className="flex-1 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/5 rounded-2xl p-4 flex items-center justify-center">
                 {mealItems.length > 0 ? (
-                    <div className="flex flex-wrap gap-x-2 gap-y-1 justify-center">
+                    <div className="flex flex-col gap-1 w-full">
                         {mealItems.map((item, i) => (
                             <a
                                 key={i}
