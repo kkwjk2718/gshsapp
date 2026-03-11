@@ -12,7 +12,7 @@ interface ScheduleItem {
     description?: string | null;
     startDate: Date;
     endDate: Date;
-    category?: string; // ACADEMIC, EVENT, HOLIDAY, PERSONAL
+    category?: string;
     isExternal?: boolean;
     isNEIS?: boolean;
 }
