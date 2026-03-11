@@ -1,7 +1,7 @@
 import { getMeals, getTimetable } from "@/lib/neis";
 import { format, differenceInDays } from "date-fns";
 import { ko } from "date-fns/locale";
-import { Calendar, Clock, Bell, BookOpen, ChevronRight, Music, LogIn } from "lucide-react";
+import { Utensils, Calendar, Clock, Bell, BookOpen, Megaphone, ChevronRight, Music, LogIn } from "lucide-react";
 import Link from "next/link";
 import { getCurrentUser } from "@/lib/session";
 import { prisma } from "@/lib/db";
@@ -23,7 +23,6 @@ export const metadata: Metadata = {
 
 export default async function Home() {
     const today = new Date();
-    // 한국 시간(KST, UTC+9) 기준으로 날짜 계산
     const koreaToday = new Date(today.getTime() + 9 * 60 * 60 * 1000);
     const currentHour = koreaToday.getUTCHours();
     const formattedDate = format(koreaToday, "yyyyMMdd");
@@ -33,13 +32,11 @@ export default async function Home() {
     let grade = "1";
     let classNum = "1";
 
-    // Only set grade/class if user exists
     if (user) {
         const calculatedGrade = await getUserGrade(user.gisu ?? null);
         if (calculatedGrade) {
             grade = calculatedGrade;
         } else if (user.studentId && user.studentId.length >= 3) {
-            // Fallback to studentId parsing if no gisu or mapping found
             grade = user.studentId.substring(0, 1);
         }
 
@@ -48,8 +45,6 @@ export default async function Home() {
         }
     }
 
-    // Fetch Data (Parallel)
-    // Skip timetable fetch if no user
     const mealsPromise = getMeals(formattedDate);
     const timetablePromise = user ? getTimetable(formattedDate, grade, classNum) : Promise.resolve([]);
     const noticesPromise = prisma.notice.findMany({
@@ -81,7 +76,6 @@ export default async function Home() {
         academicPromise
     ]);
 
-    // D-Day Logic
     let dDayTitle = "일정 없음";
     let dDayCount = "-";
     let dDayText = "";
@@ -101,10 +95,24 @@ export default async function Home() {
         dDayPrefix = diff >= 0 ? "까지" : "부터";
     }
 
-    // Meal Logic
+    const cleanMealName = (name: string) => {
+        return name.replace(/\([^)]*\)/g, '').replace(/<br\/>/g, '\n').trim();
+    };
+
     const breakfast = meals.find(m => m.MMEAL_SC_NM === "조식");
     const lunch = meals.find(m => m.MMEAL_SC_NM === "중식");
     const dinner = meals.find(m => m.MMEAL_SC_NM === "석식");
+
+    let targetMealTitle = "오늘의 중식";
+    let targetMealData = lunch;
+
+    if (currentHour >= 14) {
+        targetMealTitle = "오늘의 석식";
+        targetMealData = dinner;
+    } else if (currentHour < 8) {
+        targetMealTitle = "오늘의 조식";
+        targetMealData = breakfast;
+    }
 
     return (
         <div className="mobile-page mobile-safe-bottom md:pb-6 max-w-5xl mx-auto">
@@ -173,7 +181,8 @@ export default async function Home() {
                             <h3 className="font-bold flex items-center gap-2 text-slate-800 dark:text-slate-200">
                                 오늘의 시간표
                             </h3>
-                            {user && <Link href="/timetable"><ChevronRight className="w-4 h-4 text-slate-500 group-hover:text-emerald-400 transition-colors" /></Link>}                 </div>
+                            {user && <Link href="/timetable"><ChevronRight className="w-4 h-4 text-slate-500 group-hover:text-emerald-400 transition-colors" /></Link>}
+                        </div>
 
                         {user ? (
                             <Link href="/timetable" className="flex-1 grid grid-cols-3 gap-3">
