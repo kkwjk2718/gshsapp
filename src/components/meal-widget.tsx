@@ -16,8 +16,13 @@ interface MealWidgetProps {
     defaultMeal: "조식" | "중식" | "석식";
 }
 
-const cleanMealName = (name: string) => {
-    return name.replace(/\([^)]*\)/g, '').replace(/<br\/>/g, '\n').trim();
+const cleanMealItem = (name: string) => {
+    return name.replace(/\([^)]*\)/g, '').trim();
+};
+
+const getMealItems = (meal: MealData | undefined): string[] => {
+    if (!meal) return [];
+    return meal.DDISH_NM.split('<br/>').map(cleanMealItem).filter(Boolean);
 };
 
 export function MealWidget({ breakfast, lunch, dinner, defaultMeal }: MealWidgetProps) {
@@ -25,6 +30,7 @@ export function MealWidget({ breakfast, lunch, dinner, defaultMeal }: MealWidget
 
     const meals = { 조식: breakfast, 중식: lunch, 석식: dinner };
     const currentMeal = meals[selected];
+    const mealItems = getMealItems(currentMeal);
 
     const titleMap = { 조식: "오늘의 조식", 중식: "오늘의 중식", 석식: "오늘의 석식" };
 
@@ -39,9 +45,23 @@ export function MealWidget({ breakfast, lunch, dinner, defaultMeal }: MealWidget
             </div>
 
             <div className="flex-1 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/5 rounded-2xl p-4 flex items-center justify-center">
-                <p className="text-slate-800 dark:text-slate-300 whitespace-pre-wrap text-center leading-loose font-medium text-sm">
-                    {currentMeal ? cleanMealName(currentMeal.DDISH_NM) : "급식 정보가 없습니다."}
-                </p>
+                {mealItems.length > 0 ? (
+                    <div className="flex flex-wrap gap-x-2 gap-y-1 justify-center">
+                        {mealItems.map((item, i) => (
+                            <a
+                                key={i}
+                                href={`https://www.google.com/search?q=${encodeURIComponent(item)}&tbm=isch`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-sm font-medium text-slate-800 dark:text-slate-300 hover:text-orange-500 dark:hover:text-orange-400 hover:underline transition-colors cursor-pointer"
+                            >
+                                {item}
+                            </a>
+                        ))}
+                    </div>
+                ) : (
+                    <p className="text-sm text-slate-500">급식 정보가 없습니다.</p>
+                )}
             </div>
 
             <div className="mt-4 flex gap-2" onClick={(e) => e.preventDefault()}>
