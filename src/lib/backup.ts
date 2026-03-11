@@ -37,8 +37,12 @@ async function checkpoint() {
   } catch {}
 }
 
+function toUnixPath(p: string) {
+  return p.replace(/\\/g, "/");
+}
+
 function relFromRoot(p: string) {
-  return path.relative(ROOT, p).replace(/^\.\//, "");
+  return toUnixPath(path.relative(ROOT, p).replace(/^\.\//, ""));
 }
 
 async function getExtraPaths() {
@@ -70,7 +74,8 @@ export async function createBackup(reason = "manual") {
     throw new Error("백업할 파일이 없습니다. DB 파일이 존재하지 않습니다.");
   }
 
-  await execFileAsync("tar", ["-czf", target, ...includeRel], { cwd: ROOT });
+  const targetRel = toUnixPath(path.relative(ROOT, target));
+  await execFileAsync("tar", ["-czf", targetRel, ...includeRel], { cwd: ROOT });
 
   const meta = {
     file,
@@ -100,7 +105,7 @@ export async function listBackups() {
 async function restoreFromTarGz(src: string) {
   await checkpoint();
   // Extract into app root, overwrite existing files
-  await execFileAsync("tar", ["-xzf", src, "-C", ROOT]);
+  await execFileAsync("tar", ["-xzf", toUnixPath(src), "-C", toUnixPath(ROOT)]);
 }
 
 export async function restoreBackupFile(file: string) {
