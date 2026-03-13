@@ -110,6 +110,11 @@ export async function importUsersBackup(_: any, formData: FormData) {
 }
 
 export async function resetPassword(formData: FormData) {
+    const sessionUser = await getCurrentUser();
+    if (sessionUser?.role !== 'ADMIN') {
+        return { error: 'Permission denied.' };
+    }
+
     const userId = formData.get("userId") as string;
 
     // Simple validation
