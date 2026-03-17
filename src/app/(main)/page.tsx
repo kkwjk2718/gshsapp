@@ -126,7 +126,7 @@ export default async function Home() {
                         {user && (
                             <>
                                 <span className="h-3 w-px bg-slate-300 dark:bg-slate-700" />
-                                <span>{user.gisu ? `${user.gisu}기` : `${grade}학년 ${classNum}반`}</span>
+                                <span>{grade}학년 {classNum}반</span>
                             </>
                         )}
                     </div>
