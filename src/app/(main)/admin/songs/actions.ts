@@ -13,7 +13,7 @@ export async function updateSongStatus(id: string, status: string, rejectionReas
     where: { id },
     data: {
       status,
-      ...(status === "REJECTED" && rejectionReason ? { rejectionReason } : {}),
+      ...(status === "REJECTED" && typeof rejectionReason === "string" && rejectionReason ? { rejectionReason } : {}),
     },
   });
 
