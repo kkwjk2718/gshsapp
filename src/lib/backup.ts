@@ -83,8 +83,7 @@ export async function createBackup(reason = "manual") {
     throw new Error("백업할 파일이 없습니다. DB 파일이 존재하지 않습니다.");
   }
 
-  const targetRel = toUnixPath(path.relative(ROOT, target));
-  await execFileAsync("tar", ["-czf", targetRel, ...includeRel], { cwd: ROOT });
+  await execFileAsync("tar", ["-czf", toUnixPath(target), "-C", toUnixPath(ROOT), ...includeRel]);
 
   const meta = {
     file,
@@ -113,7 +112,6 @@ export async function listBackups() {
 
 async function restoreFromTarGz(src: string) {
   await checkpoint();
-  // Extract into app root, overwrite existing files
   await execFileAsync("tar", ["-xzf", toUnixPath(src), "-C", toUnixPath(ROOT)]);
 }
 
