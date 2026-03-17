@@ -33,14 +33,8 @@ export default async function Home() {
     let classNum = "1";
 
     if (user) {
-        const calculatedGrade = await getUserGrade(user.gisu ?? null);
-        if (calculatedGrade) {
-            grade = calculatedGrade;
-        } else if (user.studentId && user.studentId.length >= 3) {
+        if (user.studentId && user.studentId.length >= 2) {
             grade = user.studentId.substring(0, 1);
-        }
-
-        if (user.studentId && user.studentId.length >= 3) {
             classNum = user.studentId.substring(1, 2);
         }
     }
