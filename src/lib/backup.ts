@@ -10,8 +10,9 @@ const execFileAsync = promisify(execFile);
 const ROOT = process.cwd();
 const BACKUP_DIR = path.resolve(ROOT, "..", "data_backup");
 const DB_URL = process.env.DATABASE_URL || "file:./prisma/dev.db";
-const DB_FILE = DB_URL.replace(/^file:/, "");
-const DB_PATH = path.resolve(ROOT, DB_FILE);
+const IS_FILE_DB = DB_URL.startsWith("file:");
+const DB_FILE = IS_FILE_DB ? DB_URL.replace(/^file:/, "") : null;
+const DB_PATH = DB_FILE ? path.resolve(ROOT, DB_FILE) : null;
 
 const DEFAULT_EXTRA_PATHS = [
   "public/uploads",
@@ -67,8 +68,16 @@ export async function createBackup(reason = "manual") {
   const target = path.join(BACKUP_DIR, file);
 
   const extraPaths = await getExtraPaths();
-  const dbExists = fssync.existsSync(DB_PATH);
-  const includeRel = [...(dbExists ? [relFromRoot(DB_PATH)] : []), ...extraPaths.map(relFromRoot)].filter(Boolean);
+  let dbExists = false;
+  if (DB_PATH) {
+    try {
+      const stat = await fs.stat(DB_PATH);
+      dbExists = stat.isFile();
+    } catch {
+      dbExists = false;
+    }
+  }
+  const includeRel = [...(dbExists && DB_PATH ? [relFromRoot(DB_PATH)] : []), ...extraPaths.map(relFromRoot)].filter(Boolean);
 
   if (includeRel.length === 0) {
     throw new Error("백업할 파일이 없습니다. DB 파일이 존재하지 않습니다.");
@@ -119,6 +128,7 @@ export async function restoreBackupFile(file: string) {
   }
 
   if (src.endsWith(".db")) {
+    if (!DB_PATH) throw new Error("파일 기반 데이터베이스가 아니어서 .db 복원을 지원하지 않습니다.");
     await checkpoint();
     await fs.copyFile(src, DB_PATH);
     return true;
@@ -134,6 +144,7 @@ export async function restoreUploadedFile(tempPath: string, originalName: string
     return true;
   }
   if (lower.endsWith(".db")) {
+    if (!DB_PATH) throw new Error("파일 기반 데이터베이스가 아니어서 .db 복원을 지원하지 않습니다.");
     await checkpoint();
     await fs.copyFile(tempPath, DB_PATH);
     return true;
