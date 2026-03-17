@@ -159,9 +159,9 @@ export default async function Home() {
                                         <span className="font-bold" style={{ color: "var(--accent)" }}>{dDayTitle}</span>{dDayPrefix} <span className="font-bold" style={{ color: "var(--foreground)" }}>{dDayCount}</span> {dDayText}
                                     </p>
                                 </div>
-                                <div className="relative z-10 w-12 h-12 rounded-full flex items-center justify-center ring-1" style={{ backgroundColor: "var(--surface-2)", color: "var(--accent)", borderColor: "var(--border)" }}>
+                                <Link href="/calendar" className="relative z-10 w-12 h-12 rounded-full flex items-center justify-center ring-1" style={{ backgroundColor: "var(--surface-2)", color: "var(--accent)", borderColor: "var(--border)" }}>
                                     <Calendar className="w-6 h-6" />
-                                </div>
+                                </Link>
                             </>
                         ) : (
                             <div className="relative z-10 w-full flex flex-col items-center text-center py-2">
