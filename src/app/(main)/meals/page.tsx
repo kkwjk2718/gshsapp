@@ -126,9 +126,16 @@ export default async function MealsPage({ searchParams }: { searchParams: Promis
               const cleanName = dish.replace(/\([^)]*\)/g, '').trim();
               if (!cleanName) return null;
               return (
-                <div key={index} className="text-base font-medium text-center leading-snug" style={{ color: "var(--foreground)" }}>
+                <a
+                  key={index}
+                  href={`https://www.google.com/search?q=${encodeURIComponent(cleanName)}&tbm=isch`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-base font-medium text-center leading-snug hover:underline transition-colors"
+                  style={{ color: "var(--foreground)" }}
+                >
                   {cleanName}
-                </div>
+                </a>
               );
             })
           ) : (

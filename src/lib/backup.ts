@@ -10,8 +10,9 @@ const execFileAsync = promisify(execFile);
 const ROOT = process.cwd();
 const BACKUP_DIR = path.resolve(ROOT, "..", "data_backup");
 const DB_URL = process.env.DATABASE_URL || "file:./prisma/dev.db";
-const DB_FILE = DB_URL.replace(/^file:/, "");
-const DB_PATH = path.resolve(ROOT, DB_FILE);
+const IS_FILE_DB = DB_URL.startsWith("file:");
+const DB_FILE = IS_FILE_DB ? DB_URL.replace(/^file:/, "") : null;
+const DB_PATH = DB_FILE ? path.resolve(ROOT, DB_FILE) : null;
 
 const DEFAULT_EXTRA_PATHS = [
   "public/uploads",
@@ -37,8 +38,12 @@ async function checkpoint() {
   } catch {}
 }
 
+function toUnixPath(p: string) {
+  return p.replace(/\\/g, "/");
+}
+
 function relFromRoot(p: string) {
-  return path.relative(ROOT, p).replace(/^\.\//, "");
+  return toUnixPath(path.relative(ROOT, p).replace(/^\.\//, ""));
 }
 
 async function getExtraPaths() {
@@ -63,10 +68,22 @@ export async function createBackup(reason = "manual") {
   const target = path.join(BACKUP_DIR, file);
 
   const extraPaths = await getExtraPaths();
-  const includeRel = [relFromRoot(DB_PATH), ...extraPaths.map(relFromRoot)].filter(Boolean);
+  let dbExists = false;
+  if (DB_PATH) {
+    try {
+      const stat = await fs.stat(DB_PATH);
+      dbExists = stat.isFile();
+    } catch {
+      dbExists = false;
+    }
+  }
+  const includeRel = [...(dbExists && DB_PATH ? [relFromRoot(DB_PATH)] : []), ...extraPaths.map(relFromRoot)].filter(Boolean);
 
-  // macOS/Linux tar
-  await execFileAsync("tar", ["-czf", target, ...includeRel], { cwd: ROOT });
+  if (includeRel.length === 0) {
+    throw new Error("백업할 파일이 없습니다. DB 파일이 존재하지 않습니다.");
+  }
+
+  await execFileAsync("tar", ["-czf", toUnixPath(target), "-C", toUnixPath(ROOT), ...includeRel]);
 
   const meta = {
     file,
@@ -95,8 +112,7 @@ export async function listBackups() {
 
 async function restoreFromTarGz(src: string) {
   await checkpoint();
-  // Extract into app root, overwrite existing files
-  await execFileAsync("tar", ["-xzf", src, "-C", ROOT]);
+  await execFileAsync("tar", ["-xzf", toUnixPath(src), "-C", toUnixPath(ROOT)]);
 }
 
 export async function restoreBackupFile(file: string) {
@@ -110,6 +126,7 @@ export async function restoreBackupFile(file: string) {
   }
 
   if (src.endsWith(".db")) {
+    if (!DB_PATH) throw new Error("파일 기반 데이터베이스가 아니어서 .db 복원을 지원하지 않습니다.");
     await checkpoint();
     await fs.copyFile(src, DB_PATH);
     return true;
@@ -125,6 +142,7 @@ export async function restoreUploadedFile(tempPath: string, originalName: string
     return true;
   }
   if (lower.endsWith(".db")) {
+    if (!DB_PATH) throw new Error("파일 기반 데이터베이스가 아니어서 .db 복원을 지원하지 않습니다.");
     await checkpoint();
     await fs.copyFile(tempPath, DB_PATH);
     return true;
@@ -171,8 +189,12 @@ export async function maybeRunScheduledBackup() {
     const [days, last] = await Promise.all([getBackupIntervalDays(), getLastBackupAt()]);
     const due = !last || Date.now() - last.getTime() >= days * 24 * 60 * 60 * 1000;
     if (!due) return;
-    await createBackup("scheduled");
-    await setLastBackupAt(new Date());
+    try {
+      await createBackup("scheduled");
+      await setLastBackupAt(new Date());
+    } catch (e) {
+      console.warn("[backup] 자동 백업 실패:", e instanceof Error ? e.message : e);
+    }
   } finally {
     running = false;
   }

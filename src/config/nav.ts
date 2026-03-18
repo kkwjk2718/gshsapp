@@ -18,6 +18,7 @@ export const allNavItems = [
   { name: "바로가기", href: "/links", icon: LinkIcon },
   { name: "교내 사이트", href: "/sites", icon: Building2 },
   { name: "도구", href: "/utils", icon: Calculator },
+  { name: "내 정보", href: "/me", icon: User },
 ];
 
 // Keep for backward compatibility

@@ -1,12 +1,18 @@
 import { unstable_cache } from "next/cache";
 import { request } from "node:https";
 
-interface WeatherData {
+export interface WeatherData {
     temp: number;
     code: number;
+    minTemp: number;
+    maxTemp: number;
+    tomorrowRainProb: number;
 }
 
-const WEATHER_URL = "/v1/forecast?latitude=35.1805&longitude=128.1087&current_weather=true";
+const WEATHER_URL =
+    "/v1/forecast?latitude=35.1805&longitude=128.1087&current_weather=true" +
+    "&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max" +
+    "&timezone=Asia%2FSeoul";
 
 async function fetchWeatherByIPv4(): Promise<WeatherData | null> {
     return new Promise((resolve, reject) => {
@@ -38,6 +44,11 @@ async function fetchWeatherByIPv4(): Promise<WeatherData | null> {
                                 temperature?: number;
                                 weathercode?: number;
                             };
+                            daily?: {
+                                temperature_2m_max?: number[];
+                                temperature_2m_min?: number[];
+                                precipitation_probability_max?: number[];
+                            };
                         };
 
                         const current = data.current_weather;
@@ -46,7 +57,14 @@ async function fetchWeatherByIPv4(): Promise<WeatherData | null> {
                             typeof current.temperature === "number" &&
                             typeof current.weathercode === "number"
                         ) {
-                            resolve({ temp: current.temperature, code: current.weathercode });
+                            const daily = data.daily;
+                            resolve({
+                                temp: current.temperature,
+                                code: current.weathercode,
+                                minTemp: daily?.temperature_2m_min?.[0] ?? current.temperature,
+                                maxTemp: daily?.temperature_2m_max?.[0] ?? current.temperature,
+                                tomorrowRainProb: daily?.precipitation_probability_max?.[1] ?? 0,
+                            });
                             return;
                         }
 

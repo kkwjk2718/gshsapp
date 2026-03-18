@@ -1,9 +1,10 @@
 "use client";
 
 import { useTransition } from "react";
-import { CheckCircle, X, Bell, Info, Calendar } from "lucide-react";
+import { CheckCircle, X, Bell, Info, Calendar, ExternalLink } from "lucide-react";
 import { format } from "date-fns";
 import { markAsRead, deleteNotification } from "@/app/(main)/notifications/actions";
+import Link from "next/link";
 
 interface NotificationItemProps {
     notification: {
@@ -11,6 +12,7 @@ interface NotificationItemProps {
         type: string;
         title: string;
         content: string;
+        link: string | null;
         isRead: boolean;
         createdAt: Date;
     };
@@ -80,12 +82,12 @@ export function NotificationItem({ notification }: NotificationItemProps) {
                         </button>
                     </div>
                 </div>
-                <div className={`mt-1 text-sm leading-relaxed ${notification.isRead ? 'text-slate-400' : 'text-slate-600 dark:text-slate-400'}`}>
+                <div className={`mt-1 text-sm leading-relaxed whitespace-pre-wrap ${notification.isRead ? 'text-slate-400' : 'text-slate-600 dark:text-slate-400'}`}>
                     {notification.content}
                 </div>
 
-                {!notification.isRead && (
-                    <div className="mt-2 flex">
+                <div className="mt-2 flex items-center gap-3">
+                    {!notification.isRead && (
                         <button
                             onClick={handleMarkAsRead}
                             disabled={isPending}
@@ -94,8 +96,17 @@ export function NotificationItem({ notification }: NotificationItemProps) {
                             <CheckCircle className="w-3 h-3" />
                             읽음 처리
                         </button>
-                    </div>
-                )}
+                    )}
+                    {notification.link && (
+                        <Link
+                            href={notification.link}
+                            className="text-xs font-medium text-slate-500 hover:text-indigo-500 flex items-center gap-1 transition-colors"
+                        >
+                            <ExternalLink className="w-3 h-3" />
+                            바로가기
+                        </Link>
+                    )}
+                </div>
             </div>
         </div>
     );

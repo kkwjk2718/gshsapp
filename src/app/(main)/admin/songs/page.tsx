@@ -54,12 +54,12 @@ export default async function AdminSongsPage() {
                             <BanUserButton userId={song.requesterId} userName={song.requester.name} />
                             {song.status === 'PENDING' && (
                                <>
-                                  <form action={updateSongStatus.bind(null, song.id, 'APPROVED')}>
+                                   <form action={updateSongStatus.bind(null, song.id, 'APPROVED', undefined)}>
                                      <button className="p-2 rounded-lg bg-emerald-100 text-emerald-600 hover:bg-emerald-200 transition-colors" title="승인">
                                         <Check className="w-4 h-4" />
                                      </button>
                                   </form>
-                                  <form action={updateSongStatus.bind(null, song.id, 'REJECTED')}>
+                                   <form action={updateSongStatus.bind(null, song.id, 'REJECTED', undefined)}>
                                      <button className="p-2 rounded-lg bg-rose-100 text-rose-600 hover:bg-rose-200 transition-colors" title="반려">
                                         <X className="w-4 h-4" />
                                      </button>
@@ -67,7 +67,7 @@ export default async function AdminSongsPage() {
                                </>
                             )}
                             {song.status === 'APPROVED' && (
-                                <form action={updateSongStatus.bind(null, song.id, 'PLAYED')}>
+                                <form action={updateSongStatus.bind(null, song.id, 'PLAYED', undefined)}>
                                      <button className="p-2 rounded-lg bg-blue-100 text-blue-600 hover:bg-blue-200 transition-colors" title="재생 완료 처리">
                                         <Play className="w-4 h-4" />
                                      </button>

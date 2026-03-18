@@ -2,6 +2,9 @@
   "name": "web",
   "version": "0.1.0",
   "private": true,
+  "prisma": {
+    "seed": "node prisma/seed_admin.js"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",

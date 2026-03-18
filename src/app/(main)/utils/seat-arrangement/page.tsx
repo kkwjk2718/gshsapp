@@ -363,7 +363,7 @@ export default function SeatArrangementPage() {
                             {/* Seating Grid */}
                             {/* Seating Grid with Coordinates */}
                             <div
-                                className="grid gap-3 md:gap-4 p-6 rounded-3xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 shadow-inner items-center justify-center"
+                                className="grid gap-2 md:gap-3 p-4 md:p-6 rounded-3xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 shadow-inner items-center justify-center w-full"
                                 style={{
                                     gridTemplateColumns: `auto repeat(${cols}, minmax(0, 1fr))`
                                 }}
@@ -399,7 +399,7 @@ export default function SeatArrangementPage() {
                                                     onClick={() => handleSeatClick(r, c)}
                                                     disabled={!isVoidMode && !isVoid}
                                                     className={`
-                                            w-16 h-12 md:w-24 md:h-16 rounded-lg flex items-center justify-center transition-all bg-white dark:bg-slate-800 shadow-sm border
+                                            w-full h-10 md:h-14 rounded-lg flex items-center justify-center transition-all bg-white dark:bg-slate-800 shadow-sm border
                                             ${isVoid ? 'opacity-20 hover:opacity-100 border-dashed border-slate-400 bg-transparent shadow-none' : 'border-slate-200 dark:border-slate-700 shadow-md'}
                                             ${isVoidMode && !isVoid ? 'hover:ring-2 hover:ring-rose-400 cursor-pointer' : ''}
                                             ${isVoidMode && isVoid ? 'ring-2 ring-rose-400 cursor-pointer' : ''}
@@ -407,7 +407,7 @@ export default function SeatArrangementPage() {
                                                 >
                                                     {!isVoid && (
                                                         studentNum && (
-                                                            <span className="text-2xl font-bold text-indigo-600 dark:text-indigo-400 animate-in zoom-in spin-in-3 duration-300">
+                                                            <span className="text-base md:text-xl font-bold text-indigo-600 dark:text-indigo-400 animate-in zoom-in spin-in-3 duration-300">
                                                                 {studentNum}
                                                             </span>
                                                         )

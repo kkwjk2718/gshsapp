@@ -12,7 +12,7 @@ export default async function MainLayout({
     children: React.ReactNode;
 }>) {
     const user = await getCurrentUser();
-    await maybeRunScheduledBackup();
+    maybeRunScheduledBackup().catch(() => {});
 
     return (
         <div className="flex min-h-screen">

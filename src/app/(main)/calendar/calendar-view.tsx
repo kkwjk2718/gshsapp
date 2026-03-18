@@ -12,7 +12,7 @@ interface ScheduleItem {
     description?: string | null;
     startDate: Date;
     endDate: Date;
-    category?: string; // ACADEMIC, EVENT, HOLIDAY, PERSONAL
+    category?: string;
     isExternal?: boolean;
     isNEIS?: boolean;
 }
@@ -76,14 +76,14 @@ export function CalendarView({ schedules }: { schedules: ScheduleItem[] }) {
                     <div>일</div><div>월</div><div>화</div><div>수</div><div>목</div><div>금</div><div>토</div>
                 </div>
                 {/* Day Cells */}
-                <div className="grid grid-cols-7 auto-rows-fr gap-1">
+                <div className="grid grid-cols-7 auto-rows-fr gap-1 flex-1 min-h-0">
                     {calendarDays.map((day, idx) => {
                         const dayEvents = schedules.filter(s => isSameDay(new Date(s.startDate), day) || (new Date(s.startDate) <= day && new Date(s.endDate) >= day));
                         return (
                             <div
                                 key={idx}
                                 onClick={() => setSelectedDate(day)}
-                                className={`relative p-1.5 sm:p-2 rounded-xl cursor-pointer transition-all border flex flex-col items-center min-h-16 sm:min-h-20 ${isSameDay(day, selectedDate) ? "ring-2 ring-[color:var(--accent)] z-10" : ""}`}
+                                className={`relative p-1.5 sm:p-2 rounded-xl cursor-pointer transition-all border flex flex-col items-center overflow-hidden ${isSameDay(day, selectedDate) ? "ring-2 ring-[color:var(--accent)] z-10" : ""}`}
                                 style={{
                                   color: isSameMonth(day, monthStart) ? "var(--foreground)" : "var(--muted)",
                                   backgroundColor: isSameMonth(day, monthStart) ? "var(--surface)" : "var(--surface-2)",

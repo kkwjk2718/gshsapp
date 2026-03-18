@@ -2,7 +2,7 @@ import { prisma } from "@/lib/db";
 import { deleteNotice } from "./actions";
 import { format } from "date-fns";
 import Link from "next/link";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, Pencil } from "lucide-react";
 
 export default async function AdminNoticesPage() {
   const notices = await prisma.notice.findMany({
@@ -39,12 +39,17 @@ export default async function AdminNoticesPage() {
                       <td className="p-4 text-sm text-slate-500">{notice.writer.name}</td>
                       <td className="p-4 text-sm text-slate-500">{format(notice.createdAt, "yyyy.MM.dd")}</td>
                       <td className="p-4 text-right">
-                         <form action={deleteNotice}>
-                            <input type="hidden" name="id" value={notice.id} />
-                            <button className="text-rose-500 hover:text-rose-600 transition-colors p-2 hover:bg-rose-50 rounded-lg">
-                               <Trash2 className="w-4 h-4" />
-                            </button>
-                         </form>
+                         <div className="flex items-center justify-end gap-1">
+                            <Link href={`/admin/notices/${notice.id}/edit`} className="text-indigo-500 hover:text-indigo-600 transition-colors p-2 hover:bg-indigo-50 rounded-lg">
+                               <Pencil className="w-4 h-4" />
+                            </Link>
+                            <form action={deleteNotice}>
+                               <input type="hidden" name="id" value={notice.id} />
+                               <button className="text-rose-500 hover:text-rose-600 transition-colors p-2 hover:bg-rose-50 rounded-lg">
+                                  <Trash2 className="w-4 h-4" />
+                               </button>
+                            </form>
+                         </div>
                       </td>
                    </tr>
                 ))}
