@@ -52,3 +52,5 @@ gshsapp-web.tar
 /prisma/dev.db
 /data/
 /prisma/data/
+/.docker-test.env
+/.docker-test-data/
