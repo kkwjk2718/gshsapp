@@ -1,6 +1,7 @@
 "use client"
 
 import { updateNotice } from "../../actions";
+import { differenceInCalendarDays } from "date-fns";
 import { ArrowLeft, Calendar } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
@@ -23,6 +24,9 @@ export function EditNoticeForm({ notice, categories }: { notice: Notice; categor
   const [isUnlimited, setIsUnlimited] = useState(notice.expiresAt === null);
   const [contentLength, setContentLength] = useState(notice.content.length);
   const MAX_LENGTH = 1000;
+  const defaultDuration = notice.expiresAt
+    ? String(Math.min(14, Math.max(1, differenceInCalendarDays(notice.expiresAt, new Date()))))
+    : "7";
 
   return (
     <div className="p-8 max-w-2xl mx-auto space-y-8">
@@ -81,6 +85,7 @@ export function EditNoticeForm({ notice, categories }: { notice: Notice; categor
                     <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
                     <select
                        name="duration"
+                       defaultValue={defaultDuration}
                        disabled={isUnlimited}
                        className="w-full pl-10 pr-4 py-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50"
                     >

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { updateSongStatus } from "@/app/(main)/admin/songs/actions";
+import { updateSongStatus } from "./actions";
 import { X } from "lucide-react";
 import {
   Dialog,

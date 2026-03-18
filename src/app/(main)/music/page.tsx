@@ -81,8 +81,8 @@ export default async function MusicManagerPage() {
                                     <BanUserButton userId={song.requester.id} userName={song.requester.name} />
                                  </>
                               )}
-                              {song.status === 'APPROVED' && (
-                                 <form action={updateSongStatus.bind(null, song.id, 'PLAYED')} className="flex-1">
+                                 {song.status === 'APPROVED' && (
+                                  <form action={updateSongStatus.bind(null, song.id, 'PLAYED', undefined)} className="flex-1">
                                     <button className="w-full py-2 rounded-lg text-sm font-semibold" style={{ backgroundColor: "var(--surface-2)", color: "var(--accent)" }}>재생 완료</button>
                                  </form>
                               )}
@@ -133,8 +133,8 @@ export default async function MusicManagerPage() {
                                           <BanUserButton userId={song.requester.id} userName={song.requester.name} />
                                        </>
                                     )}
-                                    {song.status === 'APPROVED' && (
-                                       <form action={updateSongStatus.bind(null, song.id, 'PLAYED')}>
+                                     {song.status === 'APPROVED' && (
+                                        <form action={updateSongStatus.bind(null, song.id, 'PLAYED', undefined)}>
                                           <button className="p-2 rounded-lg" title="재생 완료" style={{ backgroundColor: "var(--surface-2)", color: "var(--accent)" }}><Play className="w-4 h-4" /></button>
                                        </form>
                                     )}

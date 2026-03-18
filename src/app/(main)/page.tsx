@@ -1,18 +1,17 @@
 import { getMeals, getTimetable } from "@/lib/neis";
 import { format, differenceInDays } from "date-fns";
-import { ko } from "date-fns/locale";
-import { Utensils, Calendar, Clock, Bell, BookOpen, Megaphone, ChevronRight, Music, LogIn } from "lucide-react";
+import { Calendar, Clock, Bell, BookOpen, ChevronRight, Music, LogIn } from "lucide-react";
 import Link from "next/link";
 import { getCurrentUser } from "@/lib/session";
 import { prisma } from "@/lib/db";
 import { NoticeRollingBanner } from "@/components/notice-rolling-banner";
 import { RealtimeClock } from "@/components/dashboard-widgets";
 import { WeatherWidget } from "@/components/weather-widget";
-import { getUserGrade } from "@/lib/grade-utils";
 import { NotificationBadge } from "@/components/layout/notification-badge";
 
 import { MealViewTracker } from "@/components/meal-view-tracker";
 import { MealWidget } from "@/components/meal-widget";
+import { getKSTDate } from "@/lib/date-utils";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
@@ -23,8 +22,8 @@ export const metadata: Metadata = {
 
 export default async function Home() {
     const today = new Date();
-    const koreaToday = new Date(today.getTime() + 9 * 60 * 60 * 1000);
-    const currentHour = koreaToday.getUTCHours();
+    const koreaToday = getKSTDate();
+    const currentHour = koreaToday.getHours();
     const formattedDate = format(koreaToday, "yyyyMMdd");
 
     const user = await getCurrentUser();
