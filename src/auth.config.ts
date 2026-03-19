@@ -22,7 +22,7 @@ export const authConfig = {
   callbacks: {
     authorized({ auth, request: { nextUrl } }) {
       const isLoggedIn = !!auth?.user;
-      const isOnDashboard = nextUrl.pathname.startsWith('/me');
+      const isOnDashboard = nextUrl.pathname === '/me' || nextUrl.pathname.startsWith('/me/');
       const isOnAdmin = nextUrl.pathname.startsWith('/admin');
       const isOnLogin = nextUrl.pathname.startsWith('/login');
       const isOnMeals = nextUrl.pathname.startsWith('/meals');
