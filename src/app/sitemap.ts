@@ -1,5 +1,31 @@
 import { MetadataRoute } from "next";
-import { prisma } from "@/lib/db";
+
+async function getNoticeRoutes(baseUrl: string): Promise<MetadataRoute.Sitemap> {
+  if (!process.env.DATABASE_URL) {
+    return [];
+  }
+
+  try {
+    const { prisma } = await import("@/lib/db");
+    const notices = await prisma.notice.findMany({
+      where: {
+        OR: [{ expiresAt: { gt: new Date() } }, { expiresAt: null }],
+      },
+      select: { id: true, createdAt: true },
+      take: 1000,
+      orderBy: { createdAt: "desc" },
+    });
+
+    return notices.map((notice) => ({
+      url: `${baseUrl}/notices/${notice.id}`,
+      lastModified: notice.createdAt,
+      changeFrequency: "weekly" as const,
+      priority: 0.6,
+    }));
+  } catch {
+    return [];
+  }
+}
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://gshs.app";
@@ -18,26 +44,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: r.priority,
   }));
 
-  let noticeRoutes: MetadataRoute.Sitemap = [];
-  try {
-    const notices = await prisma.notice.findMany({
-      where: {
-        OR: [{ expiresAt: { gt: new Date() } }, { expiresAt: null }],
-      },
-      select: { id: true, createdAt: true },
-      take: 1000,
-      orderBy: { createdAt: "desc" },
-    });
-
-    noticeRoutes = notices.map((notice) => ({
-      url: `${baseUrl}/notices/${notice.id}`,
-      lastModified: notice.createdAt,
-      changeFrequency: "weekly" as const,
-      priority: 0.6,
-    }));
-  } catch (error) {
-    console.error("Sitemap generation error (notices):", error);
-  }
+  const noticeRoutes = await getNoticeRoutes(baseUrl);
 
   return [...publicRoutes, ...noticeRoutes];
 }
