@@ -1,5 +1,6 @@
 "use server";
 
+import os from "node:os";
 import path from "node:path";
 import fs from "node:fs/promises";
 import { revalidatePath } from "next/cache";
@@ -70,7 +71,7 @@ export async function restoreFromUpload(_: RestoreState, formData: FormData): Pr
     const before = await getCounts().catch(() => null);
 
     const bytes = Buffer.from(await f.arrayBuffer());
-    const temp = path.join(process.cwd(), `tmp-restore-${Date.now()}` + (f.name.endsWith(".tar.gz") ? ".tar.gz" : ".db"));
+    const temp = path.join(os.tmpdir(), `tmp-restore-${Date.now()}` + (f.name.endsWith(".tar.gz") ? ".tar.gz" : ".db"));
     await fs.writeFile(temp, bytes);
     await restoreUploadedFile(temp, f.name);
     await fs.unlink(temp).catch(() => {});

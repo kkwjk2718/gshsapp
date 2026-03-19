@@ -8,11 +8,16 @@ import { prisma } from "@/lib/db";
 const execFileAsync = promisify(execFile);
 
 const ROOT = process.cwd();
-const BACKUP_DIR = path.resolve(ROOT, "..", "data_backup");
 const DB_URL = process.env.DATABASE_URL || "file:./prisma/dev.db";
 const IS_FILE_DB = DB_URL.startsWith("file:");
 const DB_FILE = IS_FILE_DB ? DB_URL.replace(/^file:/, "") : null;
 const DB_PATH = DB_FILE ? path.resolve(ROOT, DB_FILE) : null;
+// Store backups next to the SQLite file by default so containerized deployments
+// can write to the same mounted data volume.
+const DEFAULT_BACKUP_DIR = DB_PATH
+  ? path.resolve(path.dirname(DB_PATH), "backup")
+  : path.resolve(ROOT, "data_backup");
+const BACKUP_DIR = path.resolve(process.env.BACKUP_DIR || DEFAULT_BACKUP_DIR);
 
 const DEFAULT_EXTRA_PATHS = [
   "public/uploads",
