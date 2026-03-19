@@ -21,4 +21,4 @@ NEXT_PUBLIC_APP_URL="http://YOUR_SERVER_IP:1234"
 
 # 5. 기타 (선택)
 # 구글 애널리틱스 ID (없으면 비워두세요)
-NEXT_PUBLIC_GA_ID=""
+# Google Analytics is configured from /admin/settings after deployment.

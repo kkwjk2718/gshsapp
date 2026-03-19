@@ -4,9 +4,6 @@ import withPWA from "next-pwa";
 const nextConfig = {
     reactCompiler: true,
     output: "standalone",
-    env: {
-        NEXT_PUBLIC_GA_ID: process.env.NEXT_PUBLIC_GA_ID,
-    },
     // Explicitly configure turbopack as empty to silence the warning
     turbopack: {},
 };

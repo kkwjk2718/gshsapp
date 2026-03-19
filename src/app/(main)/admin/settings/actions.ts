@@ -1,8 +1,9 @@
 "use server"
 
 import { prisma } from "@/lib/db";
-import { revalidatePath, revalidateTag, unstable_cache } from "next/cache";
+import { revalidatePath, unstable_cache } from "next/cache";
 import { getCurrentUser } from "@/lib/session";
+import { SYSTEM_SETTING_KEYS, isValidGoogleAnalyticsId } from "@/lib/system-settings";
 
 export async function updateGradeMapping(formData: FormData) {
   const user = await getCurrentUser();
@@ -32,6 +33,7 @@ export async function updateGradeMapping(formData: FormData) {
 export type ActionResult = {
   success?: string;
   error?: string;
+  value?: string | null;
 };
 
 export async function updateICalUrl(prevState: any, formData: FormData): Promise<ActionResult> {
@@ -55,6 +57,41 @@ export async function updateICalUrl(prevState: any, formData: FormData): Promise
     // revalidateTag("schedules"); 
     revalidatePath("/", "layout");
     return { success: "iCal URL이 업데이트되었습니다." };
+}
+
+export async function updateGoogleAnalyticsId(prevState: any, formData: FormData): Promise<ActionResult> {
+    const user = await getCurrentUser();
+    if (!user || user.role !== 'ADMIN') throw new Error("Unauthorized");
+
+    const googleAnalyticsId = (formData.get("googleAnalyticsId") as string | null)?.trim() || "";
+
+    if (googleAnalyticsId && !isValidGoogleAnalyticsId(googleAnalyticsId)) {
+        return { error: "Google Analytics measurement IDs must look like G-XXXXXXXXXX." };
+    }
+
+    await prisma.systemSetting.upsert({
+        where: { key: SYSTEM_SETTING_KEYS.googleAnalyticsId },
+        update: { value: googleAnalyticsId },
+        create: {
+            key: SYSTEM_SETTING_KEYS.googleAnalyticsId,
+            value: googleAnalyticsId,
+            description: "Google Analytics measurement ID"
+        }
+    });
+
+    revalidatePath("/admin/settings");
+
+    if (googleAnalyticsId) {
+        return {
+            success: "Google Analytics measurement ID saved.",
+            value: googleAnalyticsId,
+        };
+    }
+
+    return {
+        success: "Google Analytics tracking disabled.",
+        value: null,
+    };
 }
 
 export const getICalUrl = unstable_cache(

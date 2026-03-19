@@ -1,14 +1,16 @@
 import { prisma } from "@/lib/db";
 import { updateGradeMapping } from "./actions";
-import { Settings, Save, Link, DatabaseBackup } from "lucide-react";
+import { Settings, Save, Link, DatabaseBackup, BarChart3 } from "lucide-react";
 import { ICalForm } from "./ical-form";
 import { backupNow, updateBackupInterval } from "./backup-actions";
 import { listBackups, getBackupIntervalDays } from "@/lib/backup";
 import { RestoreUploadForm } from "./restore-upload-form";
+import { GoogleAnalyticsForm } from "./google-analytics-form";
 
 export default async function SettingsPage() {
   const gradeMappingSetting = await prisma.systemSetting.findUnique({ where: { key: "GRADE_MAPPING" } });
   const iCalUrlSetting = await prisma.systemSetting.findUnique({ where: { key: "ICAL_URL" } });
+  const googleAnalyticsSetting = await prisma.systemSetting.findUnique({ where: { key: "GOOGLE_ANALYTICS_ID" } });
 
   let mapping = { "1": 42, "2": 41, "3": 40 };
   if (gradeMappingSetting) {
@@ -18,13 +20,14 @@ export default async function SettingsPage() {
   }
 
   const iCalUrl = iCalUrlSetting?.value || "";
+  const googleAnalyticsId = googleAnalyticsSetting?.value || "";
   const [backups, intervalDays] = await Promise.all([listBackups(), getBackupIntervalDays()]);
 
   return (
     <div className="p-8 space-y-8">
       <h1 className="text-2xl font-bold">시스템 설정</h1>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-8">
         <div className="glass p-8 rounded-3xl">
           <h2 className="text-lg font-bold mb-4 flex items-center gap-2">
             <Settings className="w-5 h-5" />
@@ -59,6 +62,17 @@ export default async function SettingsPage() {
           </h2>
           <p className="text-sm text-slate-500 mb-6">구글 캘린더 iCal URL을 입력하면 학사일정 페이지에 표시됩니다.</p>
           <ICalForm initialUrl={iCalUrl} />
+        </div>
+
+        <div className="glass p-8 rounded-3xl">
+          <h2 className="text-lg font-bold mb-4 flex items-center gap-2">
+            <BarChart3 className="w-5 h-5" />
+            Google Analytics
+          </h2>
+          <p className="text-sm text-slate-500 mb-6">
+            Configure the measurement ID here instead of relying on environment variables.
+          </p>
+          <GoogleAnalyticsForm initialValue={googleAnalyticsId} />
         </div>
       </div>
 

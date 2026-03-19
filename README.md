@@ -39,7 +39,7 @@ NEXT_PUBLIC_APP_URL=http://localhost:3000
 DATABASE_URL=file:./prisma/dev.db
 ```
 
-> `NEXT_PUBLIC_GA_ID`, `NEXT_PUBLIC_NEIS_API_KEY`는 로컬 개발 시 비워도 동작합니다(일부 기능 제한).
+> Google Analytics는 `/admin/settings`에서 측정 ID를 설정합니다. `NEXT_PUBLIC_NEIS_API_KEY`는 로컬 개발 시 비워도 동작합니다(일부 기능 제한).
 
 ### DB 초기화
 ```bash
