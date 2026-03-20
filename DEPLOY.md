@@ -106,7 +106,7 @@ NEXT_PUBLIC_NEIS_API_KEY=
 2. Docker 이미지 빌드 및 푸시
 3. 테스트 서버에 `deploy/compose.yml`, `deploy.sh` 복사
 4. 서버에서 `deploy.sh` 실행
-5. `/api/health`, `/`, `/menu`, `/notices` 스모크 체크
+5. SSH를 통해 서버 내부 `127.0.0.1:1234` 기준 `/api/health`, `/`, `/menu`, `/notices` 스모크 체크
 
 실패 시:
 

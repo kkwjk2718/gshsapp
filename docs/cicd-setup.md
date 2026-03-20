@@ -122,7 +122,7 @@ GitHub Actions는 아래 태그를 푸시합니다.
 5. SSH로 테스트 서버 접속
 6. `deploy/compose.yml`, `deploy.sh` 복사
 7. 서버에서 `deploy.sh` 실행
-8. `/api/health`, `/`, `/menu`, `/notices` 확인
+8. SSH로 서버에 접속해 `127.0.0.1:1234` 기준 `/api/health`, `/`, `/menu`, `/notices` 확인
 
 ## 8. 운영 서버 수동 배포 흐름
 
