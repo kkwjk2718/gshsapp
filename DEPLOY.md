@@ -15,8 +15,8 @@
 1. Pull Request 또는 push에서 CI 실행
 2. `main` push 시 Docker 이미지 빌드
 3. Docker Hub에 `sha-<commit>`, `main`, `latest` 태그 푸시
-4. 테스트 서버에 `sha-<commit>` 자동 배포
-5. 운영 서버는 GitHub Actions 수동 실행으로 배포
+4. 테스트 서버 self-hosted runner가 `sha-<commit>` 자동 배포
+5. 운영 서버는 GitHub Actions 수동 실행 + 운영 서버 runner로 배포
 
 핵심 원칙:
 
@@ -24,13 +24,14 @@
 - 테스트와 운영 서버 분리
 - 서버 런타임 시크릿은 GitHub가 아니라 서버 `.env`에 저장
 - SQLite는 컨테이너 내부가 아니라 볼륨에 저장
+- 사설망 VM에는 GitHub-hosted runner가 직접 SSH하지 않고, 각 서버 안의 self-hosted runner가 배포를 수행
 
 ## 저장소 안의 배포 관련 파일
 
 - [Dockerfile](./Dockerfile): 앱 이미지 빌드
 - [docker-compose.yml](./docker-compose.yml): 로컬/수동 서버 실행용 compose
 - [deploy/compose.yml](./deploy/compose.yml): CI/CD 서버 배포용 compose
-- [deploy/deploy.sh](./deploy/deploy.sh): 서버에서 실행되는 실제 배포 스크립트
+- [deploy/deploy.sh](./deploy/deploy.sh): 서버의 self-hosted runner가 실행하는 실제 배포 스크립트
 - [deploy/smoke_check.py](./deploy/smoke_check.py): 배포 후 기본 검증
 - [deploy/README.md](./deploy/README.md): 배포 자산 설명
 - [.github/workflows/ci.yml](./.github/workflows/ci.yml): CI
@@ -92,7 +93,7 @@ NEXT_PUBLIC_NEIS_API_KEY=
 - [ ] `.env` 또는 API 키가 커밋되지 않았는지 확인
 - [ ] 서버 `.env`가 최신 도메인 기준인지 확인
 - [ ] Docker Hub 접근 권한이 정상인지 확인
-- [ ] GitHub environment secrets가 준비되었는지 확인
+- [ ] GitHub self-hosted runner가 online 상태인지 확인
 
 ## 테스트 서버 자동 배포
 
@@ -104,15 +105,17 @@ NEXT_PUBLIC_NEIS_API_KEY=
 
 1. CI 품질 검사
 2. Docker 이미지 빌드 및 푸시
-3. 테스트 서버에 `deploy/compose.yml`, `deploy.sh` 복사
-4. 서버에서 `deploy.sh` 실행
-5. SSH를 통해 서버 내부 `127.0.0.1:1234` 기준 `/api/health`, `/`, `/menu`, `/notices` 스모크 체크
+3. `gshs-test` 라벨의 self-hosted runner가 테스트 서버에서 작업 수신
+4. 테스트 서버 로컬 `/opt/gshsapp`에 `deploy/compose.yml`, `deploy.sh` 반영
+5. 서버에서 `deploy.sh` 실행
+6. 서버 내부 `127.0.0.1:1234` 기준 `/api/health`, `/`, `/menu`, `/notices` 스모크 체크
 
 실패 시:
 
 - Actions 로그 확인
 - 서버의 `docker compose logs`
 - 서버 `backup/` 폴더의 최근 DB 백업 확인
+- runner 상태 확인: GitHub repository settings > Actions > Runners
 
 ## 운영 배포
 
@@ -126,6 +129,7 @@ NEXT_PUBLIC_NEIS_API_KEY=
 
 - 운영은 `latest`가 아니라 승인된 `sha-<commit>`만 사용
 - 운영 반영 전 테스트 서버에서 같은 SHA가 검증되어야 함
+- 운영 서버에는 `gshs-prod` 라벨의 self-hosted runner가 준비되어 있어야 함
 
 ## 롤백 전략
 

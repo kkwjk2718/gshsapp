@@ -90,6 +90,7 @@ npm run build
 - 이미지 저장소: Docker Hub
 - 테스트 배포: `main` push 후 자동 배포
 - 운영 배포: GitHub Actions 수동 실행 + `production` environment 승인
+- 배포 실행: GitHub-hosted CI + 서버별 self-hosted runner
 - 런타임: Ubuntu VM + Docker Compose
 - 데이터베이스: SQLite
 

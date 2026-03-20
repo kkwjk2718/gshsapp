@@ -172,8 +172,8 @@ DB:
 현재 CI/CD 구조:
 
 - PR / push: `ci.yml`
-- `main` push: Docker 이미지 빌드 + 테스트 서버 자동 배포
-- 운영 배포: `deploy-prod.yml` 수동 실행
+- `main` push: Docker 이미지 빌드 + `gshs-test` runner 자동 배포
+- 운영 배포: `deploy-prod.yml` 수동 실행 + `gshs-prod` runner 실행
 
 중요 파일:
 
@@ -190,6 +190,7 @@ DB:
 - 실제 서버 배포는 `sha-<commit>`만 사용
 - 서버 경로 기본값은 `/opt/gshsapp`
 - 앱은 `127.0.0.1:1234`에 바인딩하고 리버스 프록시가 앞단에서 받는 구조를 기본으로 가정
+- 사설망 VM에서는 GitHub-hosted runner가 직접 SSH하지 않고 서버 내부 self-hosted runner가 배포를 수행
 
 ## 9. AI 에이전트가 자주 실수하는 포인트
 
@@ -227,7 +228,7 @@ DB:
 새 테스트 서버 또는 운영 서버가 준비되면 아래 순서로 진행합니다.
 
 1. `docs/server-bootstrap.md` 기준으로 VM 준비
-2. GitHub Actions용 SSH 키 준비
+2. self-hosted runner를 테스트면 `gshs-test`, 운영이면 `gshs-prod`로 등록
 3. GitHub Environments / Secrets 입력
 4. 서버 `.env` 작성
 5. CI/CD 워크플로우 push 및 검증

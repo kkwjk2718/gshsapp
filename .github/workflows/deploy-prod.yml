@@ -17,10 +17,15 @@ concurrency:
 
 env:
   APP_URL: https://gshs.app
+  DEPLOY_PATH: /opt/gshsapp
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
+    runs-on:
+      - self-hosted
+      - Linux
+      - X64
+      - gshs-prod
     environment:
       name: production
       url: https://gshs.app
@@ -39,71 +44,44 @@ jobs:
               exit 1
               ;;
           esac
-      - name: Configure SSH
+      - name: Sync deploy assets on production server
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p ~/.ssh
-          printf '%s' "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/id_ed25519
-          printf '%s\n' "${{ secrets.KNOWN_HOSTS }}" > ~/.ssh/known_hosts
-          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
-      - name: Sync deploy assets
-        shell: bash
-        env:
-          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
-          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
-          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
-          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
-        run: |
-          set -euo pipefail
-          ssh -i ~/.ssh/id_ed25519 -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" "mkdir -p '$DEPLOY_PATH' '$DEPLOY_PATH/data' '$DEPLOY_PATH/backup'"
-          scp -i ~/.ssh/id_ed25519 -P "$DEPLOY_PORT" deploy/compose.yml deploy/deploy.sh "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/"
-          ssh -i ~/.ssh/id_ed25519 -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" "cd '$DEPLOY_PATH' && sed -i 's/\r$//' compose.yml deploy.sh && chmod +x deploy.sh"
+          install -d "$DEPLOY_PATH" "$DEPLOY_PATH/data" "$DEPLOY_PATH/backup"
+          install -m 644 deploy/compose.yml "$DEPLOY_PATH/compose.yml"
+          install -m 755 deploy/deploy.sh "$DEPLOY_PATH/deploy.sh"
       - name: Deploy production server
         shell: bash
         env:
-          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
-          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
-          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
-          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
           IMAGE_TAG: ${{ inputs.image_tag }}
         run: |
           set -euo pipefail
-          ssh -i ~/.ssh/id_ed25519 -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" "
-            cd '$DEPLOY_PATH' &&
-            export DOCKERHUB_USERNAME='$DOCKERHUB_USERNAME' &&
-            export DOCKERHUB_TOKEN='$DOCKERHUB_TOKEN' &&
-            export IMAGE_TAG='$IMAGE_TAG' &&
-            export APP_VERSION='$IMAGE_TAG' &&
-            export DOCKER_IMAGE='${DOCKERHUB_USERNAME}/gshsapp' &&
-            ./deploy.sh
-          "
+          cd "$DEPLOY_PATH"
+          export DOCKERHUB_USERNAME="$DOCKERHUB_USERNAME"
+          export DOCKERHUB_TOKEN="$DOCKERHUB_TOKEN"
+          export IMAGE_TAG="$IMAGE_TAG"
+          export APP_VERSION="$IMAGE_TAG"
+          export DOCKER_IMAGE="${DOCKERHUB_USERNAME}/gshsapp"
+          ./deploy.sh
 
   smoke:
-    runs-on: ubuntu-latest
+    runs-on:
+      - self-hosted
+      - Linux
+      - X64
+      - gshs-prod
     needs: deploy
     steps:
-      - name: Configure SSH
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p ~/.ssh
-          printf '%s' "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/id_ed25519
-          printf '%s\n' "${{ secrets.KNOWN_HOSTS }}" > ~/.ssh/known_hosts
-          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
       - name: Smoke check production deployment on server
         shell: bash
         env:
-          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
-          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
-          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
           EXPECTED_VERSION: ${{ inputs.image_tag }}
         run: |
           set -euo pipefail
-          ssh -i ~/.ssh/id_ed25519 -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" "
-            EXPECTED_VERSION='$EXPECTED_VERSION' python3 - <<'PY'
+          EXPECTED_VERSION="$EXPECTED_VERSION" python3 - <<'PY'
           import json
           import os
           import urllib.request
@@ -135,4 +113,3 @@ jobs:
                           f'Health endpoint version mismatch: expected {expected_version}, got {payload.get(\"version\")}'
                       )
           PY
-          "

@@ -1,6 +1,6 @@
 # deploy/README.md
 
-이 디렉터리는 GitHub Actions가 서버에 복사해서 사용하는 배포 자산 모음입니다.
+이 디렉터리는 GitHub Actions deploy job이 서버 안의 self-hosted runner에서 반영하는 배포 자산 모음입니다.
 
 ## 파일 설명
 
@@ -22,8 +22,8 @@
 설명:
 
 - `.env`: 서버 런타임 시크릿
-- `compose.yml`: 저장소에서 복사되는 파일
-- `deploy.sh`: 저장소에서 복사되는 파일
+- `compose.yml`: runner가 `/opt/gshsapp`에 반영하는 파일
+- `deploy.sh`: runner가 `/opt/gshsapp`에 반영하는 파일
 - `data/`: SQLite DB 저장
 - `backup/`: 배포 전 DB 백업 저장
 
@@ -97,18 +97,14 @@ Repository secrets:
 - `DOCKERHUB_USERNAME`
 - `DOCKERHUB_TOKEN`
 
-Environment secrets:
-
-- `DEPLOY_HOST`
-- `DEPLOY_PORT`
-- `DEPLOY_USER`
-- `DEPLOY_SSH_KEY`
-- `DEPLOY_PATH`
-- `KNOWN_HOSTS`
-
-권장 `DEPLOY_PATH`:
+고정 배포 경로:
 
 - `/opt/gshsapp`
+
+Runner labels:
+
+- 테스트 서버: `gshs-test`
+- 운영 서버: `gshs-prod`
 
 ## 운영 시 주의할 점
 

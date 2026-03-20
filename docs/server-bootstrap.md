@@ -16,7 +16,7 @@
 - 전용 배포 사용자 생성 완료
 - `/opt/gshsapp` 디렉터리 준비 완료
 - `.env`, `data/`, `backup/` 구조 준비 완료
-- GitHub Actions가 SSH 키로 접속 가능
+- GitHub Actions self-hosted runner가 online 상태
 - 리버스 프록시가 `127.0.0.1:1234`를 바라볼 수 있음
 
 ## 권장 OS
@@ -67,13 +67,6 @@ sudo chown -R deploy:deploy /home/deploy/.ssh
 sudo chmod 700 /home/deploy/.ssh
 ```
 
-여기에 GitHub Actions가 사용할 공개 SSH 키를 `authorized_keys`에 넣습니다.
-
-```bash
-sudo -u deploy bash -c 'cat >> ~/.ssh/authorized_keys'
-sudo chmod 600 /home/deploy/.ssh/authorized_keys
-```
-
 ## 4. 배포 디렉터리 준비
 
 ```bash
@@ -90,7 +83,7 @@ sudo chown -R deploy:deploy /opt/gshsapp
   backup/
 ```
 
-이후 GitHub Actions가 `compose.yml`, `deploy.sh`를 복사합니다.
+이후 서버 안의 self-hosted runner가 `compose.yml`, `deploy.sh`를 반영합니다.
 
 ## 5. 서버 .env 작성
 
@@ -166,16 +159,16 @@ ls -la /opt/gshsapp/data
 ls -la /opt/gshsapp/backup
 ```
 
-## 9. GitHub Actions 연결 전 체크리스트
+## 9. GitHub Actions runner 연결 전 체크리스트
 
 - [ ] 서버 IP 확보
-- [ ] SSH 포트 확인
 - [ ] 배포 사용자명 확정
-- [ ] GitHub Actions용 SSH 키 생성
-- [ ] `authorized_keys` 등록
 - [ ] `/opt/gshsapp/.env` 작성
 - [ ] Docker 실행 가능 확인
 - [ ] `deploy` 사용자가 `docker ps` 가능한지 확인
+- [ ] self-hosted runner 등록 토큰 준비
+- [ ] runner label 확정: 테스트=`gshs-test`, 운영=`gshs-prod`
+- [ ] runner 서비스 online 확인
 
 ## 10. 다음 단계
 
