@@ -137,6 +137,6 @@ jobs:
                       raise SystemExit(f'Unexpected service name: {payload}')
                   if payload.get('version') != expected_version:
                       raise SystemExit(
-                          f'Health endpoint version mismatch: expected {expected_version}, got {payload.get(\"version\")}'
+                          f"Health endpoint version mismatch: expected {expected_version}, got {payload.get('version')}"
                       )
           PY
