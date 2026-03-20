@@ -15,3 +15,4 @@ dist
 .vercel
 playwright-artifacts
 remote-secrets-backup-*
+deploy/.deploy.env

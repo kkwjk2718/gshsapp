@@ -56,3 +56,4 @@ gshsapp-web.tar
 /.docker-test-data/
 /playwright-artifacts/
 /remote-secrets-backup-*/
+/deploy/.deploy.env

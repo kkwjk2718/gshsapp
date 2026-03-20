@@ -1,0 +1,21 @@
+services:
+  web:
+    container_name: gshsapp-web
+    image: ${DOCKER_IMAGE:?DOCKER_IMAGE is required}:${IMAGE_TAG:?IMAGE_TAG is required}
+    restart: always
+    ports:
+      - "${HOST_BIND_IP:-127.0.0.1}:${HOST_PORT:-1234}:3000"
+    env_file:
+      - ./.env
+    environment:
+      NODE_OPTIONS: --dns-result-order=ipv4first
+      PORT: "3000"
+      HOSTNAME: 0.0.0.0
+      APP_VERSION: ${APP_VERSION:?APP_VERSION is required}
+      BACKUP_DIR: /app/backup
+    volumes:
+      - ./data:/app/data
+      - ./backup:/app/backup
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
