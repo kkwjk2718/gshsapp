@@ -13,3 +13,5 @@ README.md
 build
 dist
 .vercel
+playwright-artifacts
+remote-secrets-backup-*
