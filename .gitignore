@@ -54,3 +54,5 @@ gshsapp-web.tar
 /prisma/data/
 /.docker-test.env
 /.docker-test-data/
+/playwright-artifacts/
+/remote-secrets-backup-*/
