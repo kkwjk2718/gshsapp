@@ -2,6 +2,12 @@
 
 Start with [AGENTS.md](../AGENTS.md).
 
+Canonical raw guide:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/kkwjk2718/gshsapp/main/AGENTS.md
+```
+
 Repository-specific reminders:
 
 - This is a Next.js 16 + Prisma + SQLite project.

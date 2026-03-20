@@ -1,30 +1,52 @@
 # AGENTS.md
 
-이 문서는 GSHS.app 저장소에서 작업하는 AI 코딩 에이전트를 위한 기준 문서입니다.
+## For LLM Agents
 
-대상:
+Fetch the canonical agent guide and follow it:
 
-- Codex
-- Claude
-- Cursor
-- GitHub Copilot
-- 기타 저장소 문맥을 읽고 작업하는 에이전트
+```bash
+curl -fsSL https://raw.githubusercontent.com/kkwjk2718/gshsapp/main/AGENTS.md
+```
 
-## 1. 프로젝트 개요
+Use the raw file, not summarized page previews. This file is the canonical machine-oriented onboarding guide for this repository.
 
-GSHS.app은 경남과학고 학생용 통합 웹 서비스입니다.
+## 1. Mission
 
-핵심 기능:
+GSHS.app is a student-facing integrated web service for Gyeongnam Science High School.
 
-- 공지사항
-- 급식
-- 시간표
-- 학사 일정
-- 음악 신청
-- 교내 링크 모음
-- 관리자 페이지
+Primary goals:
 
-기술 스택:
+- keep public pages stable
+- keep admin workflows usable
+- avoid breaking test and production domain behavior
+- avoid deployment regressions
+- treat SQLite data and backups carefully
+
+When you work in this repository, optimize for correctness and operational safety first. Fast changes are good only if they do not create hidden risk for authentication, database writes, backups, or deployment.
+
+## 2. Read Order
+
+If you have enough context budget, read these in order:
+
+1. `AGENTS.md`
+2. `README.md`
+3. `CONTRIBUTING.md`
+4. `DEPLOY.md`
+5. `docs/server-bootstrap.md`
+6. `docs/cicd-setup.md`
+7. `deploy/README.md`
+
+If context is tight, prioritize:
+
+1. `AGENTS.md`
+2. `README.md`
+3. `DEPLOY.md`
+4. `.github/workflows/publish-and-deploy-test.yml`
+5. `deploy/deploy.sh`
+
+## 3. Project Snapshot
+
+Core stack:
 
 - Next.js 16 App Router
 - React 19
@@ -34,68 +56,130 @@ GSHS.app은 경남과학고 학생용 통합 웹 서비스입니다.
 - Docker / Docker Compose
 - GitHub Actions
 
-## 2. 가장 먼저 이해해야 할 것
+Current environment model:
 
-- 이 프로젝트는 현재 SQLite 기반입니다.
-- 서버 배포 시 DB는 반드시 볼륨에 둡니다.
-- 테스트 서버 도메인은 `test.gshs.app`입니다.
-- 운영 서버 도메인은 `gshs.app`입니다.
-- 운영 배포는 `latest`가 아니라 `sha-<commit>` 태그를 기준으로 합니다.
-- Google Analytics는 환경 변수가 아니라 `/admin/settings`에서 관리합니다.
+- local development: `http://localhost:3000`
+- test service domain: `https://test.gshs.app`
+- production service domain: `https://gshs.app`
 
-## 3. 저장소 구조
+Critical invariants:
 
-주요 경로:
+- SQLite in Docker must live at `file:/app/data/dev.db`
+- real deployments must use immutable `sha-<commit>` image tags
+- `latest` is never the authoritative production deployment target
+- Google Analytics is managed in `/admin/settings`, not through env-only configuration
+- private network VMs use self-hosted GitHub runners for deploy jobs
+- test and production URL values must never be mixed
 
-- `src/app`: Next.js App Router 페이지와 API 라우트
-- `src/components`: 재사용 UI 컴포넌트
-- `src/lib`: DB, 백업, 설정, 외부 연동 로직
-- `prisma/schema.prisma`: 데이터 모델
-- `deploy/`: 서버 배포용 자산
-- `.github/workflows/`: CI/CD 워크플로우
-- `docs/`: 서버 및 CI/CD 운영 문서
+## 4. Repository Map
 
-중요 하위 경로:
+Top-level paths:
 
-- `src/app/api/health/route.ts`: 배포 후 헬스체크 엔드포인트
-- `src/app/api/public-settings/route.ts`: 공개 설정 API
-- `src/app/(main)/admin/settings`: 관리자 설정 및 백업 관련 화면
-- `src/auth.config.ts`: 인증/권한 경계
-- `src/lib/backup.ts`: SQLite 백업/복원 핵심 로직
-- `src/lib/db.ts`: Prisma 클라이언트
+- `src/app`: App Router pages, layouts, route handlers, server actions
+- `src/components`: reusable UI pieces
+- `src/lib`: shared logic for DB, settings, backups, logging, utilities
+- `prisma/schema.prisma`: database schema
+- `deploy/`: deployment assets used on servers
+- `.github/workflows/`: CI/CD workflows
+- `docs/`: human-readable operational docs
 
-## 4. 로컬 개발과 검증 명령
+Important application paths:
 
-설치:
+- `src/app/api/health/route.ts`: health endpoint used by deploy verification
+- `src/app/api/public-settings/route.ts`: public settings loader for runtime config
+- `src/app/(main)/admin/settings`: admin settings UI and actions
+- `src/app/(main)/admin/settings/backup-actions.ts`: backup and restore flows
+- `src/app/(main)/admin/settings/actions.ts`: admin settings persistence
+- `src/auth.config.ts`: auth and route protection rules
+- `src/lib/backup.ts`: backup directory and file handling
+- `src/lib/db.ts`: Prisma client bootstrap
+- `src/components/analytics.tsx`: runtime analytics loading behavior
+
+Important deployment paths:
+
+- `.github/workflows/ci.yml`: repo quality checks
+- `.github/workflows/publish-and-deploy-test.yml`: build, push, and test deployment
+- `.github/workflows/deploy-prod.yml`: manual production deployment
+- `deploy/compose.yml`: server compose template
+- `deploy/deploy.sh`: server deployment script
+- `deploy/smoke_check.py`: helper smoke-check asset
+
+Important documentation paths:
+
+- `README.md`: general project introduction
+- `DEPLOY.md`: deployment overview
+- `docs/server-bootstrap.md`: new Ubuntu VM preparation
+- `docs/cicd-setup.md`: GitHub Actions and runner setup
+- `deploy/README.md`: deploy asset reference
+- `.github/copilot-instructions.md`: Copilot-specific short context
+
+## 5. Product Behavior Map
+
+Main public areas:
+
+- `/`
+- `/landing`
+- `/notices`
+- `/notices/[id]`
+- `/meals`
+- `/calendar`
+- `/sites`
+- `/teachers`
+- `/songs`
+- `/utils`
+- `/help`
+- `/privacy`
+- `/stats`
+- `/menu`
+
+Authenticated user area:
+
+- `/me`
+
+Admin area:
+
+- `/admin`
+- `/admin/users`
+- `/admin/notices`
+- `/admin/categories`
+- `/admin/tokens`
+- `/admin/logs`
+- `/admin/reports`
+- `/admin/settings`
+- `/admin/notifications`
+- `/admin/songs`
+- `/admin/sites`
+- `/admin/test`
+
+Auth expectations:
+
+- `/me` requires login
+- `/admin` requires admin role
+- `/login` should redirect away if already logged in
+- `/menu` is public and must not be accidentally captured by `/me` route matching
+
+If you touch auth behavior, always re-check:
+
+- `/login`
+- `/me`
+- `/admin`
+- `/menu`
+- test-domain redirects staying on `test.gshs.app`
+
+## 6. Local Setup
+
+Requirements:
+
+- Node.js 20+
+- npm 10+
+
+Install:
 
 ```bash
 npm ci
 ```
 
-자주 쓰는 명령:
-
-```bash
-npm run dev
-npm run lint
-npm test
-npm run build
-```
-
-작업 후 기본 검증 순서:
-
-1. `npm run lint`
-2. `npm test`
-3. `npm run build`
-
-참고:
-
-- 현재 lint는 경고가 남아 있지만 실패하지는 않습니다.
-- 테스트는 `vitest`
-- E2E 성격 검증은 필요 시 Playwright 사용
-
-## 5. 환경 변수 규칙
-
-로컬 개발 기본값:
+Local env baseline:
 
 ```dotenv
 DATABASE_URL=file:./dev.db
@@ -107,135 +191,301 @@ NEXT_PUBLIC_APP_URL=http://localhost:3000
 NEXT_PUBLIC_NEIS_API_KEY=
 ```
 
-서버 Docker 배포 기본값:
+Database init:
 
-```dotenv
-DATABASE_URL=file:/app/data/dev.db
-AUTH_SECRET=replace-me
-AUTH_TRUST_HOST=true
-AUTH_URL=https://test.gshs.app
-NEXTAUTH_URL=https://test.gshs.app
-NEXT_PUBLIC_APP_URL=https://test.gshs.app
-NEXT_PUBLIC_NEIS_API_KEY=
+```bash
+npx prisma db push
 ```
 
-운영 서버에서는 URL 세 값을 `https://gshs.app`로 바꿉니다.
+Run app:
 
-절대 하지 말 것:
+```bash
+npm run dev
+```
 
-- 실제 `.env` 파일이나 비밀값을 커밋
-- 테스트 도메인과 운영 도메인 설정을 섞기
-- 운영 계정 정보를 코드에 하드코딩
+Primary verification commands:
 
-## 6. 인증과 권한
+```bash
+npm run lint
+npm test
+npm run build
+```
 
-인증 관련 기준 파일:
+Notes:
 
-- `src/auth.config.ts`
+- lint currently produces warnings but should still exit successfully
+- tests use `vitest`
+- UI and admin smoke checks can be done with Playwright when needed
 
-현재 기준:
+## 7. Secrets And Environment Rules
 
-- `/me`는 로그인 필요
-- `/admin`은 관리자 권한 필요
-- `/login`은 로그인 상태면 홈으로 리다이렉트
-- 공개 페이지와 보호 페이지 경계를 바꿀 때는 회귀를 특히 조심해야 함
+Never commit:
 
-권한 로직을 수정할 때는 아래를 같이 확인합니다.
+- `.env`
+- `.env.local`
+- API keys
+- OAuth secrets
+- SSH private keys
+- copied server secret backups
 
-- `/login`
-- `/me`
-- `/admin`
-- `/menu`
-- 테스트 서버 도메인 리다이렉트가 `gshs.app`로 새지 않는지
+Server runtime env keys typically include:
 
-## 7. 데이터베이스와 백업
+- `DATABASE_URL`
+- `AUTH_SECRET`
+- `AUTH_TRUST_HOST`
+- `AUTH_URL`
+- `NEXTAUTH_URL`
+- `NEXT_PUBLIC_APP_URL`
+- `NEXT_PUBLIC_NEIS_API_KEY`
 
-DB:
+Domain-specific rule:
+
+- test server values must point to `https://test.gshs.app`
+- production server values must point to `https://gshs.app`
+
+Analytics-specific rule:
+
+- Google Analytics Measurement ID is stored through admin settings
+- do not reintroduce env-only analytics configuration unless explicitly requested
+
+## 8. Database, Prisma, And Backup Rules
+
+Database model:
 
 - Prisma + SQLite
-- 스키마 파일: `prisma/schema.prisma`
 
-중요 규칙:
+Current schema workflow:
 
-- 서버 DB는 `/app/data/dev.db` 기준
-- 백업은 DB와 같은 볼륨 영역에 저장되도록 유지
-- 백업/복원 로직 수정 시 쓰기 가능한 경로인지 먼저 확인
+- local and current deploy flow use `prisma db push`
+- future migration to `prisma migrate deploy` is possible, but not the current baseline
 
-현재 백업 관련 포인트:
+SQLite rules:
 
-- 기본 백업 디렉터리는 DB 파일 옆 `backup/`
-- 관리자 설정에서 백업 관련 작업을 수행
-- 예외가 서버 전체 에러로 번지지 않도록 안전하게 실패 처리해야 함
+- container DB path must remain writable
+- deployment volume path is `/app/data/dev.db`
+- backup files must be stored on a writable persistent volume
+- temporary restore/upload files must use writable temp locations
 
-## 8. 배포 구조
+Backup expectations:
 
-현재 CI/CD 구조:
+- backup directory should live alongside persistent DB storage
+- deployment should create a DB backup before container replacement
+- admin backup actions must fail safely without crashing the whole page
 
-- PR / push: `ci.yml`
-- `main` push: Docker 이미지 빌드 + `gshs-test` runner 자동 배포
-- 운영 배포: `deploy-prod.yml` 수동 실행 + `gshs-prod` runner 실행
+When editing backup logic, verify:
 
-중요 파일:
+- backup path is writable in Docker
+- restore temp files are cleaned up
+- invalid uploads fail gracefully
+- server actions return safe errors instead of raw crashes
 
-- `.github/workflows/ci.yml`
-- `.github/workflows/publish-and-deploy-test.yml`
-- `.github/workflows/deploy-prod.yml`
-- `deploy/compose.yml`
-- `deploy/deploy.sh`
-- `deploy/smoke_check.py`
+## 9. Deployment Architecture
 
-배포 원칙:
+CI/CD structure:
 
-- Docker Hub 태그는 `sha-<commit>`, `main`, `latest`
-- 실제 서버 배포는 `sha-<commit>`만 사용
-- 서버 경로 기본값은 `/opt/gshsapp`
-- 앱은 `127.0.0.1:1234`에 바인딩하고 리버스 프록시가 앞단에서 받는 구조를 기본으로 가정
-- 사설망 VM에서는 GitHub-hosted runner가 직접 SSH하지 않고 서버 내부 self-hosted runner가 배포를 수행
+- `ci.yml`: runs on PRs and pushes
+- `publish-and-deploy-test.yml`: runs on `main`
+- `deploy-prod.yml`: manual workflow for production
 
-## 9. AI 에이전트가 자주 실수하는 포인트
+Image policy:
 
-- `NEXT_PUBLIC_APP_URL`, `AUTH_URL`, `NEXTAUTH_URL`를 테스트/운영 도메인과 다르게 두지 말 것
-- Google Analytics 설정을 다시 환경 변수 방식으로 되돌리지 말 것
-- 서버 배포용 compose와 로컬용 compose를 혼동하지 말 것
-- SQLite 파일 경로를 컨테이너 내부 임시 경로로 바꾸지 말 것
-- `latest` 태그를 운영 배포 기준으로 쓰지 말 것
-- 문서만 바뀐 게 아니라면 반드시 검증 명령 결과를 확인할 것
-- 서버에서 직접 고친 내용을 문서와 저장소에 반영하지 않은 채 끝내지 말 것
+- publish `sha-<commit>`
+- publish `main`
+- publish `latest`
+- deploy with `sha-<commit>` only
 
-## 10. 문서 우선순위
+Why self-hosted runners are used:
 
-작업 전에 아래 문서를 함께 읽는 것이 좋습니다.
+- deploy targets may live on `172.16.x.x` private networks
+- GitHub-hosted runners cannot SSH directly into private-only VMs
+- therefore build/push happens on GitHub-hosted runners, but deploy/smoke steps run on each server's self-hosted runner
 
-1. `README.md`
-2. `CONTRIBUTING.md`
-3. `DEPLOY.md`
-4. `docs/server-bootstrap.md`
-5. `docs/cicd-setup.md`
-6. `deploy/README.md`
+Runner labels:
 
-## 11. 코드 변경 시 기대 행동
+- test server runner: `gshs-test`
+- production runner: `gshs-prod`
 
-에이전트는 아래 원칙을 따르는 것이 좋습니다.
+Server filesystem layout:
 
-- 작은 범위로 수정
-- 관련 문서가 바뀌면 함께 갱신
-- 시크릿은 절대 저장소에 추가하지 않음
-- 가능하면 테스트와 빌드까지 확인
-- 배포 관련 변경이면 `deploy/`, `.github/workflows/`, `docs/`를 같이 점검
+```text
+/opt/gshsapp
+  .env
+  .deploy.env
+  compose.yml
+  deploy.sh
+  data/
+  backup/
+```
 
-## 12. 새 서버가 준비되면 할 일
+Runtime network model:
 
-새 테스트 서버 또는 운영 서버가 준비되면 아래 순서로 진행합니다.
+- app binds to `127.0.0.1:1234`
+- reverse proxy or upstream gateway should forward public traffic
 
-1. `docs/server-bootstrap.md` 기준으로 VM 준비
-2. self-hosted runner를 테스트면 `gshs-test`, 운영이면 `gshs-prod`로 등록
-3. GitHub Environments / Secrets 입력
-4. 서버 `.env` 작성
-5. CI/CD 워크플로우 push 및 검증
+Test deployment flow:
 
-## 13. 참고
+1. run quality checks
+2. build Docker image
+3. push Docker tags
+4. self-hosted test runner receives deploy job
+5. copy `deploy/compose.yml` and `deploy/deploy.sh` into `/opt/gshsapp`
+6. run `deploy.sh`
+7. verify `/api/health`, `/`, `/menu`, `/notices` on `127.0.0.1:1234`
 
-사람용 운영 문서:
+Production deployment flow:
+
+1. manual workflow dispatch
+2. provide `sha-<commit>` input
+3. require `production` environment approval
+4. production runner performs deploy
+5. smoke-check the deployed SHA
+
+## 10. Validation Expectations
+
+Minimum validation after normal code changes:
+
+1. `npm run lint`
+2. `npm test`
+3. `npm run build`
+
+Add targeted checks when relevant:
+
+- auth changes: test `/login`, `/me`, `/admin`, `/menu`
+- admin settings changes: test `/admin/settings`
+- backup changes: test backup and restore failure paths
+- analytics changes: confirm runtime settings API behavior
+- deployment changes: validate workflow YAML and deploy script behavior
+
+After deploy-related changes, verify:
+
+- workflow parses
+- build pushes the expected SHA tag
+- `/api/health` returns `ok: true`
+- `/api/health.version` matches the deployed SHA
+
+## 11. Common Failure Modes
+
+1. Test domain redirects to production domain.
+Cause:
+- `AUTH_URL`, `NEXTAUTH_URL`, or `NEXT_PUBLIC_APP_URL` points at `gshs.app`
+
+2. `/menu` suddenly requires auth.
+Cause:
+- route matching uses something like `startsWith('/me')` and accidentally captures `/menu`
+
+3. `/admin/settings` throws a server-side application error in Docker.
+Cause:
+- backup or temp file path is not writable in the container
+
+4. Deploy succeeds but smoke check fails on version mismatch.
+Cause:
+- `APP_VERSION` or `IMAGE_TAG` was not propagated correctly
+
+5. Container boot loops after deploy.
+Cause:
+- DB volume permissions
+- bad env values
+- missing runtime secret
+
+6. Test deploy workflow cannot reach server.
+Cause:
+- trying to use GitHub-hosted SSH into a private IP instead of a self-hosted runner
+
+7. Repo accidentally contains secrets.
+Cause:
+- copying server `.env` or secret backups into the workspace without ignoring them
+
+## 12. Fast Debug Playbook
+
+If deploy looks wrong:
+
+1. inspect GitHub Actions logs
+2. inspect runner status in repository Actions settings
+3. inspect server container state
+4. inspect `/api/health`
+5. inspect Docker logs
+6. inspect current `.env` domain values
+
+Useful commands on the server:
+
+```bash
+docker compose -f /opt/gshsapp/compose.yml --env-file /opt/gshsapp/.deploy.env ps
+docker compose -f /opt/gshsapp/compose.yml --env-file /opt/gshsapp/.deploy.env logs --tail=200
+curl -s http://127.0.0.1:1234/api/health
+ls -la /opt/gshsapp
+ls -la /opt/gshsapp/data
+ls -la /opt/gshsapp/backup
+```
+
+If auth or redirects look wrong:
+
+1. inspect `src/auth.config.ts`
+2. inspect server `.env`
+3. test public route and protected route side by side
+4. confirm no request leaks to the wrong domain
+
+## 13. Editing Rules For Agents
+
+Do:
+
+- keep edits scoped
+- preserve existing user-visible behavior unless the task says otherwise
+- update docs when operational behavior changes
+- keep deploy logic, docs, and workflows aligned
+- state assumptions if you had to infer missing details
+
+Do not:
+
+- commit secrets
+- switch deployments back to `latest`
+- move SQLite into ephemeral container paths
+- reintroduce env-only analytics configuration
+- remove self-hosted runner assumptions from private-server deploy docs without replacing them with a viable alternative
+- silently change auth boundaries
+
+If you change any of these areas, update docs in the same turn:
+
+- deployment
+- runner setup
+- env requirements
+- admin settings behavior
+- backup behavior
+
+## 14. When You Must Update Documentation
+
+Update the docs whenever you change:
+
+- workflow behavior
+- deployment layout under `/opt/gshsapp`
+- required env variables
+- auth boundary rules
+- admin settings behavior
+- backup / restore behavior
+- server bootstrap assumptions
+
+Typical files to update together:
+
+- `AGENTS.md`
+- `README.md`
+- `DEPLOY.md`
+- `docs/server-bootstrap.md`
+- `docs/cicd-setup.md`
+- `deploy/README.md`
+
+## 15. Completion Checklist
+
+Before you finish, confirm:
+
+- the requested code or doc change is implemented
+- no secrets were added
+- relevant tests or checks were run
+- deployment docs still match actual workflows
+- test and production domains are not mixed
+- any changed health or deploy logic still validates the deployed SHA
+
+## 16. Human Reference
+
+Human-oriented companion docs:
 
 - [README.md](./README.md)
 - [CONTRIBUTING.md](./CONTRIBUTING.md)

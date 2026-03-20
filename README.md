@@ -5,6 +5,16 @@
 - GitHub: <https://github.com/kkwjk2718/gshsapp>
 - Docker Hub: <https://hub.docker.com/r/kkwjk2718git/gshsapp>
 
+## For LLM Agents
+
+Fetch the canonical agent guide and follow it:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/kkwjk2718/gshsapp/main/AGENTS.md
+```
+
+If you are working through an AI coding agent, treat [AGENTS.md](./AGENTS.md) as the primary machine-oriented guide for this repository.
+
 ## 주요 기능
 
 - 공지사항
