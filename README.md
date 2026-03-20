@@ -21,10 +21,11 @@
 
 1. [README.md](./README.md)
 2. [CONTRIBUTING.md](./CONTRIBUTING.md)
-3. [DEPLOY.md](./DEPLOY.md)
-4. [docs/server-bootstrap.md](./docs/server-bootstrap.md)
-5. [docs/cicd-setup.md](./docs/cicd-setup.md)
-6. [deploy/README.md](./deploy/README.md)
+3. [AGENTS.md](./AGENTS.md)
+4. [DEPLOY.md](./DEPLOY.md)
+5. [docs/server-bootstrap.md](./docs/server-bootstrap.md)
+6. [docs/cicd-setup.md](./docs/cicd-setup.md)
+7. [deploy/README.md](./deploy/README.md)
 
 ## 로컬 개발 시작
 
@@ -105,6 +106,7 @@ npm run build
 ## 팀원용 빠른 안내
 
 - 기능 개발: [CONTRIBUTING.md](./CONTRIBUTING.md)
+- AI 에이전트 작업 기준: [AGENTS.md](./AGENTS.md)
 - 수동 Docker 배포: [DEPLOY.md](./DEPLOY.md)
 - 새 Ubuntu 서버 준비: [docs/server-bootstrap.md](./docs/server-bootstrap.md)
 - GitHub Secrets / Environments / Actions 설정: [docs/cicd-setup.md](./docs/cicd-setup.md)
