@@ -31,6 +31,7 @@ export function NoticeForm({ categories }: { categories: Category[] }) {
              <input 
                name="title"
                type="text" 
+               data-testid="notice-title-input"
                placeholder="공지 제목을 입력하세요"
                required
                className="w-full px-4 py-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
@@ -42,6 +43,7 @@ export function NoticeForm({ categories }: { categories: Category[] }) {
                  <label className="font-semibold text-sm">카테고리</label>
                  <select 
                    name="category"
+                   data-testid="notice-category-select"
                    className="w-full px-4 py-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                  >
                     {categories.map(cat => (
@@ -69,6 +71,7 @@ export function NoticeForm({ categories }: { categories: Category[] }) {
                     <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
                     <select 
                        name="duration"
+                       data-testid="notice-duration-select"
                        disabled={isUnlimited}
                        className="w-full pl-10 pr-4 py-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50"
                     >
@@ -89,6 +92,7 @@ export function NoticeForm({ categories }: { categories: Category[] }) {
              </div>
              <textarea 
                name="content"
+               data-testid="notice-content-input"
                rows={10}
                maxLength={MAX_LENGTH}
                placeholder="공지 내용을 입력하세요 (최대 1000자)"
@@ -99,7 +103,7 @@ export function NoticeForm({ categories }: { categories: Category[] }) {
           </div>
 
           <div className="pt-4">
-             <button type="submit" className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl transition-colors">
+             <button type="submit" data-testid="submit-notice-button" className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl transition-colors">
                 작성 완료
              </button>
           </div>

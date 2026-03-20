@@ -18,6 +18,7 @@ concurrency:
 env:
   APP_URL: https://gshs.app
   DEPLOY_PATH: /opt/gshsapp
+  BACKUP_MAX_AGE_HOURS: "24"
 
 jobs:
   deploy:
@@ -51,12 +52,14 @@ jobs:
           install -d "$DEPLOY_PATH" "$DEPLOY_PATH/data" "$DEPLOY_PATH/backup"
           install -m 644 deploy/compose.yml "$DEPLOY_PATH/compose.yml"
           install -m 755 deploy/deploy.sh "$DEPLOY_PATH/deploy.sh"
+          install -m 755 deploy/restore-drill.sh "$DEPLOY_PATH/restore-drill.sh"
       - name: Deploy production server
         shell: bash
         env:
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
           IMAGE_TAG: ${{ inputs.image_tag }}
+          BACKUP_MAX_AGE_HOURS: ${{ env.BACKUP_MAX_AGE_HOURS }}
         run: |
           set -euo pipefail
           cd "$DEPLOY_PATH"
@@ -64,6 +67,7 @@ jobs:
           export DOCKERHUB_TOKEN="$DOCKERHUB_TOKEN"
           export IMAGE_TAG="$IMAGE_TAG"
           export APP_VERSION="$IMAGE_TAG"
+          export BACKUP_MAX_AGE_HOURS="$BACKUP_MAX_AGE_HOURS"
           export DOCKER_IMAGE="${DOCKERHUB_USERNAME}/gshsapp"
           ./deploy.sh
 

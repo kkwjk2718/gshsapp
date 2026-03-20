@@ -150,3 +150,20 @@ NEXT_PUBLIC_NEIS_API_KEY=
 - [deploy/README.md](./deploy/README.md)
 
 이 세 문서가 실제 서버 구축과 CI/CD 설정의 기준 문서입니다.
+## Preproduction Hardening Additions
+
+The current deployment process now includes:
+
+- Playwright E2E after automatic test deployment
+- a manual `preproduction-rehearsal.yml` workflow for a candidate SHA
+- `deploy/restore-drill.sh` for isolated restore verification
+- operational readiness checks in `/admin/test`
+
+Recommended human verification sequence before production:
+
+1. run `Preproduction Rehearsal` for the candidate `sha-<commit>`
+2. confirm the workflow is green
+3. confirm `/admin/test` shows all `PASS`
+4. confirm the latest backup timestamp is recent
+5. do a quick manual pass on `https://test.gshs.app`
+6. deploy the same SHA to production

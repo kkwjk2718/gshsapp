@@ -42,6 +42,7 @@ export function GoogleAnalyticsForm({ initialValue }: { initialValue: string }) 
         <input
           name="googleAnalyticsId"
           type="text"
+          data-testid="google-analytics-id-input"
           defaultValue={initialValue}
           placeholder="G-XXXXXXXXXX"
           autoComplete="off"
@@ -58,6 +59,7 @@ export function GoogleAnalyticsForm({ initialValue }: { initialValue: string }) 
 
       <button
         disabled={isPending}
+        data-testid="save-google-analytics-id"
         className="flex items-center gap-2 px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold transition-colors disabled:opacity-50"
       >
         {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}

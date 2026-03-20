@@ -1,6 +1,6 @@
 services:
   web:
-    container_name: gshsapp-web
+    container_name: ${CONTAINER_NAME:-gshsapp-web}
     image: ${DOCKER_IMAGE:?DOCKER_IMAGE is required}:${IMAGE_TAG:?IMAGE_TAG is required}
     restart: always
     ports:
@@ -13,6 +13,7 @@ services:
       HOSTNAME: 0.0.0.0
       APP_VERSION: ${APP_VERSION:?APP_VERSION is required}
       BACKUP_DIR: /app/backup
+      BACKUP_MAX_AGE_HOURS: ${BACKUP_MAX_AGE_HOURS:-24}
     volumes:
       - ./data:/app/data
       - ./backup:/app/backup

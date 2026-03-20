@@ -45,7 +45,10 @@ export default async function AdminNoticesPage() {
                             </Link>
                             <form action={deleteNotice}>
                                <input type="hidden" name="id" value={notice.id} />
-                               <button className="text-rose-500 hover:text-rose-600 transition-colors p-2 hover:bg-rose-50 rounded-lg">
+                               <button
+                                  aria-label={`${notice.title} 삭제`}
+                                  className="text-rose-500 hover:text-rose-600 transition-colors p-2 hover:bg-rose-50 rounded-lg"
+                               >
                                   <Trash2 className="w-4 h-4" />
                                </button>
                             </form>

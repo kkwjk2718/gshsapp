@@ -26,6 +26,14 @@ const DEFAULT_EXTRA_PATHS = [
   "public/user-content",
   "logs",
 ];
+const BACKUP_FILE_SUFFIXES = [".tar.gz", ".db", ".bak"] as const;
+
+export type BackupItem = {
+  file: string;
+  size: number;
+  createdAt: Date;
+  hasMeta: boolean;
+};
 
 function nowStamp() {
   const d = new Date();
@@ -104,8 +112,8 @@ export async function createBackup(reason = "manual") {
 export async function listBackups() {
   await ensureDir();
   const items = await fs.readdir(BACKUP_DIR);
-  const files = items.filter((n) => n.endsWith(".tar.gz") || n.endsWith(".db"));
-  const out: Array<{ file: string; size: number; createdAt: Date; hasMeta: boolean }> = [];
+  const files = items.filter((n) => BACKUP_FILE_SUFFIXES.some((suffix) => n.endsWith(suffix)));
+  const out: BackupItem[] = [];
   for (const file of files) {
     const st = await fs.stat(path.join(BACKUP_DIR, file));
     const hasMeta = items.includes(`${file}.json`);
@@ -113,6 +121,11 @@ export async function listBackups() {
   }
   out.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   return out;
+}
+
+export async function getLatestBackup() {
+  const backups = await listBackups();
+  return backups[0] ?? null;
 }
 
 async function restoreFromTarGz(src: string) {
@@ -131,6 +144,13 @@ export async function restoreBackupFile(file: string) {
   }
 
   if (src.endsWith(".db")) {
+    if (!DB_PATH) throw new Error("파일 기반 데이터베이스가 아니어서 .db 복원을 지원하지 않습니다.");
+    await checkpoint();
+    await fs.copyFile(src, DB_PATH);
+    return true;
+  }
+
+  if (src.endsWith(".bak")) {
     if (!DB_PATH) throw new Error("파일 기반 데이터베이스가 아니어서 .db 복원을 지원하지 않습니다.");
     await checkpoint();
     await fs.copyFile(src, DB_PATH);

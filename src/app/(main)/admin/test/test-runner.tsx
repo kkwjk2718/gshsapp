@@ -35,6 +35,7 @@ export function TestRunner() {
         <button
           onClick={handleRunTest}
           disabled={loading}
+          data-testid="run-system-tests"
           className="group relative inline-flex h-14 items-center justify-center overflow-hidden rounded-full bg-gradient-to-r from-indigo-600 to-purple-600 px-8 font-bold text-white transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-indigo-500/30 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:ring-offset-2 disabled:opacity-70 disabled:scale-100"
         >
           {loading ? (
@@ -56,7 +57,14 @@ export function TestRunner() {
       {results && (
         <div className="grid gap-4">
           {results.map((res, idx) => (
-            <div key={idx} className="group overflow-hidden bg-slate-900 rounded-2xl border border-slate-800 shadow-sm transition-all duration-500 animate-in fade-in slide-in-from-bottom-2" style={{ animationDelay: `${idx * 100}ms` }}>
+            <div
+              key={idx}
+              data-testid="system-test-result"
+              data-status={res.status}
+              data-test-name={res.name}
+              className="group overflow-hidden bg-slate-900 rounded-2xl border border-slate-800 shadow-sm transition-all duration-500 animate-in fade-in slide-in-from-bottom-2"
+              style={{ animationDelay: `${idx * 100}ms` }}
+            >
               <div
                 className="flex items-center justify-between p-5 cursor-pointer hover:bg-slate-800/50 transition-colors"
                 onClick={() => toggleExpand(idx)}
@@ -78,7 +86,15 @@ export function TestRunner() {
                         {expandedIndex === idx ? "접기" : "상세보기"}
                       </span>
                     </div>
-                    {res.message && <div className="text-sm text-rose-500 mt-1 font-medium">{res.message}</div>}
+                    {res.message && (
+                      <div
+                        className={`text-sm mt-1 font-medium ${
+                          res.status === "PASS" ? "text-emerald-500" : "text-rose-500"
+                        }`}
+                      >
+                        {res.message}
+                      </div>
+                    )}
                   </div>
                 </div>
                 <div className="text-right">

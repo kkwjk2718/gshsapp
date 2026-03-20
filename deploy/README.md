@@ -118,3 +118,16 @@ Runner labels:
 - [DEPLOY.md](../DEPLOY.md)
 - [docs/server-bootstrap.md](../docs/server-bootstrap.md)
 - [docs/cicd-setup.md](../docs/cicd-setup.md)
+## Additional Deploy Assets
+
+New asset:
+
+- [restore-drill.sh](./restore-drill.sh): isolated restore rehearsal on a temporary localhost port
+
+Additional environment values:
+
+- `CONTAINER_NAME`
+- `BACKUP_MAX_AGE_HOURS`
+- `RESTORE_DRILL_PORT`
+
+`restore-drill.sh` stages a copy of the latest backup or a copy of the live DB, boots a temporary container, verifies `/api/health`, verifies admin login, then cleans everything up.

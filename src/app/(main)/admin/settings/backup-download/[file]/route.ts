@@ -12,7 +12,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ file: stri
 
   const { file } = await params;
   const safe = path.basename(file);
-  if (!(safe.endsWith('.db') || safe.endsWith('.tar.gz') || safe.endsWith('.json'))) {
+  if (!(safe.endsWith('.db') || safe.endsWith('.bak') || safe.endsWith('.tar.gz') || safe.endsWith('.json'))) {
     return new NextResponse('Unsupported file type', { status: 400 });
   }
   const full = path.join(getBackupDir(), safe);

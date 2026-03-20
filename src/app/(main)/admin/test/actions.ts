@@ -5,6 +5,7 @@ import { getMeals, getTimetable } from "@/lib/neis";
 import { logAction } from "@/lib/logger";
 import { getCurrentUser } from "@/lib/session";
 import { format } from "date-fns";
+import { runOperationalReadinessDiagnostics } from "./system-diagnostics";
 
 export type TestResult = {
   name: string;
@@ -160,6 +161,9 @@ export async function runSystemTests(): Promise<TestResult[]> {
     logs.push(log(`ERROR: ${e.message}`));
     results.push({ name: "Song Request DB Flow", status: "FAIL", message: e.message, details: logs });
   }
+
+  const readinessChecks = await runOperationalReadinessDiagnostics();
+  results.push(...readinessChecks);
 
   return results;
 }

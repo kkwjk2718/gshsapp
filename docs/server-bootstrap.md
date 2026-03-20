@@ -176,3 +176,11 @@ ls -la /opt/gshsapp/backup
 
 - [docs/cicd-setup.md](./cicd-setup.md)
 - [deploy/README.md](../deploy/README.md)
+## Restore Drill Requirements
+
+Keep these assumptions true on the test server:
+
+- `/opt/gshsapp/backup` remains writable
+- `/opt/gshsapp/data/dev.db` remains the live SQLite file
+- localhost port `1235` is available for temporary restore-drill containers
+- the restore drill never overwrites the live DB in place

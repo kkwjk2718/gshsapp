@@ -168,3 +168,22 @@ GitHub Actions 실패 시 우선순위:
 - 구두 전달보다 문서 우선
 - 새 시크릿이 생기면 문서와 GitHub settings를 함께 갱신
 - 서버 구조가 바뀌면 `README`, `DEPLOY`, `docs/`, `deploy/README`를 같이 수정
+## Additional Test Environment Secrets
+
+The `test` environment now also needs:
+
+- `E2E_ADMIN_USER`
+- `E2E_ADMIN_PASSWORD`
+
+Workflow roles:
+
+- `ci.yml`: lint, vitest, build
+- `publish-and-deploy-test.yml`: publish image, deploy to test, smoke, Playwright E2E
+- `preproduction-rehearsal.yml`: manual candidate SHA deploy + smoke + E2E + restore drill
+- `deploy-prod.yml`: approved production deployment
+
+Shared defaults used by the test workflows:
+
+- `E2E_BASE_URL=https://test.gshs.app`
+- `BACKUP_MAX_AGE_HOURS=24`
+- `RESTORE_DRILL_PORT=1235`

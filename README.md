@@ -122,3 +122,18 @@ npm run build
 - 새 Ubuntu 서버 준비: [docs/server-bootstrap.md](./docs/server-bootstrap.md)
 - GitHub Secrets / Environments / Actions 설정: [docs/cicd-setup.md](./docs/cicd-setup.md)
 - 배포용 파일 설명: [deploy/README.md](./deploy/README.md)
+## CI/CD And Rehearsal Notes
+
+Additional verification commands:
+
+```bash
+npm run test:e2e
+npm run test:e2e:smoke
+```
+
+Current deployment safety baseline:
+
+- every `main` push deploys to the test server
+- test deployment must pass smoke checks and Playwright E2E
+- the manual `Preproduction Rehearsal` workflow is used to validate a candidate immutable SHA before production
+- production should only receive a SHA that already passed rehearsal on `test.gshs.app`

@@ -493,3 +493,24 @@ Human-oriented companion docs:
 - [docs/server-bootstrap.md](./docs/server-bootstrap.md)
 - [docs/cicd-setup.md](./docs/cicd-setup.md)
 - [deploy/README.md](./deploy/README.md)
+## 17. Preproduction Extensions
+
+Additional operational files:
+
+- `.github/workflows/preproduction-rehearsal.yml`
+- `deploy/restore-drill.sh`
+- `playwright.config.ts`
+- `e2e/`
+
+Additional checks now expected after deploy-related changes:
+
+- `npm run test:e2e`
+- `npm run test:e2e:smoke`
+- candidate SHA rehearsal on the test server when the change affects deployment safety
+
+Additional test environment secrets:
+
+- `E2E_ADMIN_USER`
+- `E2E_ADMIN_PASSWORD`
+
+The new default production gate is: candidate SHA passes smoke, Playwright E2E, restore drill, and `/admin/test` readiness checks on `https://test.gshs.app` before production deployment.

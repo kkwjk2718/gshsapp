@@ -1,0 +1,317 @@
+name: Preproduction Rehearsal
+
+on:
+  workflow_dispatch:
+    inputs:
+      candidate_sha:
+        description: Commit SHA or immutable sha-<commit> image tag to rehearse on test
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: preproduction-rehearsal
+  cancel-in-progress: false
+
+env:
+  DEPLOY_PATH: /opt/gshsapp
+  E2E_BASE_URL: https://test.gshs.app
+  RESTORE_DRILL_PORT: "1235"
+  BACKUP_MAX_AGE_HOURS: "24"
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      image_tag: ${{ steps.normalize.outputs.image_tag }}
+    steps:
+      - id: normalize
+        shell: bash
+        env:
+          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+        run: |
+          set -euo pipefail
+          candidate="$(echo "$CANDIDATE_SHA" | tr -d '[:space:]')"
+          if [[ -z "$candidate" ]]; then
+            echo "candidate_sha is required" >&2
+            exit 1
+          fi
+
+          if [[ "$candidate" == sha-* ]]; then
+            image_tag="$candidate"
+          else
+            image_tag="sha-$candidate"
+          fi
+
+          echo "image_tag=$image_tag" >> "$GITHUB_OUTPUT"
+
+  deploy:
+    runs-on:
+      - self-hosted
+      - Linux
+      - X64
+      - gshs-test
+    needs: prepare
+    environment:
+      name: test
+      url: ${{ env.E2E_BASE_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Sync deploy assets on test server
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -d "$DEPLOY_PATH" "$DEPLOY_PATH/data" "$DEPLOY_PATH/backup"
+          install -m 644 deploy/compose.yml "$DEPLOY_PATH/compose.yml"
+          install -m 755 deploy/deploy.sh "$DEPLOY_PATH/deploy.sh"
+          install -m 755 deploy/restore-drill.sh "$DEPLOY_PATH/restore-drill.sh"
+      - name: Deploy candidate image to test server
+        shell: bash
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+          IMAGE_TAG: ${{ needs.prepare.outputs.image_tag }}
+          BACKUP_MAX_AGE_HOURS: ${{ env.BACKUP_MAX_AGE_HOURS }}
+        run: |
+          set -euo pipefail
+          cd "$DEPLOY_PATH"
+          export DOCKERHUB_USERNAME="$DOCKERHUB_USERNAME"
+          export DOCKERHUB_TOKEN="$DOCKERHUB_TOKEN"
+          export IMAGE_TAG="$IMAGE_TAG"
+          export APP_VERSION="$IMAGE_TAG"
+          export BACKUP_MAX_AGE_HOURS="$BACKUP_MAX_AGE_HOURS"
+          export DOCKER_IMAGE="${DOCKERHUB_USERNAME}/gshsapp"
+          ./deploy.sh
+
+  smoke:
+    runs-on:
+      - self-hosted
+      - Linux
+      - X64
+      - gshs-test
+    needs:
+      - prepare
+      - deploy
+    outputs:
+      health_version: ${{ steps.smoke.outputs.health_version }}
+    steps:
+      - id: smoke
+        name: Smoke check candidate deployment on server
+        shell: bash
+        env:
+          EXPECTED_VERSION: ${{ needs.prepare.outputs.image_tag }}
+        run: |
+          set -euo pipefail
+          smoke_json="$(
+            EXPECTED_VERSION="$EXPECTED_VERSION" python3 - <<'PY'
+            import json
+            import os
+            import urllib.request
+
+            base_url = "http://127.0.0.1:1234"
+            expected_version = os.environ["EXPECTED_VERSION"]
+            paths = ["/api/health", "/", "/menu", "/notices"]
+            health_payload = None
+
+            for path in paths:
+                request = urllib.request.Request(
+                    base_url + path,
+                    headers={"User-Agent": "gshsapp-preproduction-smoke"},
+                )
+                with urllib.request.urlopen(request, timeout=30) as response:
+                    body = response.read()
+                    status = response.status
+
+                if status < 200 or status >= 400:
+                    raise SystemExit(f"{path} returned status {status}")
+
+                if path == "/api/health":
+                    health_payload = json.loads(body.decode("utf-8"))
+                    if health_payload.get("ok") is not True:
+                        raise SystemExit(f"Health endpoint returned unhealthy payload: {health_payload}")
+                    if health_payload.get("service") != "gshsapp":
+                        raise SystemExit(f"Unexpected service name: {health_payload}")
+                    if health_payload.get("version") != expected_version:
+                        raise SystemExit(
+                            f"Health endpoint version mismatch: expected {expected_version}, got {health_payload.get('version')}"
+                        )
+
+            print(json.dumps(health_payload))
+            PY
+          )"
+
+          health_version="$(SMOKE_JSON="$smoke_json" python3 - <<'PY'
+          import json
+          import os
+          print(json.loads(os.environ["SMOKE_JSON"])["version"])
+          PY
+          )"
+
+          echo "health_version=$health_version" >> "$GITHUB_OUTPUT"
+
+  e2e:
+    runs-on: ubuntu-latest
+    needs:
+      - prepare
+      - smoke
+    environment:
+      name: test
+      url: ${{ env.E2E_BASE_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Wait for test domain to serve candidate version
+        shell: bash
+        env:
+          EXPECTED_VERSION: ${{ needs.prepare.outputs.image_tag }}
+        run: |
+          set -euo pipefail
+          EXPECTED_VERSION="$EXPECTED_VERSION" E2E_BASE_URL="$E2E_BASE_URL" python3 - <<'PY'
+          import json
+          import os
+          import time
+          import urllib.request
+
+          base_url = os.environ["E2E_BASE_URL"].rstrip("/")
+          expected_version = os.environ["EXPECTED_VERSION"]
+          deadline = time.time() + 180
+
+          while time.time() < deadline:
+              request = urllib.request.Request(
+                  base_url + "/api/health",
+                  headers={"User-Agent": "gshsapp-preproduction-e2e"},
+              )
+              try:
+                  with urllib.request.urlopen(request, timeout=30) as response:
+                      payload = json.loads(response.read().decode("utf-8"))
+                  if payload.get("version") == expected_version and payload.get("ok") is True:
+                      break
+              except Exception:
+                  pass
+              time.sleep(5)
+          else:
+              raise SystemExit(
+                  f"Timed out waiting for {base_url}/api/health to report version {expected_version}"
+              )
+          PY
+      - name: Run Playwright E2E suite
+        env:
+          E2E_BASE_URL: ${{ env.E2E_BASE_URL }}
+          E2E_ADMIN_USER: ${{ secrets.E2E_ADMIN_USER }}
+          E2E_ADMIN_PASSWORD: ${{ secrets.E2E_ADMIN_PASSWORD }}
+        run: npm run test:e2e
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-preproduction-${{ github.run_id }}
+          path: |
+            playwright-report
+            test-results
+          if-no-files-found: ignore
+
+  restore_drill:
+    runs-on:
+      - self-hosted
+      - Linux
+      - X64
+      - gshs-test
+    needs:
+      - prepare
+      - e2e
+    environment:
+      name: test
+      url: ${{ env.E2E_BASE_URL }}
+    outputs:
+      restore_source_name: ${{ steps.parse.outputs.restore_source_name }}
+      latest_backup_name: ${{ steps.parse.outputs.latest_backup_name }}
+      restore_version: ${{ steps.parse.outputs.restore_version }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Sync deploy assets for restore drill
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -d "$DEPLOY_PATH" "$DEPLOY_PATH/data" "$DEPLOY_PATH/backup"
+          install -m 644 deploy/compose.yml "$DEPLOY_PATH/compose.yml"
+          install -m 755 deploy/restore-drill.sh "$DEPLOY_PATH/restore-drill.sh"
+      - name: Run isolated restore drill
+        shell: bash
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+          IMAGE_TAG: ${{ needs.prepare.outputs.image_tag }}
+          RESTORE_DRILL_OUTPUT_FILE: ${{ runner.temp }}/restore-drill.env
+          RESTORE_DRILL_PORT: ${{ env.RESTORE_DRILL_PORT }}
+          BACKUP_MAX_AGE_HOURS: ${{ env.BACKUP_MAX_AGE_HOURS }}
+          E2E_ADMIN_USER: ${{ secrets.E2E_ADMIN_USER }}
+          E2E_ADMIN_PASSWORD: ${{ secrets.E2E_ADMIN_PASSWORD }}
+        run: |
+          set -euo pipefail
+          cd "$DEPLOY_PATH"
+          export DOCKERHUB_USERNAME="$DOCKERHUB_USERNAME"
+          export DOCKERHUB_TOKEN="$DOCKERHUB_TOKEN"
+          export IMAGE_TAG="$IMAGE_TAG"
+          export APP_VERSION="$IMAGE_TAG"
+          export DOCKER_IMAGE="${DOCKERHUB_USERNAME}/gshsapp"
+          ./restore-drill.sh
+      - id: parse
+        name: Parse restore drill outputs
+        shell: bash
+        env:
+          RESTORE_DRILL_OUTPUT_FILE: ${{ runner.temp }}/restore-drill.env
+        run: |
+          set -euo pipefail
+          if [[ ! -f "$RESTORE_DRILL_OUTPUT_FILE" ]]; then
+            echo "Restore drill output file is missing." >&2
+            exit 1
+          fi
+          cat "$RESTORE_DRILL_OUTPUT_FILE" >> "$GITHUB_OUTPUT"
+
+  report:
+    runs-on: ubuntu-latest
+    if: always()
+    needs:
+      - prepare
+      - deploy
+      - smoke
+      - e2e
+      - restore_drill
+    steps:
+      - name: Write rehearsal summary
+        shell: bash
+        env:
+          DEPLOY_RESULT: ${{ needs.deploy.result }}
+          SMOKE_RESULT: ${{ needs.smoke.result }}
+          E2E_RESULT: ${{ needs.e2e.result }}
+          RESTORE_RESULT: ${{ needs.restore_drill.result }}
+          IMAGE_TAG: ${{ needs.prepare.outputs.image_tag }}
+          HEALTH_VERSION: ${{ needs.smoke.outputs.health_version }}
+          RESTORE_SOURCE_NAME: ${{ needs.restore_drill.outputs.restore_source_name }}
+          LATEST_BACKUP_NAME: ${{ needs.restore_drill.outputs.latest_backup_name }}
+          RESTORE_VERSION: ${{ needs.restore_drill.outputs.restore_version }}
+        run: |
+          set -euo pipefail
+          {
+            echo "## Preproduction Rehearsal"
+            echo
+            echo "- Deployment SHA: $IMAGE_TAG"
+            echo "- Health version: ${HEALTH_VERSION:-n/a}"
+            echo "- Smoke result: $SMOKE_RESULT"
+            echo "- E2E result: $E2E_RESULT"
+            echo "- Restore drill result: $RESTORE_RESULT"
+            echo "- Restore drill version: ${RESTORE_VERSION:-n/a}"
+            echo "- Restore source: ${RESTORE_SOURCE_NAME:-n/a}"
+            echo "- Latest backup file: ${LATEST_BACKUP_NAME:-n/a}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [[ "$DEPLOY_RESULT" != "success" || "$SMOKE_RESULT" != "success" || "$E2E_RESULT" != "success" || "$RESTORE_RESULT" != "success" ]]; then
+            exit 1
+          fi
