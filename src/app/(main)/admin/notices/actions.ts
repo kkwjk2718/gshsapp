@@ -1,6 +1,7 @@
 "use server"
 
 import { prisma } from "@/lib/db";
+import { resolveNoticeCategoryValue } from "@/lib/notice-categories";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/session";
@@ -9,7 +10,7 @@ import { addDays } from "date-fns";
 export async function createNotice(formData: FormData) {
   const title = formData.get("title") as string;
   const content = formData.get("content") as string;
-  const category = formData.get("category") as string;
+  const category = await resolveNoticeCategoryValue(formData.get("category"));
   const durationStr = formData.get("duration") as string;
   const unlimited = formData.get("unlimited") === "on";
   
@@ -54,7 +55,7 @@ export async function updateNotice(formData: FormData) {
     const id = formData.get("id") as string;
     const title = formData.get("title") as string;
     const content = formData.get("content") as string;
-    const category = formData.get("category") as string;
+    const category = await resolveNoticeCategoryValue(formData.get("category"));
     const durationStr = formData.get("duration") as string;
     const unlimited = formData.get("unlimited") === "on";
 

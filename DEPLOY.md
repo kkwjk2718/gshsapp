@@ -167,3 +167,8 @@ Recommended human verification sequence before production:
 4. confirm the latest backup timestamp is recent
 5. do a quick manual pass on `https://test.gshs.app`
 6. deploy the same SHA to production
+## Network Binding Note
+
+Deployments now bind the app container to `0.0.0.0:1234` by default.
+
+This is intentional because the current reverse proxy reaches the test VM over the network. Internal smoke checks still use `127.0.0.1:1234` from inside the VM, but the service must also be reachable from the proxy host.

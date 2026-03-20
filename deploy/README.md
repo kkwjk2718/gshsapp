@@ -131,3 +131,13 @@ Additional environment values:
 - `RESTORE_DRILL_PORT`
 
 `restore-drill.sh` stages a copy of the latest backup or a copy of the live DB, boots a temporary container, verifies `/api/health`, verifies admin login, then cleans everything up.
+## Network Binding Note
+
+The default deployment binding is now `0.0.0.0:${HOST_PORT}:3000`.
+
+Reason:
+
+- the reverse proxy currently reaches the app over the VM network, not through a same-host localhost-only proxy
+- binding to `127.0.0.1` prevented the external reverse proxy server from reaching the app container on the test VM
+
+If the network model changes later, `HOST_BIND_IP` can still be overridden explicitly.

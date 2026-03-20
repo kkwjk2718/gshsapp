@@ -184,3 +184,8 @@ Keep these assumptions true on the test server:
 - `/opt/gshsapp/data/dev.db` remains the live SQLite file
 - localhost port `1235` is available for temporary restore-drill containers
 - the restore drill never overwrites the live DB in place
+## Port Binding Note
+
+The current deployment default is `HOST_BIND_IP=0.0.0.0`.
+
+That means the app listens on the VM network interface at port `1234`, so the reverse proxy server can forward traffic to it. If you later move the reverse proxy onto the same VM, you can override `HOST_BIND_IP` back to `127.0.0.1`.

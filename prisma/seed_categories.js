@@ -1,29 +1,31 @@
-const { PrismaClient } = require('@prisma/client')
-const prisma = new PrismaClient()
+const { PrismaClient } = require("@prisma/client");
+
+const prisma = new PrismaClient();
 
 async function main() {
   const categories = [
-    { value: 'GENERAL', label: '일반' },
-    { value: 'ACADEMIC', label: '학사' },
-    { value: 'EVENT', label: '행사' },
-    { value: 'BROADCAST', label: '방송' },
-  ]
+    { value: "GENERAL", label: "일반" },
+    { value: "ACADEMIC", label: "학사" },
+    { value: "EVENT", label: "행사" },
+    { value: "BROADCAST", label: "방송" },
+  ];
 
-  for (const cat of categories) {
+  for (const category of categories) {
     await prisma.noticeCategory.upsert({
-      where: { value: cat.value },
-      update: {},
-      create: cat,
-    })
+      where: { value: category.value },
+      update: { label: category.label },
+      create: category,
+    });
   }
-  console.log('Categories seeded!')
+
+  console.log("Categories seeded!");
 }
 
 main()
-  .catch((e) => {
-    console.error(e)
-    process.exit(1)
+  .catch((error) => {
+    console.error(error);
+    process.exit(1);
   })
   .finally(async () => {
-    await prisma.$disconnect()
-  })
+    await prisma.$disconnect();
+  });

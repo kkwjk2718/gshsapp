@@ -30,10 +30,13 @@ export async function loginAsAdmin(page: Page) {
   await page.locator("#userId").fill(userId);
   await page.locator("#password").fill(password);
 
-  await Promise.all([
-    page.waitForURL((url) => !url.pathname.endsWith("/login"), { timeout: 30_000 }),
-    page.locator('button[type="submit"]').click(),
-  ]);
+  await page.locator('button[type="submit"]').click();
+  await page.waitForLoadState("networkidle");
+
+  if (new URL(page.url()).pathname.endsWith("/login")) {
+    const errorMessage = (await page.locator('[aria-live="polite"] p').first().textContent())?.trim();
+    throw new Error(errorMessage || "Admin login did not complete successfully.");
+  }
 
   await assertNoApplicationError(page);
 }

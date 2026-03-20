@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import { loadNoticeCategories } from "@/lib/notice-categories";
 import { notFound } from "next/navigation";
 import { EditNoticeForm } from "./edit-form";
 
@@ -11,7 +12,7 @@ export default async function EditNoticePage({ params }: Props) {
 
     const [notice, categories] = await Promise.all([
         prisma.notice.findUnique({ where: { id } }),
-        prisma.noticeCategory.findMany({ orderBy: { label: "asc" } }),
+        loadNoticeCategories(prisma),
     ]);
 
     if (!notice) notFound();

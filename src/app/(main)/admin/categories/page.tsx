@@ -1,9 +1,10 @@
 import { prisma } from "@/lib/db";
+import { loadNoticeCategories } from "@/lib/notice-categories";
 import { createCategory, deleteCategory } from "./actions";
 import { Trash2, Tag } from "lucide-react";
 
 export default async function CategoriesPage() {
-  const categories = await prisma.noticeCategory.findMany();
+  const categories = await loadNoticeCategories(prisma);
 
   return (
     <div className="p-8 space-y-8">
