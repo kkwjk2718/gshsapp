@@ -2,111 +2,133 @@
 
 GSHS.app 기여 가이드입니다.
 
-## 0. 기본 원칙
-- 작은 변경, 명확한 설명, 빠른 리뷰
-- 운영 안정성 우선 (특히 DB/인증/권한)
-- 민감정보는 절대 커밋 금지
+이 문서는 개발 방식, 브랜치 전략, PR 기준, 배포 관련 주의사항을 정리합니다.
 
----
+## 기본 원칙
 
-## 1. 개발 환경 준비
+- 작은 변경 단위로 작업합니다.
+- 동작 변경이 있으면 이유와 영향 범위를 같이 적습니다.
+- 서버, 인증, 권한, 데이터베이스 관련 변경은 특히 신중하게 리뷰합니다.
+- 시크릿, 비밀번호, 토큰, SSH 키, `.env` 파일은 절대 커밋하지 않습니다.
+
+## 개발 환경 준비
 
 ```bash
 npm ci
-cp env-docker-example.txt .env.local   # 필요 시 값 수정
 npm run dev
 ```
 
-권장 Node 버전: 20+
+권장 버전:
 
----
+- Node.js 20 이상
+- npm 10 이상
 
-## 2. 브랜치 전략
+로컬 환경 변수 예시는 [README.md](./README.md)를 참고합니다.
 
-`main`에 직접 푸시하지 않고 기능 브랜치로 작업합니다.
+## 브랜치 전략
 
-브랜치 네이밍:
+직접 `main`에 작업하지 않습니다.
+
+브랜치 이름 규칙:
+
 - `feat/<short-description>`
 - `fix/<short-description>`
 - `chore/<short-description>`
 - `docs/<short-description>`
 
 예시:
-- `feat/calendar-3year-window`
-- `fix/login-demo-hint`
 
----
+- `feat/admin-settings-backup`
+- `fix/menu-auth-guard`
+- `docs/server-bootstrap`
 
-## 3. 커밋 메시지 규칙
+## 커밋 메시지 규칙
+
+짧고 명확하게 작성합니다.
 
 권장 형식:
+
+```text
+type: summary
+```
+
+또는
 
 ```text
 type(scope): summary
 ```
 
 예시:
-- `fix(calendar): extend NEIS query range`
-- `docs(contrib): add PR checklist`
-- `chore(login): remove demo credentials hint`
 
----
+- `fix: stop redirecting menu to login`
+- `feat(settings): manage google analytics from admin`
+- `docs: expand server deployment guide`
 
-## 4. PR 생성 전 체크리스트
+## 작업 전에 읽을 문서
 
-- [ ] `npm run lint` 통과
-- [ ] 로컬에서 핵심 페이지 동작 확인 (`/login`, `/calendar`, `/timetable`)
-- [ ] 민감정보/테스트 계정/비밀키 미포함 확인
-- [ ] DB 스키마 변경 시 영향도 설명 추가
-- [ ] 변경 내용 스크린샷 또는 재현 절차 첨부
+변경 내용에 따라 아래 문서를 먼저 읽습니다.
 
----
+- 기능 개발 전: [README.md](./README.md)
+- 배포 관련 변경 전: [DEPLOY.md](./DEPLOY.md)
+- 서버 작업 전: [docs/server-bootstrap.md](./docs/server-bootstrap.md)
+- GitHub Actions 변경 전: [docs/cicd-setup.md](./docs/cicd-setup.md)
 
-## 5. PR 작성 가이드
+## PR 생성 전 체크리스트
 
-PR에는 아래를 포함해주세요.
+- [ ] `npm run lint`
+- [ ] `npm test`
+- [ ] `npm run build`
+- [ ] 주요 화면 또는 변경한 기능을 직접 확인
+- [ ] 민감 정보가 포함되지 않았는지 확인
+- [ ] 데이터베이스 또는 권한 관련 영향이 있으면 PR 설명에 적기
+- [ ] 문서가 필요한 변경이면 같이 수정하기
 
-1. **왜** 바꿨는지 (문제)
-2. **무엇을** 바꿨는지 (해결 방식)
-3. **어떻게 검증**했는지 (테스트/체크)
-4. 배포 시 주의사항 (있다면)
+## PR 설명에 꼭 포함할 것
 
-PR 템플릿(`.github/pull_request_template.md`)을 사용합니다.
+1. 왜 바꾸는지
+2. 무엇을 바꿨는지
+3. 어떻게 검증했는지
+4. 배포 영향이 있는지
+5. 운영 주의사항이 있는지
 
----
+## 문서 수정이 필요한 경우
 
-## 6. 금지사항 (중요)
+아래 중 하나라도 해당하면 문서를 같이 갱신합니다.
 
-- `.env`, 토큰, 비밀번호, API Key 커밋 금지
-- 운영 DB 파일 직접 커밋 금지
-- 권한/인증 로직 변경 시 리뷰 없이 병합 금지
-- UI에 데모 계정 정보 하드코딩 금지
+- 새 환경 변수 추가
+- Docker 또는 서버 실행 방식 변경
+- GitHub Actions 동작 변경
+- 테스트 서버/운영 서버 구조 변경
+- 팀원이 따라야 하는 작업 절차 변경
 
----
+우선 수정 후보:
 
-## 7. 이슈 작성 가이드
+- [README.md](./README.md)
+- [DEPLOY.md](./DEPLOY.md)
+- [docs/server-bootstrap.md](./docs/server-bootstrap.md)
+- [docs/cicd-setup.md](./docs/cicd-setup.md)
+- [deploy/README.md](./deploy/README.md)
 
-버그 이슈에 포함할 내용:
-- 재현 절차
-- 기대 결과 vs 실제 결과
-- 환경(브라우저/OS/배포 환경)
-- 로그/스크린샷
+## 금지 사항
 
-기능 요청 이슈:
-- 목적(사용자 가치)
-- 범위(필수/선택)
-- 수용 기준(완료 조건)
+- `.env` 파일 커밋
+- Docker Hub 토큰, API 키, SSH 키 커밋
+- 운영 계정 정보 하드코딩
+- 리뷰 없이 인증/권한 로직 큰 변경
+- 데이터베이스 파일 직접 커밋
 
----
+## 리뷰 포인트
 
-## 8. 리뷰 기준
+리뷰어는 아래를 우선 확인합니다.
 
-리뷰어는 아래를 중점 확인합니다.
-- 안정성: 런타임 에러/권한 오류 여부
-- 보안: 민감정보 노출 여부
-- 유지보수성: 과도한 복잡도/중복 여부
-- 문서화: 배포/운영 영향 설명 여부
+- 서버 오류를 만들 수 있는 예외 처리 누락이 없는지
+- 인증/권한 경계가 깨지지 않는지
+- SQLite 데이터 손상 가능성이 없는지
+- 테스트 서버와 운영 서버 설정이 섞이지 않는지
+- 문서와 실제 동작이 맞는지
 
----
+## 질문이 생기면
 
-문의 사항은 이슈 또는 PR 코멘트로 남겨주세요.
+이슈, PR 코멘트, 또는 팀 채널에 남기고 문서 기준으로 정리합니다.
+
+구두 설명만으로 해결하지 말고, 반복될 내용이면 문서에 반영하는 것을 원칙으로 합니다.
