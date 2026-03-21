@@ -13,12 +13,8 @@ export function NoticesCreateLink() {
   }
 
   return (
-    <Link
-      href="/admin/notices/new"
-      className="flex items-center justify-center gap-2 px-4 py-2.5 tap-target font-bold rounded-xl transition-colors w-full sm:w-auto"
-      style={{ backgroundColor: "var(--accent)", color: "var(--brand-sub)" }}
-    >
-      <PlusCircle className="w-4 h-4" />
+    <Link href="/admin/notices/new" className="btn-primary w-full px-4 py-2.5 text-sm sm:w-auto">
+      <PlusCircle className="h-4 w-4" />
       새 공지 작성
     </Link>
   );

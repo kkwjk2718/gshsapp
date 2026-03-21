@@ -1,109 +1,133 @@
-import { prisma } from "@/lib/db";
 import Link from "next/link";
-import { Music, Users, Bell, ArrowRight, Ticket, Tag, Settings, ScrollText, Activity, Send, Building2 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
+import {
+  Activity,
+  Bell,
+  Building2,
+  Music,
+  ScrollText,
+  Send,
+  Settings,
+  ShieldCheck,
+  Tag,
+  Ticket,
+  Users,
+} from "lucide-react";
+import { prisma } from "@/lib/db";
+
+function StatCard({
+  title,
+  value,
+  icon: Icon,
+  href,
+}: {
+  title: string;
+  value: number;
+  icon: LucideIcon;
+  href: string;
+}) {
+  return (
+    <Link href={href} className="glass-card glass-card-hover p-5">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <div className="section-kicker">{title}</div>
+          <div className="mt-3 text-[2rem] font-semibold tracking-[-0.06em]" style={{ color: "var(--foreground)" }}>
+            {value}
+          </div>
+        </div>
+        <div className="icon-badge">
+          <Icon className="h-4 w-4" />
+        </div>
+      </div>
+    </Link>
+  );
+}
 
 export default async function AdminDashboard() {
-   const pendingSongsCount = await prisma.songRequest.count({
-      where: { status: "PENDING" },
-   });
+  const [pendingSongsCount, usersCount, noticesCount, tokensCount] = await Promise.all([
+    prisma.songRequest.count({ where: { status: "PENDING" } }),
+    prisma.user.count(),
+    prisma.notice.count(),
+    prisma.inviteToken.count({ where: { isUsed: false } }),
+  ]);
 
-   const usersCount = await prisma.user.count();
-   const noticesCount = await prisma.notice.count();
-   // Count valid (unused) tokens
-   const tokensCount = await prisma.inviteToken.count({
-      where: { isUsed: false }
-   });
+  const quickActions = [
+    { href: "/admin/notices/new", title: "공지 작성", copy: "중요 공지를 빠르게 등록합니다.", icon: Bell },
+    { href: "/admin/notifications", title: "알림 발송", copy: "전체 사용자에게 즉시 안내를 보냅니다.", icon: Send },
+    { href: "/admin/tokens", title: "초대 토큰", copy: "새 사용자 초대 토큰을 발급합니다.", icon: Ticket },
+    { href: "/admin/categories", title: "카테고리 관리", copy: "공지 카테고리를 정리합니다.", icon: Tag },
+    { href: "/admin/settings", title: "서비스 설정", copy: "백업과 환경 설정을 관리합니다.", icon: Settings },
+    { href: "/admin/logs", title: "로그 확인", copy: "서비스 로그와 기록을 확인합니다.", icon: ScrollText },
+    { href: "/admin/reports", title: "오류 신고 관리", copy: "들어온 문제 제보를 검토합니다.", icon: ShieldCheck },
+    { href: "/admin/test", title: "시스템 진단", copy: "운영 준비 상태를 점검합니다.", icon: Activity },
+    { href: "/admin/sites", title: "교내 사이트 관리", copy: "관련 링크 목록을 최신 상태로 유지합니다.", icon: Building2 },
+  ];
 
-   const StatCard = ({ title, value, icon: Icon, href, color }: any) => (
-      <Link href={href} className="glass p-4 sm:p-6 rounded-3xl flex items-center justify-between hover:scale-[1.02] transition-transform">
-         <div>
-            <div className="text-slate-500 dark:text-slate-400 mb-1 text-sm">{title}</div>
-            <div className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-slate-100">{value}</div>
-         </div>
-         <div className={`p-4 rounded-full ${color}`}>
-            <Icon className="w-6 h-6 text-white" />
-         </div>
-      </Link>
-   );
+  return (
+    <div className="page-shell admin-theme">
+      <div className="page-shell-narrow space-y-4 md:space-y-5">
+        <section className="glass-strong px-5 py-5 md:px-6 md:py-6">
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="info-chip">대기 중 기상곡 {pendingSongsCount}건</span>
+                <span className="info-chip">운영 사용자 {usersCount}명</span>
+              </div>
 
-   return (
-      <div className="mobile-page mobile-safe-bottom space-y-8">
-         <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-slate-100">관리자 대시보드</h1>
-
-         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <StatCard
-               title="기상곡 승인 대기"
-               value={pendingSongsCount}
-               icon={Music}
-               href="/admin/songs"
-               color="bg-rose-500"
-            />
-            <StatCard
-               title="전체 사용자"
-               value={usersCount}
-               icon={Users}
-               href="/admin/users"
-               color="bg-indigo-500"
-            />
-            <StatCard
-               title="게시된 공지"
-               value={noticesCount}
-               icon={Bell}
-               href="/admin/notices"
-               color="bg-emerald-500"
-            />
-            <StatCard
-               title="사용 가능 토큰"
-               value={tokensCount}
-               icon={Ticket}
-               href="/admin/tokens"
-               color="bg-amber-500"
-            />
-         </div>
-
-         <div className="glass p-4 sm:p-8 rounded-3xl">
-            <h2 className="text-xl font-bold mb-4 text-slate-900 dark:text-slate-100">빠른 작업</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
-               <Link href="/admin/notices/new" className="px-5 py-3 rounded-xl bg-indigo-600 text-white font-bold flex items-center gap-2 hover:bg-indigo-700 transition-colors">
-                  새 공지 작성
-                  <ArrowRight className="w-4 h-4" />
-               </Link>
-               <Link href="/admin/notifications" className="px-5 py-3 rounded-xl bg-indigo-600 text-white font-bold flex items-center gap-2 hover:bg-indigo-700 transition-colors">
-                  알림 발송
-                  <Send className="w-4 h-4" />
-               </Link>
-               <Link href="/admin/tokens" className="px-5 py-3 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-700 font-bold flex items-center gap-2 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
-                  초대 토큰 발급
-                  <Ticket className="w-4 h-4" />
-               </Link>
-               <Link href="/admin/categories" className="px-5 py-3 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-700 font-bold flex items-center gap-2 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
-                  공지 카테고리 관리
-                  <Tag className="w-4 h-4" />
-               </Link>
-               <Link href="/admin/settings" className="px-5 py-3 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-700 font-bold flex items-center gap-2 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
-                  시스템 설정
-                  <Settings className="w-4 h-4" />
-               </Link>
-               <Link href="/admin/logs" className="px-5 py-3 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-700 font-bold flex items-center gap-2 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
-                  시스템 로그 관리
-                  <ScrollText className="w-4 h-4" />
-               </Link>
-               <Link href="/admin/reports" className="px-5 py-3 rounded-xl bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-400 border border-rose-200 dark:border-rose-700/50 font-bold flex items-center gap-2 hover:bg-rose-200 dark:hover:bg-rose-900/50 transition-colors">
-                  오류 신고 관리
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                  </svg>
-               </Link>
-               <Link href="/admin/test" className="px-5 py-3 rounded-xl bg-slate-100 dark:bg-slate-800 text-rose-700 dark:text-rose-400 border border-rose-200 dark:border-rose-900/50 font-bold flex items-center gap-2 hover:bg-rose-100 dark:hover:bg-rose-900/20 transition-colors">
-                  시스템 기능 진단
-                  <Activity className="w-4 h-4" />
-               </Link>
-               <Link href="/admin/sites" className="px-5 py-3 rounded-xl bg-slate-100 dark:bg-slate-800 text-teal-700 dark:text-teal-400 border border-teal-200 dark:border-teal-900/50 font-bold flex items-center gap-2 hover:bg-teal-100 dark:hover:bg-teal-900/20 transition-colors">
-                  교내 사이트 관리
-                  <Building2 className="w-4 h-4" />
-               </Link>
+              <div>
+                <div className="section-kicker">Admin Console</div>
+                <h1 className="section-title mt-1">관리자 대시보드</h1>
+                <p className="section-copy mt-3 max-w-2xl">
+                  운영 상태, 사용자, 공지, 토큰, 진단 기능을 한 화면에서 빠르게 관리할 수 있도록 밀도 있게 정리했습니다.
+                </p>
+              </div>
             </div>
-         </div>
+
+            <div className="glass-muted px-4 py-4 text-sm" style={{ color: "var(--muted)" }}>
+              빠른 작업을 바로 실행하고, 주요 운영 지표를 상단에서 즉시 파악할 수 있습니다.
+            </div>
+          </div>
+        </section>
+
+        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <StatCard title="기상곡 대기" value={pendingSongsCount} icon={Music} href="/admin/songs" />
+          <StatCard title="전체 사용자" value={usersCount} icon={Users} href="/admin/users" />
+          <StatCard title="공지 수" value={noticesCount} icon={Bell} href="/admin/notices" />
+          <StatCard title="사용 가능 토큰" value={tokensCount} icon={Ticket} href="/admin/tokens" />
+        </section>
+
+        <section className="glass-card p-5 md:p-6">
+          <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+            <div>
+              <div className="section-kicker">Quick Actions</div>
+              <h2 className="mt-1 text-[1.35rem] font-semibold tracking-[-0.04em]" style={{ color: "var(--foreground)" }}>
+                자주 쓰는 관리 작업
+              </h2>
+            </div>
+            <p className="text-sm" style={{ color: "var(--muted)" }}>
+              새 공지 작성, 알림 발송, 시스템 진단까지 바로 이동할 수 있습니다.
+            </p>
+          </div>
+
+          <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {quickActions.map((action) => (
+              <Link key={action.href} href={action.href} className="glass-card glass-card-hover flex items-start gap-3 p-4">
+                <div className="icon-badge shrink-0">
+                  <action.icon className="h-4 w-4" />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold" style={{ color: "var(--foreground)" }}>
+                    {action.title}
+                  </div>
+                  <p className="mt-2 text-xs leading-relaxed" style={{ color: "var(--muted)" }}>
+                    {action.copy}
+                  </p>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </section>
       </div>
-   );
+    </div>
+  );
 }

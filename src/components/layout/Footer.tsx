@@ -1,28 +1,117 @@
 import Link from "next/link";
+import { AlertTriangle, BarChart3, ExternalLink, Shield, Sparkles } from "lucide-react";
 
 export function Footer() {
   const currentYear = new Date().getFullYear();
 
   return (
-    <footer className="border-t border-slate-200 dark:border-slate-800 mt-12 py-8 text-center text-sm text-slate-500">
-      <div className="max-w-5xl mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-4">
-        <div className="text-left">
-          <p className="font-semibold text-slate-700 dark:text-slate-300">GSHS.app</p>
-          <p className="text-xs mt-1">경남과학고등학교 정보부 &middot; Developed by 김건우</p>
-          <p className="text-xs mt-1">&copy; {currentYear} GSHS Information Department. All rights reserved.</p>
-        </div>
-        <div className="flex flex-col md:flex-row gap-4 text-xs items-center">
-          <div className="flex gap-4">
-            <Link href="/help" className="hover:text-indigo-500 transition-colors">도움말</Link>
-            <Link href="/privacy" className="hover:text-indigo-500 transition-colors">개인정보처리방침</Link>
-            <Link href="/stats" className="hover:text-indigo-500 transition-colors">서버 통계</Link>
-            <a href="https://gshs-h.gne.go.kr" target="_blank" rel="noreferrer" className="hover:text-indigo-500 transition-colors">학교 홈페이지</a>
+    <footer className="mt-12 px-4 pb-8 md:px-6 md:pb-10">
+      <div className="mx-auto grid w-full max-w-[1360px] gap-4 rounded-[2rem] border px-5 py-6 backdrop-blur-2xl md:grid-cols-[minmax(0,1.3fr)_minmax(360px,0.9fr)] md:px-6">
+        <div className="glass-muted p-5">
+          <div className="section-kicker">Platform</div>
+          <div className="mt-2 flex items-center gap-3">
+            <div className="icon-badge h-11 w-11 rounded-[1.25rem]">
+              <Sparkles className="h-[18px] w-[18px]" />
+            </div>
+            <div>
+              <p className="text-lg font-semibold tracking-[-0.04em]" style={{ color: "var(--foreground)" }}>
+                GSHS.app
+              </p>
+              <p className="text-sm" style={{ color: "var(--muted)" }}>
+                경남과학고 학생 생활을 위한 통합 서비스
+              </p>
+            </div>
           </div>
-          <div className="md:ml-4 md:pl-4 md:border-l border-slate-300 dark:border-slate-700">
-            <Link href="/report" className="px-3 py-1.5 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-400 hover:bg-rose-500/20 transition-colors font-medium inline-flex items-center gap-1.5">
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-              </svg>
+
+          <div className="mt-4 grid gap-3 md:grid-cols-2">
+            <div className="glass-muted px-4 py-3">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ color: "var(--muted)" }}>
+                Built by
+              </p>
+              <p className="mt-2 text-sm font-medium" style={{ color: "var(--foreground)" }}>
+                경남과학고등학교 정보부
+              </p>
+              <p className="mt-1 text-xs" style={{ color: "var(--muted)" }}>
+                Developed by 김건우
+              </p>
+            </div>
+
+            <div className="glass-muted px-4 py-3">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ color: "var(--muted)" }}>
+                Availability
+              </p>
+              <p className="mt-2 text-sm font-medium" style={{ color: "var(--foreground)" }}>
+                학교 정보를 빠르게 확인하는 학생용 허브
+              </p>
+              <p className="mt-1 text-xs" style={{ color: "var(--muted)" }}>
+                급식, 시간표, 일정, 공지, 관리자 기능을 하나의 화면 흐름 안에 정리했습니다.
+              </p>
+            </div>
+          </div>
+
+          <p className="mt-4 text-xs" style={{ color: "var(--muted)" }}>
+            © {currentYear} GSHS Information Department. All rights reserved.
+          </p>
+        </div>
+
+        <div className="grid gap-4">
+          <div className="glass-muted p-5">
+            <div className="section-kicker">Quick Access</div>
+            <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+              <Link
+                href="/help"
+                className="flex items-center justify-between rounded-[1.1rem] border px-4 py-3 transition-all hover:-translate-y-0.5"
+                style={{ borderColor: "color-mix(in srgb, var(--border) 66%, transparent)", color: "var(--foreground)" }}
+              >
+                이용 안내
+                <ExternalLink className="h-4 w-4" style={{ color: "var(--muted)" }} />
+              </Link>
+              <Link
+                href="/privacy"
+                className="flex items-center justify-between rounded-[1.1rem] border px-4 py-3 transition-all hover:-translate-y-0.5"
+                style={{ borderColor: "color-mix(in srgb, var(--border) 66%, transparent)", color: "var(--foreground)" }}
+              >
+                개인정보처리방침
+                <Shield className="h-4 w-4" style={{ color: "var(--muted)" }} />
+              </Link>
+              <Link
+                href="/stats"
+                className="flex items-center justify-between rounded-[1.1rem] border px-4 py-3 transition-all hover:-translate-y-0.5"
+                style={{ borderColor: "color-mix(in srgb, var(--border) 66%, transparent)", color: "var(--foreground)" }}
+              >
+                서버 통계
+                <BarChart3 className="h-4 w-4" style={{ color: "var(--muted)" }} />
+              </Link>
+              <a
+                href="https://gshs-h.gne.go.kr"
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center justify-between rounded-[1.1rem] border px-4 py-3 transition-all hover:-translate-y-0.5"
+                style={{ borderColor: "color-mix(in srgb, var(--border) 66%, transparent)", color: "var(--foreground)" }}
+              >
+                학교 홈페이지
+                <ExternalLink className="h-4 w-4" style={{ color: "var(--muted)" }} />
+              </a>
+            </div>
+          </div>
+
+          <div className="glass-muted flex flex-col gap-3 p-5 md:flex-row md:items-center md:justify-between">
+            <div>
+              <div className="section-kicker">Feedback</div>
+              <p className="mt-2 text-sm" style={{ color: "var(--muted)" }}>
+                문제를 발견했거나 개선 아이디어가 있다면 바로 전달해 주세요.
+              </p>
+            </div>
+            <Link
+              href="/report"
+              className="inline-flex items-center gap-2 rounded-[1.15rem] border px-4 py-3 text-sm font-semibold transition-all hover:-translate-y-0.5"
+              style={{
+                background: "color-mix(in srgb, var(--danger) 14%, var(--surface) 86%)",
+                borderColor: "color-mix(in srgb, var(--danger) 30%, transparent)",
+                color: "var(--foreground)",
+              }}
+            >
+              <AlertTriangle className="h-4 w-4" />
               오류 신고
             </Link>
           </div>

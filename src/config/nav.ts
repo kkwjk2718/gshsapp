@@ -1,13 +1,22 @@
-import { Home, Utensils, Music, Clock, Calendar, User, Menu, Calculator, Megaphone, Link as LinkIcon, Radio, Bell, AlertCircle, Building2 } from "lucide-react";
+import {
+  Building2,
+  Calendar,
+  Calculator,
+  Clock,
+  Home,
+  Link as LinkIcon,
+  Megaphone,
+  Music,
+  User,
+  Utensils,
+} from "lucide-react";
 
-// Primary items for mobile bottom navigation (most frequently used)
 export const primaryNavItems = [
   { name: "홈", href: "/", icon: Home },
   { name: "급식", href: "/meals", icon: Utensils },
   { name: "기상곡", href: "/songs", icon: Music },
 ];
 
-// All navigation items for desktop sidebar and mobile menu
 export const allNavItems = [
   { name: "홈", href: "/", icon: Home },
   { name: "공지사항", href: "/notices", icon: Megaphone },
@@ -22,9 +31,5 @@ export const allNavItems = [
 ];
 
 export const desktopNavItems = allNavItems.filter((item) => item.href !== "/me");
-
-// Keep for backward compatibility
 export const mainNavItems = desktopNavItems;
-
-// Bottom nav now uses primary + menu button
 export const bottomNavItems = primaryNavItems;

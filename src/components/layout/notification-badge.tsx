@@ -19,10 +19,11 @@ export function NotificationBadge({ className }: NotificationBadgeProps) {
   return (
     <span
       className={cn(
-        "absolute bg-rose-500 rounded-full border-2 border-white dark:border-slate-900",
+        "absolute rounded-full border-2 border-[color:var(--surface)] shadow-[0_0_14px_rgba(75,216,255,0.45)]",
         "w-2.5 h-2.5 top-0 right-0",
         className,
       )}
+      style={{ backgroundColor: "var(--accent-2)" }}
     />
   );
 }

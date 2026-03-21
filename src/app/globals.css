@@ -4,12 +4,12 @@
 @theme {
   --font-sans: var(--font-noto-sans-kr), sans-serif;
 
-  /* Animtations */
-  --animate-float: float 6s ease-in-out infinite;
+  --animate-float: float 8s ease-in-out infinite;
   --animate-pulse-slow: pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  --animate-orbit: orbit 18s ease-in-out infinite;
+  --animate-drift: drift 22s ease-in-out infinite alternate;
 
   @keyframes float {
-
     0%,
     100% {
       transform: translateY(0);
@@ -19,53 +19,92 @@
       transform: translateY(-10px);
     }
   }
+
+  @keyframes orbit {
+    0% {
+      transform: translate3d(0, 0, 0) scale(1);
+    }
+
+    50% {
+      transform: translate3d(2%, -3%, 0) scale(1.05);
+    }
+
+    100% {
+      transform: translate3d(-2%, 2%, 0) scale(1);
+    }
+  }
+
+  @keyframes drift {
+    0% {
+      transform: translate3d(0, 0, 0);
+      opacity: 0.42;
+    }
+
+    100% {
+      transform: translate3d(0, -18px, 0);
+      opacity: 0.62;
+    }
+  }
 }
 
-/* Light Mode (Default) */
 :root {
   color-scheme: light;
-  --brand-main: #dce0d9;
-  --brand-sub: #fbf6ef;
-  --brand-third: #ead7c3;
+  --brand-main: #07111f;
+  --brand-sub: #f5fbff;
+  --brand-third: #91edff;
 
-  --background: #fbf6ef;
-  --foreground: #0d3b66;
-  --surface: #fbf6ef;
-  --surface-2: #dce0d9;
-  --border: #ead7c3;
-  --muted: #0d3b66;
-  --accent: #0d3b66;
+  --background: #e8f3ff;
+  --foreground: #081121;
+  --surface: rgba(255, 255, 255, 0.68);
+  --surface-2: rgba(241, 248, 255, 0.86);
+  --surface-3: rgba(222, 238, 255, 0.86);
+  --border: rgba(83, 156, 255, 0.2);
+  --muted: #516d90;
+  --accent: #2b79ff;
+  --accent-2: #4bd8ff;
+  --danger: #ff5f89;
 
-  --bg-gradient-start: #dce0d9;
-  --bg-gradient-end: #fbf6ef;
-  --accent-glow: #ead7c3;
+  --bg-gradient-start: #d7ecff;
+  --bg-gradient-end: #ecf5ff;
+  --accent-glow: rgba(75, 216, 255, 0.22);
+  --panel-glow: rgba(43, 121, 255, 0.16);
+  --grid-line: rgba(74, 128, 224, 0.08);
 }
 
-/* Dark Mode - Linear inspired */
 .dark {
   color-scheme: dark;
-  --brand-main: #0b0d10;
-  --brand-sub: #f5f7fa;
-  --brand-third: #5e6ad2;
+  --brand-main: #06101d;
+  --brand-sub: #f4fbff;
+  --brand-third: #7fe9ff;
 
-  --background: #08090a;
-  --foreground: #f5f7fa;
-  --surface: #111216;
-  --surface-2: #171a21;
-  --border: #252935;
-  --muted: #a9afbd;
-  --accent: #5e6ad2;
+  --background: #050b14;
+  --foreground: #edf7ff;
+  --surface: rgba(7, 16, 29, 0.72);
+  --surface-2: rgba(12, 24, 42, 0.86);
+  --surface-3: rgba(17, 33, 56, 0.9);
+  --border: rgba(127, 233, 255, 0.16);
+  --muted: #89a6c5;
+  --accent: #59d7ff;
+  --accent-2: #6b8bff;
+  --danger: #ff7ca1;
 
-  --bg-gradient-start: #08090a;
-  --bg-gradient-end: #08090a;
-  --accent-glow: #1a1f30;
+  --bg-gradient-start: #07111f;
+  --bg-gradient-end: #030810;
+  --accent-glow: rgba(89, 215, 255, 0.18);
+  --panel-glow: rgba(107, 139, 255, 0.16);
+  --grid-line: rgba(127, 233, 255, 0.06);
+}
+
+html {
+  scroll-behavior: smooth;
 }
 
 body {
   color: var(--foreground);
   background:
-    radial-gradient(1200px 500px at 50% -220px, var(--accent-glow), transparent 70%),
-    var(--background);
+    radial-gradient(900px 420px at 18% -5%, color-mix(in srgb, var(--accent-glow) 86%, transparent), transparent 70%),
+    radial-gradient(980px 520px at 100% 0%, color-mix(in srgb, var(--panel-glow) 94%, transparent), transparent 74%),
+    linear-gradient(160deg, var(--bg-gradient-start), var(--bg-gradient-end) 58%, color-mix(in srgb, var(--bg-gradient-end) 84%, black 16%) 100%);
   background-attachment: fixed;
   font-family: var(--font-sans);
   transition: background-color 0.3s ease, color 0.3s ease;
@@ -73,12 +112,41 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overflow-x: hidden;
+  position: relative;
 }
 
-/* Custom Scrollbar */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background-image:
+    linear-gradient(to right, transparent 0, transparent calc(100% - 1px), var(--grid-line) calc(100% - 1px)),
+    linear-gradient(to bottom, transparent 0, transparent calc(100% - 1px), var(--grid-line) calc(100% - 1px));
+  background-size: 72px 72px;
+  opacity: 0.55;
+  pointer-events: none;
+  z-index: -2;
+  mask-image: radial-gradient(circle at center, black, transparent 88%);
+}
+
+body::after {
+  content: "";
+  position: fixed;
+  inset: -12% 5% auto;
+  height: 24rem;
+  border-radius: 9999px;
+  background:
+    radial-gradient(circle at 20% 50%, color-mix(in srgb, var(--accent) 22%, transparent), transparent 36%),
+    radial-gradient(circle at 70% 35%, color-mix(in srgb, var(--accent-2) 24%, transparent), transparent 32%);
+  filter: blur(70px);
+  pointer-events: none;
+  z-index: -1;
+  animation: drift 22s ease-in-out infinite alternate;
+}
+
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
 }
 
 ::-webkit-scrollbar-track {
@@ -86,18 +154,26 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--border);
+  background: color-mix(in srgb, var(--border) 90%, transparent);
   border-radius: 9999px;
 }
 
 ::selection {
-  background: var(--brand-third);
-  color: var(--brand-main);
+  background: color-mix(in srgb, var(--accent) 34%, transparent);
+  color: var(--brand-sub);
 }
 
 @layer utilities {
   .mobile-page {
-    @apply p-4 md:p-8;
+    @apply px-4 py-5 md:px-6 md:py-6;
+  }
+
+  .page-shell {
+    @apply mx-auto w-full max-w-[1360px] px-4 pb-[calc(5.5rem+env(safe-area-inset-bottom))] pt-5 md:px-6 md:pb-10 md:pt-6;
+  }
+
+  .page-shell-narrow {
+    @apply mx-auto w-full max-w-[1180px];
   }
 
   .mobile-safe-bottom {
@@ -117,127 +193,183 @@ body {
     min-width: 44px;
   }
 
-
-  /* Premium Glass Effect */
   .glass {
-    @apply border rounded-xl;
-    background: var(--surface);
-    border-color: var(--border);
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+    @apply border rounded-[1.5rem] backdrop-blur-2xl;
+    background:
+      linear-gradient(180deg, color-mix(in srgb, var(--surface) 94%, transparent), color-mix(in srgb, var(--surface-2) 90%, transparent));
+    border-color: color-mix(in srgb, var(--border) 86%, transparent);
+    box-shadow:
+      inset 0 1px 0 color-mix(in srgb, white 10%, transparent),
+      0 22px 54px color-mix(in srgb, var(--panel-glow) 48%, transparent);
   }
 
   .glass-card {
-    @apply border rounded-2xl transition-all duration-300;
-    background: var(--surface);
-    border-color: var(--border);
+    @apply border rounded-[1.75rem] backdrop-blur-2xl transition-all duration-300;
+    background:
+      linear-gradient(180deg, color-mix(in srgb, var(--surface) 96%, transparent), color-mix(in srgb, var(--surface-2) 92%, transparent));
+    border-color: color-mix(in srgb, var(--border) 84%, transparent);
+    box-shadow:
+      inset 0 1px 0 color-mix(in srgb, white 10%, transparent),
+      0 26px 60px color-mix(in srgb, var(--panel-glow) 34%, transparent);
   }
 
   .glass-card-hover {
-    @apply hover:-translate-y-0.5 hover:shadow-lg;
-    box-shadow: 0 4px 12px var(--accent-glow);
-  }
-
-  /* Gradient Text */
-  .text-gradient {
-    background: linear-gradient(90deg, var(--foreground), var(--accent));
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
-  }
-
-  .text-brand {
-    color: var(--brand-main);
-  }
-
-  .text-brand-sub {
-    color: var(--brand-sub);
-  }
-
-  .bg-brand {
-    background-color: var(--brand-main);
-  }
-
-  .bg-brand-sub {
-    background-color: var(--brand-sub);
-  }
-
-  .bg-brand-third {
-    background-color: var(--brand-third);
-  }
-
-  /* Primary Button */
-  .btn-primary {
-    @apply font-bold py-3 px-6 rounded-xl transition-all duration-200 active:scale-[0.98] flex items-center justify-center gap-2 cursor-pointer;
-    background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 92%, white 8%), var(--accent));
-    color: var(--brand-sub);
-    border: 1px solid color-mix(in srgb, var(--accent) 88%, black 12%);
     box-shadow:
-      0 18px 36px color-mix(in srgb, var(--accent) 28%, transparent 72%),
-      inset 0 1px 0 color-mix(in srgb, white 24%, transparent 76%);
+      inset 0 1px 0 color-mix(in srgb, white 10%, transparent),
+      0 26px 60px color-mix(in srgb, var(--panel-glow) 34%, transparent);
+  }
+
+  .glass-card-hover:hover {
+    transform: translateY(-4px);
+    box-shadow:
+      inset 0 1px 0 color-mix(in srgb, white 12%, transparent),
+      0 34px 74px color-mix(in srgb, var(--accent-glow) 48%, transparent);
+  }
+
+  .glass-muted {
+    @apply rounded-[1.35rem] border backdrop-blur-xl;
+    background: color-mix(in srgb, var(--surface-2) 84%, transparent);
+    border-color: color-mix(in srgb, var(--border) 72%, transparent);
+  }
+
+  .glass-strong {
+    @apply rounded-[1.75rem] border backdrop-blur-2xl;
+    background:
+      radial-gradient(circle at top left, color-mix(in srgb, var(--accent-glow) 36%, transparent), transparent 42%),
+      linear-gradient(180deg, color-mix(in srgb, var(--surface-2) 92%, transparent), color-mix(in srgb, var(--surface) 94%, transparent));
+    border-color: color-mix(in srgb, var(--accent) 24%, var(--border) 76%);
+    box-shadow:
+      inset 0 1px 0 color-mix(in srgb, white 12%, transparent),
+      0 30px 72px color-mix(in srgb, var(--panel-glow) 42%, transparent);
+  }
+
+  .section-kicker {
+    @apply text-[11px] font-semibold uppercase tracking-[0.22em];
+    color: color-mix(in srgb, var(--accent-2) 72%, var(--foreground) 28%);
+  }
+
+  .section-title {
+    @apply text-[1.8rem] font-semibold tracking-[-0.04em] md:text-[2.15rem];
+    color: var(--foreground);
+  }
+
+  .section-copy {
+    @apply text-sm leading-relaxed md:text-[15px];
+    color: var(--muted);
+  }
+
+  .info-chip {
+    @apply inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-[11px] font-medium;
+    background: color-mix(in srgb, var(--surface-2) 82%, transparent);
+    border-color: color-mix(in srgb, var(--border) 72%, transparent);
+    color: var(--muted);
+  }
+
+  .icon-badge {
+    @apply inline-flex h-10 w-10 items-center justify-center rounded-2xl border;
+    background: color-mix(in srgb, var(--surface-2) 82%, transparent);
+    border-color: color-mix(in srgb, var(--accent) 16%, var(--border) 84%);
+    color: var(--accent);
+    box-shadow: inset 0 1px 0 color-mix(in srgb, white 10%, transparent);
+  }
+
+  .hero-orb {
+    @apply pointer-events-none absolute rounded-full blur-3xl;
+    animation: orbit 18s ease-in-out infinite;
+  }
+
+  .btn-primary {
+    @apply flex items-center justify-center gap-2 rounded-2xl px-6 py-3 font-semibold transition-all duration-200 active:scale-[0.98] cursor-pointer;
+    background:
+      linear-gradient(135deg, color-mix(in srgb, var(--accent) 90%, white 10%), color-mix(in srgb, var(--accent-2) 55%, var(--accent) 45%));
+    color: #051120;
+    border: 1px solid color-mix(in srgb, var(--accent-2) 48%, transparent);
+    box-shadow:
+      0 18px 36px color-mix(in srgb, var(--accent) 22%, transparent),
+      inset 0 1px 0 color-mix(in srgb, white 20%, transparent);
   }
 
   .btn-primary:hover {
     transform: translateY(-1px);
-    filter: brightness(1.04);
     box-shadow:
-      0 22px 42px color-mix(in srgb, var(--accent) 34%, transparent 66%),
-      inset 0 1px 0 color-mix(in srgb, white 28%, transparent 72%);
+      0 22px 44px color-mix(in srgb, var(--accent) 28%, transparent),
+      inset 0 1px 0 color-mix(in srgb, white 24%, transparent);
   }
 
   .btn-primary:focus-visible {
-    outline: 2px solid color-mix(in srgb, var(--accent) 28%, white 72%);
+    outline: 2px solid color-mix(in srgb, var(--accent-2) 56%, white 44%);
     outline-offset: 3px;
   }
 
   .btn-primary:disabled {
-    opacity: 0.7;
+    opacity: 0.72;
     cursor: progress;
     transform: none;
-    box-shadow:
-      0 10px 20px color-mix(in srgb, var(--accent) 18%, transparent 82%),
-      inset 0 1px 0 color-mix(in srgb, white 16%, transparent 84%);
   }
 
-  /* Secondary/Glass Button */
   .btn-glass {
-    @apply font-medium py-3 px-6 rounded-lg transition-all duration-300 active:scale-95 flex items-center justify-center gap-2;
-    background: var(--brand-sub);
-    color: var(--brand-main);
-    border: 1px solid var(--brand-third);
+    @apply flex items-center justify-center gap-2 rounded-2xl px-5 py-3 font-medium transition-all duration-200 active:scale-[0.98];
+    background: color-mix(in srgb, var(--surface-2) 84%, transparent);
+    color: var(--foreground);
+    border: 1px solid color-mix(in srgb, var(--border) 84%, transparent);
   }
 
-  /* Admin area normalization */
+  .btn-glass:hover {
+    background: color-mix(in srgb, var(--surface-3) 88%, transparent);
+    border-color: color-mix(in srgb, var(--accent) 24%, var(--border) 76%);
+  }
+
+  .input-glass {
+    @apply w-full rounded-2xl border px-4 py-3 transition-all outline-none backdrop-blur-xl;
+    background: color-mix(in srgb, var(--surface-2) 86%, transparent);
+    border-color: color-mix(in srgb, var(--border) 84%, transparent);
+    color: var(--foreground);
+    box-shadow: inset 0 1px 0 color-mix(in srgb, white 10%, transparent);
+  }
+
+  .input-glass::placeholder {
+    color: color-mix(in srgb, var(--muted) 78%, transparent);
+  }
+
+  .input-glass:focus {
+    border-color: color-mix(in srgb, var(--accent) 42%, var(--border) 58%);
+    box-shadow:
+      0 0 0 3px color-mix(in srgb, var(--accent) 14%, transparent),
+      inset 0 1px 0 color-mix(in srgb, white 12%, transparent);
+  }
+
   .admin-theme button {
-    border-radius: 0.75rem;
+    border-radius: 1rem;
   }
 
   .admin-theme input,
   .admin-theme select,
   .admin-theme textarea {
-    background: var(--surface) !important;
+    background: color-mix(in srgb, var(--surface-2) 86%, transparent) !important;
     color: var(--foreground) !important;
-    border: 1px solid var(--border) !important;
+    border: 1px solid color-mix(in srgb, var(--border) 84%, transparent) !important;
   }
 
   .admin-theme input:focus,
   .admin-theme select:focus,
   .admin-theme textarea:focus {
-    outline: 2px solid var(--accent);
+    outline: 2px solid color-mix(in srgb, var(--accent) 34%, transparent);
     outline-offset: 1px;
   }
 
   .admin-theme button:not(:disabled),
   .admin-theme a[role="button"],
   .admin-theme a[class*="bg-"] {
-    background: var(--surface-2) !important;
+    background: color-mix(in srgb, var(--surface-2) 84%, transparent) !important;
     color: var(--foreground) !important;
-    border: 1px solid var(--border) !important;
+    border: 1px solid color-mix(in srgb, var(--border) 84%, transparent) !important;
   }
 
   .admin-theme button:not(:disabled):hover,
   .admin-theme a[role="button"]:hover,
   .admin-theme a[class*="bg-"]:hover {
-    filter: brightness(1.04);
+    background: color-mix(in srgb, var(--surface-3) 88%, transparent) !important;
+    border-color: color-mix(in srgb, var(--accent) 24%, var(--border) 76%) !important;
   }
 
   .admin-theme button:disabled {

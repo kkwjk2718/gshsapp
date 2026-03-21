@@ -1,16 +1,24 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Bell, ChevronDown, LogIn, Menu, Radio, ShieldCheck, User } from "lucide-react";
-import { ModeToggle } from "@/components/mode-toggle";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  Bell,
+  ChevronDown,
+  LogIn,
+  Menu,
+  Radio,
+  ShieldCheck,
+  User,
+} from "lucide-react";
+import { HomeHeaderMeta } from "@/app/(main)/home-personalization";
+import { RealtimeClock } from "@/components/dashboard-widgets";
 import { LogoutButton } from "@/components/auth/logout-button";
+import { ModeToggle } from "@/components/mode-toggle";
 import { useUserSummary } from "@/components/user-summary-provider";
 import { cn } from "@/lib/utils";
 import { NotificationBadge } from "./notification-badge";
-import { RealtimeClock } from "@/components/dashboard-widgets";
-import { HomeHeaderMeta } from "@/app/(main)/home-personalization";
 
 function QuickMenuLink({
   href,
@@ -89,17 +97,21 @@ function UserMenuDropdown({
         aria-haspopup="menu"
         aria-expanded={isOpen}
         onClick={() => setIsOpen((open) => !open)}
-        className="inline-flex min-h-11 items-center gap-3 rounded-full border px-2.5 py-2 text-left transition-colors"
+        className="inline-flex min-h-11 items-center gap-3 rounded-[1.3rem] border px-2.5 py-2 text-left transition-all duration-200"
         style={{
-          backgroundColor: "color-mix(in srgb, var(--surface) 88%, var(--surface-2) 12%)",
-          borderColor: "color-mix(in srgb, var(--border) 82%, var(--accent) 18%)",
+          background:
+            "linear-gradient(135deg, color-mix(in srgb, var(--surface-2) 88%, transparent), color-mix(in srgb, var(--surface) 90%, transparent))",
+          borderColor: "color-mix(in srgb, var(--border) 80%, var(--accent) 20%)",
           color: "var(--foreground)",
-          boxShadow: "0 12px 24px color-mix(in srgb, var(--accent) 8%, transparent)",
+          boxShadow: "0 18px 32px color-mix(in srgb, var(--panel-glow) 22%, transparent)",
         }}
       >
         <div
-          className="flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold"
-          style={{ backgroundColor: "var(--accent)", color: "var(--brand-sub)" }}
+          className="flex h-8 w-8 items-center justify-center rounded-[1rem] text-sm font-semibold"
+          style={{
+            backgroundColor: "color-mix(in srgb, var(--accent) 16%, var(--surface-2) 84%)",
+            color: "var(--accent-2)",
+          }}
         >
           {summary.name?.[0] || "U"}
         </div>
@@ -116,13 +128,20 @@ function UserMenuDropdown({
         <div
           data-testid="desktop-user-menu"
           role="menu"
-          className="absolute right-0 top-full z-[80] mt-2 w-72 rounded-[1.4rem] border p-2 shadow-2xl backdrop-blur-xl"
+          className="absolute right-0 top-full z-[80] mt-2 w-72 rounded-[1.55rem] border p-2.5 shadow-2xl backdrop-blur-2xl"
           style={{
-            backgroundColor: "color-mix(in srgb, var(--surface) 94%, transparent)",
-            borderColor: "var(--border)",
+            background:
+              "linear-gradient(180deg, color-mix(in srgb, var(--surface) 94%, transparent), color-mix(in srgb, var(--surface-2) 96%, transparent))",
+            borderColor: "color-mix(in srgb, var(--border) 84%, var(--accent) 16%)",
           }}
         >
-          <div className="rounded-[1.1rem] px-3 py-3" style={{ backgroundColor: "var(--surface-2)" }}>
+          <div
+            className="rounded-[1.25rem] border px-3 py-3"
+            style={{
+              backgroundColor: "color-mix(in srgb, var(--surface-2) 88%, transparent)",
+              borderColor: "color-mix(in srgb, var(--border) 64%, transparent)",
+            }}
+          >
             <div className="text-sm font-semibold" style={{ color: "var(--foreground)" }}>
               {summary.name}
             </div>
@@ -133,10 +152,7 @@ function UserMenuDropdown({
 
           {showMusicLink || showAdminLink ? (
             <div className="px-1 pb-1 pt-3">
-              <div
-                className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-[0.16em]"
-                style={{ color: "var(--muted)" }}
-              >
+              <div className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ color: "var(--muted)" }}>
                 빠른 이동
               </div>
               {showMusicLink ? (
@@ -160,7 +176,7 @@ function UserMenuDropdown({
             </div>
           ) : null}
 
-          <div className="mx-1 my-2 h-px" style={{ backgroundColor: "var(--border)" }} />
+          <div className="mx-1 my-2 h-px" style={{ backgroundColor: "color-mix(in srgb, var(--border) 72%, transparent)" }} />
 
           <Link
             href="/me"
@@ -212,16 +228,17 @@ export function DesktopUtilityHeader({
   const showLoginLink = pathname !== "/login";
 
   return (
-    <div data-testid="desktop-utility-header" className="sticky top-0 z-[60] hidden px-4 pt-4 md:block">
+    <div data-testid="desktop-utility-header" className="sticky top-0 z-[60] hidden px-4 pt-3 md:block">
       <div
-        className="mx-auto w-full rounded-[1.65rem] border px-4 py-3 shadow-sm backdrop-blur-xl"
+        className="mx-auto w-full max-w-[1360px] rounded-[1.75rem] border px-4 py-2.5 shadow-sm backdrop-blur-2xl md:px-5"
         style={{
-          backgroundColor: "color-mix(in srgb, var(--surface) 88%, transparent)",
-          borderColor: "color-mix(in srgb, var(--border) 88%, var(--accent) 12%)",
-          boxShadow: "0 18px 40px color-mix(in srgb, var(--accent) 7%, transparent)",
+          background:
+            "linear-gradient(180deg, color-mix(in srgb, var(--surface) 92%, transparent), color-mix(in srgb, var(--surface-2) 94%, transparent))",
+          borderColor: "color-mix(in srgb, var(--border) 84%, var(--accent) 16%)",
+          boxShadow: "0 24px 60px color-mix(in srgb, var(--panel-glow) 24%, transparent)",
         }}
       >
-        <div className="flex min-h-[3.5rem] items-center justify-between gap-4">
+        <div className="flex min-h-[3.25rem] items-center justify-between gap-4">
           <div className="flex min-w-0 flex-1 items-center gap-3">
             <button
               type="button"
@@ -230,10 +247,11 @@ export function DesktopUtilityHeader({
               aria-controls="desktop-sidebar-drawer"
               aria-expanded={isSidebarOpen}
               onClick={onSidebarToggle}
-              className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border transition-colors"
+              className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[1.1rem] border transition-all duration-200"
               style={{
-                backgroundColor: "color-mix(in srgb, var(--surface-2) 72%, var(--surface) 28%)",
-                borderColor: "color-mix(in srgb, var(--border) 75%, var(--accent) 25%)",
+                background:
+                  "linear-gradient(135deg, color-mix(in srgb, var(--surface-2) 84%, transparent), color-mix(in srgb, var(--surface) 90%, transparent))",
+                borderColor: "color-mix(in srgb, var(--border) 74%, var(--accent) 26%)",
                 color: "var(--foreground)",
               }}
             >
@@ -243,8 +261,11 @@ export function DesktopUtilityHeader({
             <Link
               href="/"
               data-testid="desktop-header-brand"
-              className="shrink-0 text-lg font-semibold tracking-[-0.04em]"
-              style={{ color: "var(--foreground)" }}
+              className="shrink-0 text-[1.05rem] font-semibold tracking-[-0.04em]"
+              style={{
+                color: "var(--foreground)",
+                textShadow: "0 0 18px color-mix(in srgb, var(--accent-2) 18%, transparent)",
+              }}
             >
               GSHS.app
             </Link>
@@ -252,9 +273,10 @@ export function DesktopUtilityHeader({
             {isHome ? (
               <div
                 data-testid="desktop-home-meta"
-                className="ml-1 flex min-w-0 items-center gap-3 overflow-hidden rounded-full px-3 py-2 text-[12px]"
+                className="ml-1 flex min-w-0 items-center gap-3 overflow-hidden rounded-[1.1rem] border px-3 py-2 text-[12px]"
                 style={{
-                  backgroundColor: "color-mix(in srgb, var(--surface-2) 50%, transparent)",
+                  background: "color-mix(in srgb, var(--surface-2) 84%, transparent)",
+                  borderColor: "color-mix(in srgb, var(--border) 68%, transparent)",
                   color: "var(--muted)",
                 }}
               >
@@ -274,10 +296,11 @@ export function DesktopUtilityHeader({
             <Link
               href="/notifications"
               data-testid="desktop-header-notifications"
-              className="relative inline-flex h-11 w-11 items-center justify-center rounded-full border transition-colors"
+              className="relative inline-flex h-11 w-11 items-center justify-center rounded-[1.1rem] border transition-all duration-200"
               style={{
-                backgroundColor: "color-mix(in srgb, var(--surface-2) 68%, var(--surface) 32%)",
-                borderColor: "color-mix(in srgb, var(--border) 78%, var(--accent) 22%)",
+                background:
+                  "linear-gradient(135deg, color-mix(in srgb, var(--surface-2) 84%, transparent), color-mix(in srgb, var(--surface) 92%, transparent))",
+                borderColor: "color-mix(in srgb, var(--border) 72%, var(--accent) 28%)",
                 color: "var(--foreground)",
               }}
             >
@@ -286,20 +309,18 @@ export function DesktopUtilityHeader({
             </Link>
 
             {!isLoaded ? (
-              <div
-                className="h-11 w-36 animate-pulse rounded-full"
-                style={{ backgroundColor: "var(--surface-2)" }}
-              />
+              <div className="h-11 w-36 animate-pulse rounded-full" style={{ backgroundColor: "var(--surface-2)" }} />
             ) : summary.authenticated ? (
               <UserMenuDropdown showMusicLink={showMusicLink} showAdminLink={showAdminLink} />
             ) : showLoginLink ? (
               <Link
                 href="/login"
                 data-testid="desktop-utility-login-link"
-                className="inline-flex min-h-11 items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold transition-colors"
+                className="inline-flex min-h-11 items-center gap-2 rounded-[1.15rem] border px-4 py-2 text-sm font-semibold transition-all duration-200"
                 style={{
-                  backgroundColor: "color-mix(in srgb, var(--surface) 72%, var(--surface-2) 28%)",
-                  borderColor: "color-mix(in srgb, var(--border) 68%, var(--accent) 32%)",
+                  background:
+                    "linear-gradient(135deg, color-mix(in srgb, var(--surface-2) 88%, transparent), color-mix(in srgb, var(--surface) 92%, transparent))",
+                  borderColor: "color-mix(in srgb, var(--border) 62%, var(--accent) 38%)",
                   color: "var(--foreground)",
                 }}
               >

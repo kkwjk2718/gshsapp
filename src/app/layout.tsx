@@ -67,7 +67,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#0f172a",
+  themeColor: "#081121",
 };
 
 export default function RootLayout({
@@ -77,7 +77,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ko" suppressHydrationWarning>
-      <body className={`antialiased bg-slate-50 dark:bg-slate-950 transition-colors duration-300 ${notoSansKr.className} ${notoSansKr.variable}`}>
+      <body className={`antialiased transition-colors duration-300 ${notoSansKr.className} ${notoSansKr.variable}`}>
         <Script
           id="theme-migrate"
           strategy="beforeInteractive"
