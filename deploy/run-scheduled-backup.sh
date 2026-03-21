@@ -3,7 +3,7 @@ set -Eeuo pipefail
 
 CONTAINER_NAME="${CONTAINER_NAME:-gshsapp-web}"
 APP_ROOT="${APP_ROOT:-/app}"
-BACKUP_COMMAND="${BACKUP_COMMAND:-node_modules/.bin/tsx scripts/run-scheduled-backup.ts}"
+BACKUP_COMMAND="${BACKUP_COMMAND:-node scripts/run-scheduled-backup.mjs}"
 
 if ! command -v docker >/dev/null 2>&1; then
   echo "Docker is required to run scheduled backups." >&2
