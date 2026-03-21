@@ -21,6 +21,38 @@ export async function assertNoApplicationError(page: Page) {
   await expect(page.locator("body")).not.toContainText("Digest:");
 }
 
+export async function assertDesktopSidebarLayout(page: Page) {
+  await expect(page.locator("aside")).toBeVisible();
+
+  const metrics = await page.evaluate(() => {
+    const aside = document.querySelector("aside");
+    const firstLink = aside?.querySelector("nav a");
+
+    if (!(aside instanceof HTMLElement) || !(firstLink instanceof HTMLElement)) {
+      return null;
+    }
+
+    const asideRect = aside.getBoundingClientRect();
+    const linkRect = firstLink.getBoundingClientRect();
+
+    return {
+      asideClientHeight: aside.clientHeight,
+      asideScrollHeight: aside.scrollHeight,
+      asideWidth: asideRect.width,
+      linkWidth: linkRect.width,
+    };
+  });
+
+  expect(metrics).not.toBeNull();
+
+  if (!metrics) {
+    return;
+  }
+
+  expect(metrics.asideScrollHeight).toBeLessThanOrEqual(metrics.asideClientHeight + 1);
+  expect(metrics.linkWidth).toBeGreaterThanOrEqual(metrics.asideWidth * 0.78);
+}
+
 export async function loginAsAdmin(page: Page) {
   const userId = getRequiredEnv("E2E_ADMIN_USER");
   const password = getRequiredEnv("E2E_ADMIN_PASSWORD");

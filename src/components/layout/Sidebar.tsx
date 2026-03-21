@@ -1,112 +1,19 @@
-"use client";
-
 import Link from "next/link";
-import { Radio, ShieldCheck } from "lucide-react";
 import { SidebarNav } from "./SidebarNav";
-import { ModeToggle } from "@/components/mode-toggle";
-import { LogoutButton } from "@/components/auth/logout-button";
-import { useUserSummary } from "@/components/user-summary-provider";
-
-function UserCardSkeleton() {
-  return (
-    <div className="flex flex-col gap-2">
-      <div className="flex items-center gap-3 px-4 py-3 rounded-xl" style={{ backgroundColor: "var(--surface-2)" }}>
-        <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-700 animate-pulse" />
-        <div className="flex-1 space-y-2">
-          <div className="h-3 rounded bg-slate-200 dark:bg-slate-700 animate-pulse" />
-          <div className="h-3 w-2/3 rounded bg-slate-200 dark:bg-slate-700 animate-pulse" />
-        </div>
-      </div>
-    </div>
-  );
-}
 
 export function Sidebar() {
-  const { summary, isLoaded } = useUserSummary();
-  const showMusicLink = summary.role === "BROADCAST" || summary.role === "ADMIN";
-  const showAdminLink = summary.role === "ADMIN";
-
   return (
     <aside
-      className="sidebar-shell hidden md:flex fixed left-0 top-0 w-64 border-r backdrop-blur-xl z-50 overflow-hidden"
+      className="sidebar-shell hidden md:flex fixed left-0 top-0 w-56 border-r backdrop-blur-xl z-50"
       style={{ borderColor: "var(--border)", backgroundColor: "var(--surface)" }}
     >
-      <div className="flex h-full min-h-0 flex-col">
-        <div className="sidebar-brand p-6 flex-shrink-0">
-          <Link href="/" className="text-2xl font-bold text-[color:var(--foreground)]">GSHS.app</Link>
+      <div className="flex h-full w-full flex-col px-3 py-4">
+        <div className="sidebar-brand px-2 pb-4 pt-1">
+          <Link href="/" className="text-[1.9rem] font-bold leading-none text-[color:var(--foreground)]">
+            GSHS.app
+          </Link>
         </div>
-
-        <div className="sidebar-scroll flex-1 min-h-0 overflow-y-auto px-4 pb-4">
-          <div className="flex flex-col gap-1">
-            <SidebarNav />
-
-            {showMusicLink && (
-              <Link
-                href="/music"
-                className="sidebar-role-link flex items-center gap-3 px-4 py-2.5 rounded-xl transition-colors"
-                style={{ color: "var(--foreground)", backgroundColor: "transparent" }}
-              >
-                <Radio className="w-5 h-5" />
-                <span className="font-semibold text-sm">방송부 스튜디오</span>
-              </Link>
-            )}
-
-            {showAdminLink && (
-              <Link
-                href="/admin"
-                className="sidebar-role-link flex items-center gap-3 px-4 py-2.5 rounded-xl transition-colors"
-                style={{ color: "var(--foreground)", backgroundColor: "transparent" }}
-              >
-                <ShieldCheck className="w-5 h-5" />
-                <span className="font-semibold text-sm">관리자 페이지</span>
-              </Link>
-            )}
-          </div>
-        </div>
-
-        <div className="sidebar-bottom border-t p-4 flex-shrink-0" style={{ borderColor: "var(--border)" }}>
-          {!isLoaded ? (
-            <UserCardSkeleton />
-          ) : summary.authenticated ? (
-            <div className="flex flex-col gap-2">
-              <Link
-                href="/me"
-                data-testid="sidebar-user-link"
-                className="sidebar-user-link flex items-center gap-3 px-4 py-3 rounded-xl transition-colors"
-                style={{ backgroundColor: "var(--surface-2)" }}
-              >
-                <div
-                  className="w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs"
-                  style={{ backgroundColor: "var(--accent)", color: "var(--brand-sub)" }}
-                >
-                  {summary.name?.[0] || "U"}
-                </div>
-                <div className="flex-1 overflow-hidden">
-                  <div className="text-sm font-medium truncate" style={{ color: "var(--foreground)" }}>
-                    {summary.name}
-                  </div>
-                  <div className="text-xs truncate" style={{ color: "var(--muted)" }}>
-                    {summary.studentId || "GSHS.app"}
-                  </div>
-                </div>
-              </Link>
-              <LogoutButton className="sidebar-logout rounded-xl" />
-            </div>
-          ) : (
-            <Link
-              href="/login"
-              data-testid="sidebar-login-link"
-              className="sidebar-user-link flex items-center justify-center gap-2 px-4 py-3 rounded-xl transition-colors font-medium"
-              style={{ backgroundColor: "var(--brand-main)", color: "var(--brand-sub)" }}
-            >
-              로그인
-            </Link>
-          )}
-
-          <div className="sidebar-theme-row flex items-center justify-center pt-4">
-            <ModeToggle />
-          </div>
-        </div>
+        <SidebarNav />
       </div>
     </aside>
   );

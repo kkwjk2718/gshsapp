@@ -21,8 +21,10 @@ export const allNavItems = [
   { name: "내 정보", href: "/me", icon: User },
 ];
 
+export const desktopNavItems = allNavItems.filter((item) => item.href !== "/me");
+
 // Keep for backward compatibility
-export const mainNavItems = allNavItems;
+export const mainNavItems = desktopNavItems;
 
 // Bottom nav now uses primary + menu button
 export const bottomNavItems = primaryNavItems;

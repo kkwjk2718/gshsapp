@@ -1,10 +1,25 @@
+import type { MouseEventHandler } from "react";
 import { cn } from "@/lib/utils";
 import { LogOut } from "lucide-react";
 
-export function LogoutButton({ className }: { className?: string }) {
+type LogoutButtonProps = {
+  className?: string;
+  next?: string;
+  testId?: string;
+  onClick?: MouseEventHandler<HTMLAnchorElement>;
+};
+
+export function LogoutButton({
+  className,
+  next = "/login",
+  testId,
+  onClick,
+}: LogoutButtonProps) {
   return (
     <a
-      href="/logout?next=/login"
+      href={`/logout?next=${encodeURIComponent(next)}`}
+      data-testid={testId}
+      onClick={onClick}
       className={cn("w-full flex items-center gap-3 px-4 py-2 text-xs rounded-lg transition-colors cursor-pointer", className)}
       style={{ color: "var(--foreground)" }}
     >

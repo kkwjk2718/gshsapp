@@ -1,9 +1,13 @@
 import { test, expect } from "@playwright/test";
-import { assertNoApplicationError } from "./utils";
+import { assertDesktopSidebarLayout, assertNoApplicationError } from "./utils";
 
 test("public routes render without server errors @smoke", async ({ page }) => {
+  await page.setViewportSize({ width: 1366, height: 768 });
+
   await page.goto("/");
   await expect(page.locator("body")).toContainText("GSHS.app");
+  await expect(page.getByTestId("desktop-utility-login-link")).toBeVisible();
+  await assertDesktopSidebarLayout(page);
   await assertNoApplicationError(page);
 
   await page.goto("/notices");
