@@ -1,0 +1,116 @@
+name: Production Health Monitor
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "*/10 * * * *"
+
+permissions:
+  contents: read
+
+env:
+  BASE_URL: https://gshs.app
+  SERVICE_NAME: gshsapp
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - id: health
+        name: Check public production health
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE_URL="$BASE_URL" SERVICE_NAME="$SERVICE_NAME" python3 - <<'PY'
+          import json
+          import os
+          import urllib.request
+
+          base_url = os.environ["BASE_URL"].rstrip("/")
+          service_name = os.environ["SERVICE_NAME"]
+          user_agent = "gshsapp-production-monitor"
+
+          def fetch(path: str):
+              request = urllib.request.Request(
+                  base_url + path,
+                  headers={"User-Agent": user_agent},
+              )
+              with urllib.request.urlopen(request, timeout=30) as response:
+                  body = response.read()
+                  return response.status, body
+
+          health_status, health_body = fetch("/api/health")
+          root_status, _ = fetch("/")
+          payload = json.loads(health_body.decode("utf-8"))
+
+          if health_status != 200:
+              raise SystemExit(f"/api/health returned status {health_status}")
+          if root_status != 200:
+              raise SystemExit(f"/ returned status {root_status}")
+          if payload.get("ok") is not True:
+              raise SystemExit(f"Health payload is not ok: {payload}")
+          if payload.get("service") != service_name:
+              raise SystemExit(f"Unexpected service name: {payload}")
+          if not str(payload.get("version", "")).startswith("sha-"):
+              raise SystemExit(f"Unexpected production version: {payload}")
+
+          summary_path = os.environ["GITHUB_STEP_SUMMARY"]
+          output_path = os.environ["GITHUB_OUTPUT"]
+          with open(summary_path, "a", encoding="utf-8") as summary:
+              summary.write("## Production Health Monitor\n\n")
+              summary.write(f"- Base URL: {base_url}\n")
+              summary.write(f"- Version: {payload['version']}\n")
+              summary.write("- Result: success\n")
+          with open(output_path, "a", encoding="utf-8") as output:
+              output.write(f"version={payload['version']}\n")
+          PY
+
+      - name: Notify alert webhook on failure
+        if: steps.health.outcome != 'success'
+        shell: bash
+        env:
+          ALERT_WEBHOOK_URL: ${{ secrets.MONITOR_ALERT_WEBHOOK_URL }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+
+          {
+            echo "## Production Health Monitor"
+            echo
+            echo "- Base URL: $BASE_URL"
+            echo "- Result: failure"
+            echo "- Run URL: $RUN_URL"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [[ -z "${ALERT_WEBHOOK_URL:-}" ]]; then
+            echo "MONITOR_ALERT_WEBHOOK_URL is not configured; skipping webhook notification."
+            exit 0
+          fi
+
+          ALERT_WEBHOOK_URL="$ALERT_WEBHOOK_URL" BASE_URL="$BASE_URL" RUN_URL="$RUN_URL" python3 - <<'PY'
+          import json
+          import os
+          import urllib.request
+
+          message = f"[gshsapp] Production health check failed for {os.environ['BASE_URL']}. Run: {os.environ['RUN_URL']}"
+          payload = {
+              "text": message,
+              "content": message,
+          }
+          request = urllib.request.Request(
+              os.environ["ALERT_WEBHOOK_URL"],
+              data=json.dumps(payload).encode("utf-8"),
+              headers={"Content-Type": "application/json"},
+              method="POST",
+          )
+          with urllib.request.urlopen(request, timeout=30) as response:
+              response.read()
+          PY
+
+      - name: Fail workflow if health checks failed
+        if: steps.health.outcome != 'success'
+        shell: bash
+        run: exit 1

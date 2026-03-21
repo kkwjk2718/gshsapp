@@ -137,3 +137,7 @@ Current deployment safety baseline:
 - test deployment must pass smoke checks and Playwright E2E
 - the manual `Preproduction Rehearsal` workflow is used to validate a candidate immutable SHA before production
 - production should only receive a SHA that already passed rehearsal on `test.gshs.app`
+
+Additional operations docs:
+
+- [docs/production-launch-runbook.md](./docs/production-launch-runbook.md)

@@ -172,3 +172,13 @@ Recommended human verification sequence before production:
 Deployments now bind the app container to `0.0.0.0:1234` by default.
 
 This is intentional because the current reverse proxy reaches the test VM over the network. Internal smoke checks still use `127.0.0.1:1234` from inside the VM, but the service must also be reachable from the proxy host.
+
+## Production Launch Runbook
+
+Use [docs/production-launch-runbook.md](./docs/production-launch-runbook.md) as the source of truth for:
+
+- production runner/bootstrap requirements
+- off-host backup export before first release
+- the exact go/no-go order for candidate SHA promotion
+- rollback rules
+- the scheduled production health monitor workflow

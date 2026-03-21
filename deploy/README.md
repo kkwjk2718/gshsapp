@@ -141,3 +141,25 @@ Reason:
 - binding to `127.0.0.1` prevented the external reverse proxy server from reaching the app container on the test VM
 
 If the network model changes later, `HOST_BIND_IP` can still be overridden explicitly.
+
+## Off-Host Backup Export
+
+New asset:
+
+- [offsite-backup.sh](./offsite-backup.sh): copy the latest backup, or a fresh live DB export, to an off-host destination
+
+Required environment value:
+
+- `OFFSITE_TARGET`
+
+Examples:
+
+```bash
+cd /opt/gshsapp
+OFFSITE_TARGET=/mnt/backups/gshsapp ./offsite-backup.sh
+```
+
+```bash
+cd /opt/gshsapp
+OFFSITE_TARGET=backup-user@backup-host:/srv/backups/gshsapp/ ./offsite-backup.sh
+```

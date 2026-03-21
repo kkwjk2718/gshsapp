@@ -187,3 +187,28 @@ Shared defaults used by the test workflows:
 - `E2E_BASE_URL=https://test.gshs.app`
 - `BACKUP_MAX_AGE_HOURS=24`
 - `RESTORE_DRILL_PORT=1235`
+
+## Production Verification Additions
+
+Production deployment now includes post-deploy Playwright smoke checks in `deploy-prod.yml`.
+
+Additional production environment secrets:
+
+- `E2E_ADMIN_USER`
+- `E2E_ADMIN_PASSWORD`
+
+Optional repository secret:
+
+- `MONITOR_ALERT_WEBHOOK_URL`
+
+New workflow:
+
+- `.github/workflows/production-health-monitor.yml`
+
+Recommended usage:
+
+1. run `Preproduction Rehearsal` for the candidate SHA
+2. confirm the same SHA is green on `test.gshs.app`
+3. run `Deploy Production`
+4. confirm `deploy -> smoke -> e2e` is green
+5. keep the monitor workflow enabled so production health is checked continuously

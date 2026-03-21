@@ -189,3 +189,20 @@ Keep these assumptions true on the test server:
 The current deployment default is `HOST_BIND_IP=0.0.0.0`.
 
 That means the app listens on the VM network interface at port `1234`, so the reverse proxy server can forward traffic to it. If you later move the reverse proxy onto the same VM, you can override `HOST_BIND_IP` back to `127.0.0.1`.
+
+## Production VM Extras
+
+For the production VM, also prepare:
+
+- a self-hosted runner labeled `gshs-prod`
+- an off-host backup destination or a confirmed Proxmox snapshot process
+- `/opt/gshsapp/offsite-backup.sh` copied from `deploy/offsite-backup.sh`
+
+Production `.env` must use the live domain:
+
+```dotenv
+AUTH_URL=https://gshs.app
+NEXTAUTH_URL=https://gshs.app
+NEXT_PUBLIC_APP_URL=https://gshs.app
+DATABASE_URL=file:/app/data/dev.db
+```
