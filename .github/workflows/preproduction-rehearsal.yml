@@ -58,7 +58,7 @@ jobs:
       name: test
       url: ${{ env.E2E_BASE_URL }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Sync deploy assets on test server
         shell: bash
         run: |
@@ -160,8 +160,8 @@ jobs:
       name: test
       url: ${{ env.E2E_BASE_URL }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 20
           cache: npm
@@ -234,7 +234,7 @@ jobs:
       latest_backup_name: ${{ steps.parse.outputs.latest_backup_name }}
       restore_version: ${{ steps.parse.outputs.restore_version }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Sync deploy assets for restore drill
         shell: bash
         run: |

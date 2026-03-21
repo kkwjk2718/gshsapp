@@ -2,8 +2,6 @@
 
 import { signIn } from '@/auth';
 import { AuthError } from 'next-auth';
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { redirect } from 'next/navigation';
 import { logAction } from "@/lib/logger";
 
 export async function logPageView(pathname: string) {
