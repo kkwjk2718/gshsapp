@@ -159,14 +159,35 @@ body {
 
   /* Primary Button */
   .btn-primary {
-    @apply font-bold py-3 px-6 rounded-lg transition-all duration-300 active:scale-95 flex items-center justify-center gap-2;
-    background: var(--brand-main);
+    @apply font-bold py-3 px-6 rounded-xl transition-all duration-200 active:scale-[0.98] flex items-center justify-center gap-2 cursor-pointer;
+    background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 92%, white 8%), var(--accent));
     color: var(--brand-sub);
-    box-shadow: 0 10px 22px var(--brand-third);
+    border: 1px solid color-mix(in srgb, var(--accent) 88%, black 12%);
+    box-shadow:
+      0 18px 36px color-mix(in srgb, var(--accent) 28%, transparent 72%),
+      inset 0 1px 0 color-mix(in srgb, white 24%, transparent 76%);
   }
 
   .btn-primary:hover {
-    filter: none;
+    transform: translateY(-1px);
+    filter: brightness(1.04);
+    box-shadow:
+      0 22px 42px color-mix(in srgb, var(--accent) 34%, transparent 66%),
+      inset 0 1px 0 color-mix(in srgb, white 28%, transparent 72%);
+  }
+
+  .btn-primary:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--accent) 28%, white 72%);
+    outline-offset: 3px;
+  }
+
+  .btn-primary:disabled {
+    opacity: 0.7;
+    cursor: progress;
+    transform: none;
+    box-shadow:
+      0 10px 20px color-mix(in srgb, var(--accent) 18%, transparent 82%),
+      inset 0 1px 0 color-mix(in srgb, white 16%, transparent 84%);
   }
 
   /* Secondary/Glass Button */
