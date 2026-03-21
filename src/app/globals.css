@@ -104,6 +104,15 @@ body {
     padding-bottom: calc(5.5rem + env(safe-area-inset-bottom));
   }
 
+  .sidebar-shell {
+    height: 100dvh;
+  }
+
+  .sidebar-scroll {
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+  }
+
   .tap-target {
     min-height: 44px;
     min-width: 44px;
@@ -234,5 +243,58 @@ body {
 
   .admin-theme button:disabled {
     opacity: 0.55;
+  }
+}
+
+@media (max-height: 840px) {
+  .sidebar-brand {
+    padding: 1rem 1.25rem 0.875rem;
+  }
+
+  .sidebar-nav {
+    gap: 0.25rem;
+  }
+
+  .sidebar-nav-link,
+  .sidebar-role-link,
+  .sidebar-user-link,
+  .sidebar-logout {
+    padding-top: 0.625rem;
+    padding-bottom: 0.625rem;
+  }
+
+  .sidebar-bottom {
+    padding: 0.75rem;
+  }
+
+  .sidebar-theme-row {
+    padding-top: 0.75rem;
+  }
+}
+
+@media (max-height: 760px) {
+  .sidebar-brand {
+    padding: 0.875rem 1rem 0.75rem;
+  }
+
+  .sidebar-nav-link,
+  .sidebar-role-link {
+    min-height: 2.5rem;
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
+  }
+
+  .sidebar-user-link,
+  .sidebar-logout {
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
+  }
+
+  .sidebar-bottom {
+    padding: 0.625rem;
+  }
+
+  .sidebar-theme-row {
+    padding-top: 0.5rem;
   }
 }

@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
 import { assertNoApplicationError, loginAsAdmin } from "./utils";
 
 const expectedReadinessChecks = [
@@ -9,6 +9,21 @@ const expectedReadinessChecks = [
   "Database Path Configuration",
 ];
 
+async function expectInViewportBottom(page: Page, selector: string) {
+  const viewport = page.viewportSize();
+  const box = await page.locator(selector).boundingBox();
+
+  expect(box).not.toBeNull();
+  expect(viewport).not.toBeNull();
+
+  if (!box || !viewport) {
+    return;
+  }
+
+  expect(box.y).toBeGreaterThanOrEqual(0);
+  expect(box.y + box.height).toBeLessThanOrEqual(viewport.height);
+}
+
 test("admin settings and diagnostics stay healthy after deploy @smoke", async ({ page }) => {
   test.setTimeout(90_000);
 
@@ -18,6 +33,8 @@ test("admin settings and diagnostics stay healthy after deploy @smoke", async ({
   await expect(page.getByTestId("sidebar-user-link")).toBeVisible();
   await expect(page.getByTestId("home-welcome-authenticated")).toBeVisible();
   await expect(page.getByTestId("home-timetable-authenticated")).toBeVisible();
+  await expectInViewportBottom(page, 'aside a[href^="/logout"]');
+  await expectInViewportBottom(page, "aside button[title='테마 변경']");
   await assertNoApplicationError(page);
 
   await page.goto("/admin");

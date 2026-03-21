@@ -10,7 +10,7 @@ export function SidebarNav() {
   const pathname = usePathname();
 
   return (
-    <nav className="space-y-1">
+    <nav className="sidebar-nav flex flex-col gap-1">
       {mainNavItems.map((item) => {
         const isActive = pathname === item.href;
         return (
@@ -18,7 +18,7 @@ export function SidebarNav() {
             key={item.href}
             href={item.href}
             className={cn(
-              "flex items-center gap-3 px-4 py-3 rounded-xl border text-sm font-medium transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent)]",
+              "sidebar-nav-link flex items-center gap-3 px-4 py-3 rounded-xl border text-sm font-medium transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent)]",
               isActive ? "" : "hover:bg-[color:var(--surface-2)]"
             )}
             style={isActive
