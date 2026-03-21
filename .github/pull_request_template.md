@@ -1,36 +1,41 @@
-## 변경 요약
+## Summary
 - 
 
-## 왜 필요한가
+## Why
 - 
 
-## 상세 변경 사항
+## Detailed Changes
 - 
 
-## 검증 방법
+## Verification
 - [ ] `npm run lint`
 - [ ] `npm test`
 - [ ] `npm run build`
-- [ ] 변경한 화면 또는 기능 직접 확인
+- [ ] I manually checked the changed UI or workflow when needed
 
-## 배포 영향
-- [ ] 없음
-- [ ] 있음
+## Deployment Impact
+- [ ] None
+- [ ] Yes
 
-배포 영향이 있다면 설명:
+If yes, describe:
 
-## 서버 / 환경 변수 영향
-- [ ] 없음
-- [ ] 있음
+## Server / Environment Impact
+- [ ] None
+- [ ] Yes
 
-있다면 아래를 적어주세요:
-- 새 환경 변수
-- 테스트 서버 영향
-- 운영 서버 영향
-- GitHub Actions / Docker / CI/CD 영향
+If yes, describe:
+- environment variable changes
+- test server impact
+- production server impact
+- GitHub Actions / Docker / CI/CD impact
 
-## 체크리스트
-- [ ] 민감 정보(.env, 토큰, 비밀번호, SSH 키) 미포함
-- [ ] 운영 계정 정보 하드코딩 없음
-- [ ] DB/권한/인증 변경 시 영향 설명 추가
-- [ ] 문서가 필요한 변경이면 함께 수정
+## Repository Rules
+- [ ] I checked `docs/repository-governance.md`
+- [ ] This PR is ready for `lint`, `test`, and `build`
+- [ ] If this changes deploy, auth, backup, env, or release flow, I updated the related docs
+
+## Safety Checklist
+- [ ] No secrets were added
+- [ ] No passwords or private keys were added
+- [ ] DB/auth/permission changes are explained
+- [ ] Docs were updated when needed

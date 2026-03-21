@@ -141,3 +141,18 @@ Current deployment safety baseline:
 Additional operations docs:
 
 - [docs/production-launch-runbook.md](./docs/production-launch-runbook.md)
+
+## Repository Rules
+
+Repository operating rules now live here:
+
+- [docs/repository-governance.md](./docs/repository-governance.md)
+- [docs/repository-governance.ko.md](./docs/repository-governance.ko.md)
+
+This includes:
+
+- current `main` branch protection behavior
+- merge requirements and required checks
+- emergency bypass expectations
+- documentation update rules
+- test-to-production promotion rules

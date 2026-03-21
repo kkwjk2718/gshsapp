@@ -212,3 +212,26 @@ Recommended usage:
 3. run `Deploy Production`
 4. confirm `deploy -> smoke -> e2e` is green
 5. keep the monitor workflow enabled so production health is checked continuously
+
+## Repository Governance And Branch Protection
+
+Detailed repository policy:
+
+- [docs/repository-governance.md](./repository-governance.md)
+- [docs/repository-governance.ko.md](./repository-governance.ko.md)
+
+Current `main` branch protection baseline:
+
+- required checks: `lint`, `test`, `build`
+- strict required status checks enabled
+- unresolved conversations must be resolved
+- force pushes disabled
+- branch deletion disabled
+- admin enforcement disabled for emergency recovery only
+
+Implications for CI/CD:
+
+- a PR branch must be rebased or updated if `main` moved
+- green workflow runs from an outdated branch are not enough
+- release candidates should be merged only after required checks are green on the latest base
+- emergency admin bypass should be treated as an incident and documented

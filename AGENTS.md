@@ -514,3 +514,22 @@ Additional test environment secrets:
 - `E2E_ADMIN_PASSWORD`
 
 The new default production gate is: candidate SHA passes smoke, Playwright E2E, restore drill, and `/admin/test` readiness checks on `https://test.gshs.app` before production deployment.
+
+## 18. Repository Governance
+
+Repository policy reference:
+
+- `docs/repository-governance.md`
+- `docs/repository-governance.ko.md`
+
+Agents must treat this as binding process documentation.
+
+Current baseline:
+
+- `main` is protected
+- required checks are `lint`, `test`, and `build`
+- unresolved review conversations block merge
+- force pushes and branch deletion on `main` are blocked
+- admin emergency bypass is still possible and must be treated as incident-only
+
+If you change workflow names, branch protection assumptions, merge policy, or release gates, update the governance doc in the same change.

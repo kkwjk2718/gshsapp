@@ -182,3 +182,16 @@ Use [docs/production-launch-runbook.md](./docs/production-launch-runbook.md) as 
 - the exact go/no-go order for candidate SHA promotion
 - rollback rules
 - the scheduled production health monitor workflow
+
+## Repository Governance Reference
+
+Deployment and release decisions should also follow:
+
+- [docs/repository-governance.md](./docs/repository-governance.md)
+- [docs/repository-governance.ko.md](./docs/repository-governance.ko.md)
+
+Especially important before production:
+
+- only merge green PRs
+- only promote a green immutable `sha-<commit>`
+- document any emergency bypass or incident-driven direct action
