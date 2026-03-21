@@ -108,7 +108,7 @@ export function WeatherDetailModal({ weather }: WeatherDetailModalProps) {
                                 <div>
                                     <div className="text-xs text-slate-500 dark:text-slate-400">내일 강수 확률</div>
                                     <div className="text-sm font-semibold text-slate-700 dark:text-slate-200">
-                                        {weather.tomorrowRainProb}%
+                                        {weather.tomorrowRainProb !== null ? `${weather.tomorrowRainProb}%` : "-"}
                                     </div>
                                 </div>
                             </div>

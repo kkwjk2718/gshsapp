@@ -34,6 +34,25 @@ export async function deleteNotification(notificationId: string) {
     }
 }
 
+export async function deleteReadNotifications() {
+    const user = await getCurrentUser();
+    if (!user) return { error: "Unauthorized" };
+
+    try {
+        await prisma.notification.deleteMany({
+            where: {
+                userId: user.id,
+                isRead: true,
+            },
+        });
+        revalidatePath("/notifications");
+        return { success: true };
+    } catch (e) {
+        revalidatePath("/notifications");
+        return { error: "Failed" };
+    }
+}
+
 export async function getUnreadNotificationCount() {
     const user = await getCurrentUser();
     if (!user) return 0;

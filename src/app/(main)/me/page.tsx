@@ -8,6 +8,7 @@ import { format, differenceInDays } from "date-fns";
 import { ProfileCard } from "./profile-card";
 import { PasswordChangeForm } from "./password-change-form";
 import { Metadata } from "next";
+import { LogoutButton } from "@/components/auth/logout-button";
 
 export const metadata: Metadata = {
   title: "내 정보",
@@ -114,6 +115,11 @@ export default async function MyPage() {
              </div>
         </div>
         
+        <LogoutButton
+            className="md:hidden justify-center rounded-2xl border border-[color:var(--border)] py-3 text-sm font-medium"
+            next="/login"
+        />
+
         <div className="text-center text-xs text-slate-400 pb-20">
             GSHS.app v1.2.0
         </div>

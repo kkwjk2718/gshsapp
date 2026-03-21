@@ -6,7 +6,7 @@ export interface WeatherData {
     code: number;
     minTemp: number;
     maxTemp: number;
-    tomorrowRainProb: number;
+    tomorrowRainProb: number | null;
 }
 
 const WEATHER_URL =
@@ -63,7 +63,7 @@ async function fetchWeatherByIPv4(): Promise<WeatherData | null> {
                                 code: current.weathercode,
                                 minTemp: daily?.temperature_2m_min?.[0] ?? current.temperature,
                                 maxTemp: daily?.temperature_2m_max?.[0] ?? current.temperature,
-                                tomorrowRainProb: daily?.precipitation_probability_max?.[1] ?? 0,
+                                tomorrowRainProb: daily?.precipitation_probability_max?.[1] ?? null,
                             });
                             return;
                         }
