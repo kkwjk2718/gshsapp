@@ -14,7 +14,26 @@ export async function requestSong(formData: FormData) {
   }
 
   const youtubeUrl = formData.get("youtubeUrl") as string;
-  const videoTitle = formData.get("videoTitle") as string || "신청곡";
+  const rawVideoTitle = (formData.get("videoTitle") as string | null)?.trim() ?? "";
+  let videoTitle = rawVideoTitle;
+  if (!videoTitle) {
+    try {
+      const response = await fetch(
+        `https://www.youtube.com/oembed?url=${encodeURIComponent(youtubeUrl)}&format=json`
+      );
+      if (response.ok) {
+        const data = (await response.json()) as { title?: string };
+        if (typeof data.title === "string" && data.title.trim()) {
+          videoTitle = data.title.trim();
+        }
+      }
+    } catch {
+      // Fall back to the default title when YouTube metadata cannot be loaded.
+    }
+  }
+  if (!videoTitle) {
+    videoTitle = "신청곡";
+  }
 
   const user = await getCurrentUser();
   if (!user || !user.id) throw new Error("Unauthorized");
@@ -28,29 +47,34 @@ export async function requestSong(formData: FormData) {
   }
 
   // 2. Quota Check (Skip for Admin)
-  if (dbUser.role !== 'ADMIN') {
+  if (dbUser.role !== "ADMIN") {
     const todayDay = new Date().getDay();
     const rule = await prisma.songRule.findFirst({
-      where: { dayOfWeek: todayDay }
+      where: { dayOfWeek: todayDay },
     });
 
-    if (rule && rule.allowedGrade !== 'ALL') {
+    if (rule && rule.allowedGrade !== "ALL") {
       let grade = await getUserGrade(dbUser.gisu);
+
       if (!grade && dbUser.studentId && dbUser.studentId.length >= 3) {
         grade = dbUser.studentId.substring(0, 1);
       }
 
-      const allowedGrades = rule.allowedGrade.split(",");
+      const allowedGrades = rule.allowedGrade
+        .split(",")
+        .map((value) => value.trim())
+        .filter(Boolean);
+
       if (!grade || !allowedGrades.includes(grade)) {
-        return;
+        throw new Error(`오늘은 ${rule.allowedGrade}학년만 신청할 수 있습니다.`);
       }
     }
   }
 
   // 3. Calculate Priority Score
   let priorityScore = 10;
-  if (dbUser.role === 'ADMIN') priorityScore = 999;
-  else if (dbUser.role === 'BROADCAST') priorityScore = 50;
+  if (dbUser.role === "ADMIN") priorityScore = 999;
+  else if (dbUser.role === "BROADCAST") priorityScore = 50;
 
   const isAnonymous = formData.get("isAnonymous") === "on";
 
@@ -61,7 +85,7 @@ export async function requestSong(formData: FormData) {
       videoTitle,
       status: "PENDING",
       priorityScore,
-      isAnonymous
+      isAnonymous,
     },
   });
 
@@ -73,18 +97,18 @@ export async function requestSong(formData: FormData) {
 export async function getTodayMorningSongs() {
   const { todayMorning } = getSongTimeRanges();
 
-  // 오늘 아침 기상곡 (어제 07:00 ~ 오늘 05:00 신청분 중 APPROVED/PLAYED)
+  // 오늘 아침 기상곡(어제 07:00 ~ 오늘 05:00 신청분 중 APPROVED/PLAYED)
   return await prisma.songRequest.findMany({
     where: {
       createdAt: {
         gte: todayMorning.start,
-        lt: todayMorning.end
+        lt: todayMorning.end,
       },
       status: {
-        in: ["APPROVED", "PLAYED"]
-      }
+        in: ["APPROVED", "PLAYED"],
+      },
     },
-    orderBy: { priorityScore: 'desc' },
+    orderBy: { priorityScore: "desc" },
     include: { requester: true },
   });
 }
@@ -104,13 +128,10 @@ export async function getNextMorningSongs() {
     where: {
       createdAt: {
         gte: targetRange.start,
-        lt: targetRange.end
-      }
+        lt: targetRange.end,
+      },
     },
-    orderBy: [
-      { priorityScore: 'desc' },
-      { createdAt: 'asc' }
-    ],
+    orderBy: [{ priorityScore: "desc" }, { createdAt: "asc" }],
     include: { requester: true },
   });
 }
