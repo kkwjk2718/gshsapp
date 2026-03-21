@@ -5,6 +5,10 @@ import { getCurrentUser } from "@/lib/session";
 import { redirect } from "next/navigation";
 import { Metadata } from "next";
 
+//for grade calculate
+import { prisma } from "@/lib/db";
+import { getUserGrade } from "@/lib/grade-utils";
+
 export const metadata: Metadata = {
   title: "기상곡 신청",
   description: "아침 기상곡을 신청하고 다른 학생들이 신청한 곡을 확인하세요.",
@@ -17,18 +21,47 @@ export default async function SongsPage() {
   const todaySongs = await getTodayMorningSongs();
   const nextSongs = await getNextMorningSongs();
 
+  const dbUser = await prisma.user.findUnique({
+    where: { id: user.id },
+  });
+  
+  let isAllowedGrade = true;
+
+  if (dbUser && dbUser.role !== "ADMIN") {
+  const todayDay = new Date().getDay();
+
+  const rule = await prisma.songRule.findFirst({
+    where: { dayOfWeek: todayDay },
+  });
+
+  if (rule && rule.allowedGrade !== "ALL") {
+    let grade = await getUserGrade(dbUser.gisu);
+
+    if (!grade && dbUser.studentId && dbUser.studentId.length >= 3) {
+      grade = dbUser.studentId.substring(0, 1);
+    }
+
+    const allowedGrades = rule.allowedGrade
+      .split(",")
+      .map((v) => v.trim())
+      .filter(Boolean);
+
+    isAllowedGrade = !!grade && allowedGrades.includes(grade);
+  }
+}
+  
   return (
     <div className="mobile-page mobile-safe-bottom space-y-8">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold" style={{ color: "var(--foreground)" }}>기상곡 신청</h1>
           <p style={{ color: "var(--muted)" }}>
-            매일 07:00 ~ 익일 05:00까지 신청 가능합니다.
+            금일 07:00 ~ 익일 05:00까지 신청 가능합니다.
           </p>
         </div>
       </div>
 
-      <SongRequestForm />
+      <SongRequestForm isAllowedGrade={isAllowedGrade} />
 
       <div className="space-y-8">
         <div className="space-y-4">
