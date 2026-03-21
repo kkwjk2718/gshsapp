@@ -15,6 +15,7 @@ env:
   NEXT_PUBLIC_APP_URL: http://localhost:3000
   DATABASE_URL: file:./prisma/dev.db
   NEXT_PUBLIC_NEIS_API_KEY: ""
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 jobs:
   lint:

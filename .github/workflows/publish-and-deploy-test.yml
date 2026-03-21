@@ -24,6 +24,7 @@ env:
   DEPLOY_PATH: /opt/gshsapp
   E2E_BASE_URL: https://test.gshs.app
   BACKUP_MAX_AGE_HOURS: "24"
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 jobs:
   quality:
