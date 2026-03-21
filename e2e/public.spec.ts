@@ -75,6 +75,19 @@ test("public routes render without server errors @smoke", async ({ page }) => {
   await expect(page.locator("#userId")).toBeVisible();
   await expect(page.locator("#password")).toBeVisible();
   await assertNoApplicationError(page);
+
+  await page.goto("/utils");
+  await expect(page.locator('a[href="/utils/timer"]')).toBeVisible();
+  await expect(page.locator('a[href="/utils/stopwatch"]')).toBeVisible();
+  await assertNoApplicationError(page);
+
+  await page.goto("/utils/timer");
+  await expect(page.getByRole("button", { name: "시작" })).toBeVisible();
+  await assertNoApplicationError(page);
+
+  await page.goto("/utils/stopwatch");
+  await expect(page.getByRole("button", { name: "시작" })).toBeVisible();
+  await assertNoApplicationError(page);
 });
 
 test("home layout uses wider content area on FHD screens", async ({ page }) => {
