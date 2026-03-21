@@ -31,9 +31,11 @@ export async function loginAsAdmin(page: Page) {
   await page.locator("#password").fill(password);
 
   await page.locator('button[type="submit"]').click();
-  await page.waitForLoadState("networkidle");
-
-  if (new URL(page.url()).pathname.endsWith("/login")) {
+  try {
+    await page.waitForURL((url) => !url.pathname.endsWith("/login"), {
+      timeout: 15_000,
+    });
+  } catch {
     const errorMessage = (await page.locator('[aria-live="polite"] p').first().textContent())?.trim();
     throw new Error(errorMessage || "Admin login did not complete successfully.");
   }
