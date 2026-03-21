@@ -15,6 +15,7 @@ interface RuleSettingsFormProps {
 }
 
 const GRADE_OPTIONS = ["1", "2", "3"] as const;
+type GradeOption = (typeof GRADE_OPTIONS)[number];
 
 function parseAllowedGrades(value: string) {
   const normalized = value.trim().toUpperCase();
@@ -35,7 +36,7 @@ function parseAllowedGrades(value: string) {
   return selected;
 }
 
-function serializeAllowedGrades(grades: string[]) {
+function serializeAllowedGrades(grades: GradeOption[]) {
   const unique = GRADE_OPTIONS.filter((grade) => grades.includes(grade));
   if (unique.length === GRADE_OPTIONS.length) return "ALL";
   return unique.join(",");
@@ -63,7 +64,7 @@ export function RuleSettingsForm({ initialRules }: RuleSettingsFormProps) {
 
   const isDirty = !areSameRules(rules, savedRules);
 
-  const handleToggleGrade = (dayOfWeek: number, grade: string) => {
+  const handleToggleGrade = (dayOfWeek: number, grade: GradeOption) => {
     setNotice(null);
     setRules((current) =>
       current.map((rule) => {

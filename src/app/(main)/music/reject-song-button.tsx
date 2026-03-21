@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { updateSongStatus } from "./actions";
 import { X } from "lucide-react";
+
+import { updateSongStatus } from "./actions";
 import {
   Dialog,
   DialogContent,
@@ -18,7 +19,11 @@ interface RejectSongButtonProps {
   variant?: "icon" | "full";
 }
 
-export function RejectSongButton({ songId, songTitle, variant = "icon" }: RejectSongButtonProps) {
+export function RejectSongButton({
+  songId,
+  songTitle,
+  variant = "icon",
+}: RejectSongButtonProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
 

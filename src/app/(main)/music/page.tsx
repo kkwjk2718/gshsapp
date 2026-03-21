@@ -1,12 +1,15 @@
+import { Metadata } from "next";
+import { redirect } from "next/navigation";
+import { format } from "date-fns";
+import { Check, Music as MusicIcon, Play, Settings } from "lucide-react";
+
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
-import { redirect } from "next/navigation";
+
 import { updateSongStatus } from "./actions";
+import { RejectSongButton } from "./reject-song-button";
 import { RuleSettingsForm } from "./rule-settings-form";
-import { Check, X, Play, Settings, Music as MusicIcon } from "lucide-react";
-import { format } from "date-fns";
 import { BanUserButton } from "../admin/songs/ban-user-button";
-import { Metadata } from "next";
 
 export const metadata: Metadata = {
   title: "방송부 스튜디오",
@@ -49,7 +52,7 @@ export default async function MusicManagerPage() {
         <div>
           <h1 className="text-2xl font-bold">방송부 스튜디오</h1>
           <p style={{ color: "var(--muted)" }}>
-            기상곡 신청을 관리하고 요일별 신청 규칙을 설정할 수 있습니다.
+            기상곡 신청을 관리하고 요일별 신청 가능 학년을 설정합니다.
           </p>
         </div>
       </div>
@@ -94,10 +97,19 @@ export default async function MusicManagerPage() {
                     {song.youtubeUrl}
                   </a>
 
+                  {song.rejectionReason && song.status === "REJECTED" && (
+                    <p className="text-xs whitespace-pre-wrap" style={{ color: "var(--muted)" }}>
+                      반려 사유: {song.rejectionReason}
+                    </p>
+                  )}
+
                   <div className="flex items-center gap-2 pt-1">
                     {song.status === "PENDING" && (
                       <>
-                        <form action={updateSongStatus.bind(null, song.id, "APPROVED")} className="flex-1">
+                        <form
+                          action={updateSongStatus.bind(null, song.id, "APPROVED", undefined)}
+                          className="flex-1"
+                        >
                           <button
                             className="w-full py-2 rounded-lg text-sm font-semibold"
                             style={{ backgroundColor: "var(--surface-2)", color: "var(--accent)" }}
@@ -105,20 +117,22 @@ export default async function MusicManagerPage() {
                             승인
                           </button>
                         </form>
-                        <form action={updateSongStatus.bind(null, song.id, "REJECTED")} className="flex-1">
-                          <button
-                            className="w-full py-2 rounded-lg text-sm font-semibold"
-                            style={{ backgroundColor: "var(--surface-2)", color: "var(--muted)" }}
-                          >
-                            반려
-                          </button>
-                        </form>
+                        <div className="flex-1">
+                          <RejectSongButton
+                            songId={song.id}
+                            songTitle={song.videoTitle}
+                            variant="full"
+                          />
+                        </div>
                         <BanUserButton userId={song.requester.id} userName={song.requester.name} />
                       </>
                     )}
 
                     {song.status === "APPROVED" && (
-                      <form action={updateSongStatus.bind(null, song.id, "PLAYED")} className="flex-1">
+                      <form
+                        action={updateSongStatus.bind(null, song.id, "PLAYED", undefined)}
+                        className="flex-1"
+                      >
                         <button
                           className="w-full py-2 rounded-lg text-sm font-semibold"
                           style={{ backgroundColor: "var(--surface-2)", color: "var(--accent)" }}
@@ -169,7 +183,7 @@ export default async function MusicManagerPage() {
                     <td className="p-4 font-mono text-xs" style={{ color: "var(--muted)" }}>
                       {song.priorityScore}
                     </td>
-                    <td className="p-4 max-w-[200px]">
+                    <td className="p-4 max-w-[240px]">
                       <div className="font-medium truncate">{song.videoTitle}</div>
                       <a
                         href={song.youtubeUrl}
@@ -180,6 +194,11 @@ export default async function MusicManagerPage() {
                       >
                         {song.youtubeUrl}
                       </a>
+                      {song.rejectionReason && song.status === "REJECTED" && (
+                        <p className="mt-1 text-xs whitespace-pre-wrap" style={{ color: "var(--muted)" }}>
+                          반려 사유: {song.rejectionReason}
+                        </p>
+                      )}
                     </td>
                     <td className="p-4 text-sm">
                       <div>{song.requester.name}</div>
@@ -191,7 +210,7 @@ export default async function MusicManagerPage() {
                       <div className="flex justify-end gap-1">
                         {song.status === "PENDING" && (
                           <>
-                            <form action={updateSongStatus.bind(null, song.id, "APPROVED")}>
+                            <form action={updateSongStatus.bind(null, song.id, "APPROVED", undefined)}>
                               <button
                                 className="p-2 rounded-lg"
                                 style={{ backgroundColor: "var(--surface-2)", color: "var(--accent)" }}
@@ -200,21 +219,13 @@ export default async function MusicManagerPage() {
                                 <Check className="w-4 h-4" />
                               </button>
                             </form>
-                            <form action={updateSongStatus.bind(null, song.id, "REJECTED")}>
-                              <button
-                                className="p-2 rounded-lg"
-                                title="반려"
-                                style={{ backgroundColor: "var(--surface-2)", color: "var(--muted)" }}
-                              >
-                                <X className="w-4 h-4" />
-                              </button>
-                            </form>
+                            <RejectSongButton songId={song.id} songTitle={song.videoTitle} />
                             <BanUserButton userId={song.requester.id} userName={song.requester.name} />
                           </>
                         )}
 
                         {song.status === "APPROVED" && (
-                          <form action={updateSongStatus.bind(null, song.id, "PLAYED")}>
+                          <form action={updateSongStatus.bind(null, song.id, "PLAYED", undefined)}>
                             <button
                               className="p-2 rounded-lg"
                               title="재생 완료"
