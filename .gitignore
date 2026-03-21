@@ -24,13 +24,14 @@
 .DS_Store
 *.pem
 
-# debug
+# debug logs
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
+*.log
 
-# env files (can opt-in for committing if needed)
+# env files
 .env*
 !.env.example
 
@@ -49,7 +50,18 @@ __pycache__/
 *.tar
 gshsapp-web.tar
 
-# local runtime database
+# runtime database files
+*.db
+*.db-shm
+*.db-wal
+
+# local runtime paths
+/data/
+/backup/
+/backups/
+/logs/
+
+# legacy/local db paths
 /dev.db
 /prisma/dev.db
 /data/
