@@ -26,11 +26,11 @@ const HomePersonalizationContext = createContext<HomePersonalizationContextValue
 
 function TimetableSkeleton() {
   return (
-    <div className="flex-1 grid grid-cols-3 gap-3">
+    <div className="flex-1 grid grid-cols-3 gap-3 xl:gap-4">
       {Array.from({ length: 6 }).map((_, index) => (
         <div
           key={index}
-          className="h-[72px] rounded-2xl border border-slate-200 bg-white p-2 animate-pulse dark:border-white/5 dark:bg-white/5"
+          className="h-[72px] rounded-2xl border border-slate-200 bg-white p-2 animate-pulse xl:h-[80px] xl:p-3 dark:border-white/5 dark:bg-white/5"
         />
       ))}
     </div>
@@ -167,7 +167,7 @@ export function HomeWelcomeCard({ publicDDay }: { publicDDay: HomeDdayPayload | 
   return (
     <div
       data-testid="home-welcome-authenticated"
-      className="relative z-10 flex w-full items-center justify-between gap-4"
+      className="relative z-10 flex w-full items-center justify-between gap-4 xl:gap-6"
     >
       <div>
         <h2 className="mb-1 text-xl font-bold" style={{ color: "var(--foreground)" }}>
@@ -225,12 +225,12 @@ export function HomeTimetableCard() {
     <Link
       href="/timetable"
       data-testid="home-timetable-authenticated"
-      className="flex-1 grid grid-cols-3 gap-3"
+      className="flex-1 grid grid-cols-3 gap-3 xl:gap-4"
     >
       {data.todayTimetable.length > 0 ? data.todayTimetable.slice(0, 6).map((item, index) => (
         <div
           key={`${item.period}-${index}`}
-          className="flex flex-col items-center justify-center rounded-2xl border border-slate-200 bg-white p-2 transition-colors hover:bg-slate-50 dark:border-white/5 dark:bg-white/5 dark:hover:bg-white/10"
+          className="flex flex-col items-center justify-center rounded-2xl border border-slate-200 bg-white p-2 transition-colors hover:bg-slate-50 xl:min-h-[80px] xl:p-3 dark:border-white/5 dark:bg-white/5 dark:hover:bg-white/10"
         >
           <div className="mb-1 text-[10px] font-bold text-slate-600 dark:text-slate-400">
             {`${item.period}\uad50\uc2dc`}

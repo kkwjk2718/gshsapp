@@ -1,8 +1,8 @@
-# Contributing
+﻿# 기여 가이드
 
-This document explains how to work safely in the `gshsapp` repository.
+이 문서는 `gshsapp` 저장소에서 안전하게 작업하는 기본 절차를 설명합니다.
 
-Use this together with:
+함께 읽을 문서:
 
 - [README.md](./README.md)
 - [AGENTS.md](./AGENTS.md)
@@ -10,59 +10,61 @@ Use this together with:
 - [docs/cicd-setup.md](./docs/cicd-setup.md)
 - [docs/repository-governance.md](./docs/repository-governance.md)
 
-## Default Workflow
+## 기본 작업 흐름
 
-Use this flow for almost every change:
+대부분의 변경은 아래 순서를 따릅니다.
 
-1. Create a branch from `main`.
-2. Make the change in the branch.
-3. Run the required local checks.
-4. Open a pull request.
-5. Resolve review comments.
-6. Merge only after the required checks are green.
+1. `main`에서 브랜치를 분기합니다.
+2. 브랜치에서 변경 작업을 진행합니다.
+3. 필요한 로컬 검증을 실행합니다.
+4. Pull Request를 생성합니다.
+5. 리뷰 코멘트와 대화 스레드를 정리합니다.
+6. 필수 체크가 모두 초록일 때만 머지합니다.
 
-Do not work directly on `main` for normal changes.
+일반적인 작업은 `main`에서 직접 진행하지 않습니다.
 
-## Branch Naming
+## 브랜치 이름 규칙
 
-Recommended branch names:
+팀 일반 작업에서는 아래 형식을 권장합니다.
 
-- `feat/<short-description>`
-- `fix/<short-description>`
-- `chore/<short-description>`
-- `docs/<short-description>`
+- `feat/<짧은설명>`
+- `fix/<짧은설명>`
+- `chore/<짧은설명>`
+- `docs/<짧은설명>`
 
-Examples:
+예시:
 
 - `feat/admin-notice-tools`
 - `fix/menu-auth-guard`
 - `docs/release-runbook`
 
-## Commit Messages
+AI 에이전트가 생성하는 브랜치는 `codex/` 접두사를 사용합니다.
 
-Keep commit messages short and explicit.
+## 커밋 메시지 규칙
 
-Recommended formats:
+커밋 메시지는 짧고 명확하게 작성합니다.
+
+권장 형식:
 
 ```text
 type: summary
 ```
 
-or
+또는
 
 ```text
 type(scope): summary
 ```
 
-Examples:
+예시:
 
 - `fix: stop redirecting menu to login`
 - `feat(settings): manage analytics from admin`
 - `docs: expand repository governance guide`
 
-## Required Local Checks
+## Pull Request 전 필수 로컬 체크
 
-Run these before opening or updating a PR:
+PR을 열기 전, 또는 업데이트하기 전 아래 명령을 기본으로 실행합니다.
 
 ```bash
 npm run lint
@@ -70,38 +72,38 @@ npm test
 npm run build
 ```
 
-When the change affects deployment safety or critical user flows, also verify:
+배포 안전성이나 핵심 사용자 흐름에 영향을 주는 변경이라면 아래도 함께 확인합니다.
 
 ```bash
 npm run test:e2e:smoke
 ```
 
-## Pull Request Expectations
+## Pull Request 설명에 반드시 들어가야 할 내용
 
-A PR description should explain:
+PR 설명에는 아래 항목이 포함되어야 합니다.
 
-1. what changed
-2. why it changed
-3. how it was verified
-4. whether deployment behavior changes
-5. whether test or production environment changes are required
+1. 무엇이 바뀌었는지
+2. 왜 바뀌었는지
+3. 어떻게 검증했는지
+4. 배포 동작이 바뀌는지
+5. 테스트/운영 환경 설정 변경이 필요한지
 
-Use the PR template and keep it accurate.
+PR 템플릿을 사용하고, 실제 변경 내용과 일치하게 유지합니다.
 
-## Documentation Rules
+## 문서 갱신 규칙
 
-Update docs in the same PR when a change affects:
+아래 항목에 영향을 주는 변경은 같은 PR에서 문서도 함께 수정합니다.
 
-- deployment behavior
-- GitHub Actions behavior
-- branch protection or merge policy
-- authentication or authorization behavior
-- environment variables
-- backup, restore, or rollback behavior
-- test or production domains
-- AI agent instructions
+- 배포 동작
+- GitHub Actions 동작
+- 브랜치 보호 또는 머지 정책
+- 인증/인가 동작
+- 환경 변수
+- 백업, 복원, 롤백 동작
+- 테스트/운영 도메인
+- AI 에이전트 작업 기준
 
-Relevant docs include:
+주요 문서:
 
 - [README.md](./README.md)
 - [DEPLOY.md](./DEPLOY.md)
@@ -111,61 +113,61 @@ Relevant docs include:
 - [docs/repository-governance.md](./docs/repository-governance.md)
 - [AGENTS.md](./AGENTS.md)
 
-## Secrets And Sensitive Data
+## 시크릿 및 민감 정보 규칙
 
-Never commit:
+절대 커밋하지 않는 항목:
 
 - `.env`
 - `.env.local`
-- API keys
-- passwords
-- Docker Hub tokens
-- SSH private keys
-- copied server secret backups
-- raw server database files unless explicitly needed for a controlled recovery task
+- API 키
+- 비밀번호
+- Docker Hub 토큰
+- SSH 비밀키
+- 서버에서 복사한 시크릿 백업 파일
+- 통제되지 않은 원시 DB 파일
 
-If a change requires secret updates, document:
+시크릿 변경이 필요한 작업이라면 PR 설명에 아래 내용을 남깁니다.
 
-- which secret changed
-- where it is stored
-- whether test and production both need updates
+- 어떤 시크릿이 바뀌는지
+- 어디에 저장되는지
+- 테스트와 운영 모두 수정이 필요한지
 
-## Branch Protection And Merge Policy
+## 브랜치 보호 및 머지 정책 요약
 
-Detailed repository rules live here:
+상세 규칙은 아래 문서를 따릅니다.
 
 - [docs/repository-governance.md](./docs/repository-governance.md)
 - [docs/repository-governance.ko.md](./docs/repository-governance.ko.md)
 
-Current team baseline:
+현재 팀 기본값:
 
-- `main` is protected
-- required checks are `lint`, `test`, and `build`
-- unresolved review conversations block merge
-- force push and branch deletion on `main` are blocked
-- emergency admin bypass exists but is for incident response only
+- `main` 보호 활성화
+- 필수 체크: `lint`, `test`, `build`
+- 미해결 리뷰 대화가 있으면 머지 불가
+- `main`에 대한 force push 및 branch deletion 금지
+- 관리자 긴급 우회는 사고 대응 용도로만 허용
 
-## Review Priorities
+## 리뷰 우선순위
 
-Reviews should prioritize operational risk over style.
+리뷰는 스타일보다 운영 위험을 우선합니다.
 
-Focus on:
+중점 확인 항목:
 
-- auth and role regressions
-- database write safety
-- backup and restore safety
-- test vs production domain mixups
-- deployment regressions
-- silent feature regressions
-- missing docs
+- 인증/권한 회귀
+- DB 쓰기 안전성
+- 백업/복원 안전성
+- 테스트와 운영 도메인 혼선
+- 배포 회귀
+- 조용히 사라진 기능
+- 누락된 문서
 
-## For AI Agents
+## AI 에이전트 작업 시 추가 규칙
 
-AI agents must follow the same process as human contributors.
+AI 에이전트도 사람과 동일한 절차를 따라야 합니다.
 
-Before large or infra-related changes, agents should read:
+비교적 큰 변경이나 인프라 관련 변경 전에는 아래 문서를 먼저 읽습니다.
 
 - [AGENTS.md](./AGENTS.md)
 - [docs/repository-governance.md](./docs/repository-governance.md)
 
-If an agent changes workflow names, branch protection assumptions, or release gates, it must update the related docs in the same change.
+에이전트가 워크플로우 이름, 브랜치 보호 가정, 배포 게이트를 바꾸면 관련 문서를 같은 변경 안에서 함께 업데이트해야 합니다.

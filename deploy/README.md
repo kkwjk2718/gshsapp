@@ -1,20 +1,26 @@
-# deploy/README.md
+﻿# 배포 자산 안내
 
-이 디렉터리는 GitHub Actions deploy job이 서버 안의 self-hosted runner에서 반영하는 배포 자산 모음입니다.
+이 디렉터리는 GitHub Actions 배포 job과 서버의 self-hosted runner가 사용하는 배포 자산을 모아둔 곳입니다.
 
 ## 파일 설명
 
 - [compose.yml](./compose.yml): 서버용 Docker Compose 템플릿
-- [deploy.sh](./deploy.sh): 서버에서 실제 배포를 수행하는 스크립트
-- [smoke_check.py](./smoke_check.py): 배포 후 URL 스모크 체크
+- [deploy.sh](./deploy.sh): 실제 배포를 수행하는 메인 스크립트
+- [smoke_check.py](./smoke_check.py): 배포 후 헬스 확인 보조 스크립트
+- [restore-drill.sh](./restore-drill.sh): 임시 컨테이너 기반 복원 리허설
+- [offsite-backup.sh](./offsite-backup.sh): 오프호스트 백업 내보내기
+- [run-scheduled-backup.sh](./run-scheduled-backup.sh): self-hosted runner가 실행하는 정기 백업 진입점
 
-## 서버에서 최종적으로 필요한 파일 구조
+## 서버에 최종적으로 필요한 구조
 
 ```text
 /opt/gshsapp
   .env
   compose.yml
   deploy.sh
+  restore-drill.sh
+  offsite-backup.sh
+  run-scheduled-backup.sh
   data/
   backup/
 ```
@@ -22,38 +28,41 @@
 설명:
 
 - `.env`: 서버 런타임 시크릿
-- `compose.yml`: runner가 `/opt/gshsapp`에 반영하는 파일
-- `deploy.sh`: runner가 `/opt/gshsapp`에 반영하는 파일
-- `data/`: SQLite DB 저장
-- `backup/`: 배포 전 DB 백업 저장
+- `compose.yml`: runner가 반영하는 서버용 compose 파일
+- `deploy.sh`: runner가 실행하는 배포 스크립트
+- `restore-drill.sh`: 복원 리허설 실행용 스크립트
+- `offsite-backup.sh`: 외부 백업 저장소로 복사하는 스크립트
+- `run-scheduled-backup.sh`: 정기 백업용 호스트 스크립트
+- `data/`: SQLite DB 보관 디렉터리
+- `backup/`: 백업 파일 보관 디렉터리
 
-## compose.yml 동작
+## `compose.yml` 동작 방식
 
 서버용 compose는 아래 원칙으로 작성되어 있습니다.
 
 - `build:` 대신 `image:` 사용
-- `sha-<commit>` 기반 이미지 배포
-- `127.0.0.1:${HOST_PORT}:3000` 방식 포트 바인딩
-- `./data:/app/data`, `./backup:/app/backup` 볼륨 사용
+- `sha-<commit>` 기준 이미지 배포
+- `${HOST_BIND_IP}:${HOST_PORT}:3000` 방식 포트 바인딩
+- `./data:/app/data`, `./backup:/app/backup` 영속 볼륨 사용
 - `APP_VERSION`을 컨테이너에 주입
 
-즉, 리버스 프록시가 같은 서버에서 `127.0.0.1:1234`를 바라보는 구조를 기본값으로 가정합니다.
+현재 기본값은 프록시가 다른 서버에서 접근할 수 있도록 `0.0.0.0:${HOST_PORT}:3000`입니다.
 
-## deploy.sh 동작 순서
+## `deploy.sh` 실행 순서
 
 `deploy.sh`는 아래 순서로 동작합니다.
 
 1. Docker Compose 사용 가능 여부 확인
-2. `data/`, `backup/` 디렉터리 생성
-3. 임시 `.deploy.env` 파일 생성
+2. `data/`, `backup/` 디렉터리 준비
+3. 임시 `.deploy.env` 생성
 4. 필요 시 Docker Hub 로그인
-5. `sha-<commit>` 이미지 pull
+5. 지정한 `sha-<commit>` 이미지 pull
 6. 기존 SQLite DB 백업
 7. `docker compose up -d --remove-orphans`
 8. `/api/health` 응답 확인
 9. 실패 시 compose 상태와 로그 출력
 
-## deploy.sh에서 사용하는 주요 환경 변수
+## `deploy.sh` 주요 환경 변수
 
 필수:
 
@@ -69,14 +78,14 @@
 - `DOCKERHUB_USERNAME`
 - `DOCKERHUB_TOKEN`
 
-기본값:
+현재 기본값:
 
 - `DOCKER_IMAGE=kkwjk2718git/gshsapp`
-- `HOST_BIND_IP=127.0.0.1`
+- `HOST_BIND_IP=0.0.0.0`
 - `HOST_PORT=1234`
 - `APP_VERSION=$IMAGE_TAG`
 
-## 서버 .env 예시
+## 서버 `.env` 예시
 
 ```dotenv
 DATABASE_URL=file:/app/data/dev.db
@@ -88,7 +97,7 @@ NEXT_PUBLIC_APP_URL=https://test.gshs.app
 NEXT_PUBLIC_NEIS_API_KEY=
 ```
 
-운영 서버에서는 URL 세 값을 `https://gshs.app`로 변경합니다.
+운영 서버에서는 URL 세 값을 `https://gshs.app`으로 변경합니다.
 
 ## GitHub Secrets / Environments
 
@@ -106,53 +115,32 @@ Runner labels:
 - 테스트 서버: `gshs-test`
 - 운영 서버: `gshs-prod`
 
-## 운영 시 주의할 점
+## 운영 시 주의 사항
 
 - `latest`가 아니라 `sha-<commit>`를 배포 기준으로 사용합니다.
-- `backup/` 폴더는 삭제하지 않습니다.
-- `.env`는 서버에서 직접 관리하고 저장소에 올리지 않습니다.
-- SQLite를 쓰고 있으므로 운영 대규모 변경 전에 백업 상태를 먼저 확인합니다.
+- `backup/` 디렉터리는 삭제하지 않습니다.
+- `.env`는 서버에서 직접 관리하며 저장소에는 올리지 않습니다.
+- SQLite를 사용하므로 대규모 변경 전에는 백업 상태를 먼저 확인합니다.
 
-## 관련 문서
+## 복원 리허설
 
-- [DEPLOY.md](../DEPLOY.md)
-- [docs/server-bootstrap.md](../docs/server-bootstrap.md)
-- [docs/cicd-setup.md](../docs/cicd-setup.md)
-## Additional Deploy Assets
+`restore-drill.sh`는 최신 백업 또는 라이브 DB 복사본을 임시 작업 디렉터리로 가져와 별도 포트에서 컨테이너를 띄운 뒤, 헬스 응답과 관리자 로그인 가능 여부를 확인하고 정리합니다.
 
-New asset:
-
-- [restore-drill.sh](./restore-drill.sh): isolated restore rehearsal on a temporary localhost port
-
-Additional environment values:
+관련 환경 변수:
 
 - `CONTAINER_NAME`
 - `BACKUP_MAX_AGE_HOURS`
 - `RESTORE_DRILL_PORT`
 
-`restore-drill.sh` stages a copy of the latest backup or a copy of the live DB, boots a temporary container, verifies `/api/health`, verifies admin login, then cleans everything up.
-## Network Binding Note
+## 오프호스트 백업 내보내기
 
-The default deployment binding is now `0.0.0.0:${HOST_PORT}:3000`.
+`offsite-backup.sh`는 최신 백업 파일이 있으면 그것을, 없으면 라이브 DB 복사본을 외부 저장소로 보냅니다.
 
-Reason:
-
-- the reverse proxy currently reaches the app over the VM network, not through a same-host localhost-only proxy
-- binding to `127.0.0.1` prevented the external reverse proxy server from reaching the app container on the test VM
-
-If the network model changes later, `HOST_BIND_IP` can still be overridden explicitly.
-
-## Off-Host Backup Export
-
-New asset:
-
-- [offsite-backup.sh](./offsite-backup.sh): copy the latest backup, or a fresh live DB export, to an off-host destination
-
-Required environment value:
+필수 환경 변수:
 
 - `OFFSITE_TARGET`
 
-Examples:
+예시:
 
 ```bash
 cd /opt/gshsapp
@@ -164,29 +152,31 @@ cd /opt/gshsapp
 OFFSITE_TARGET=backup-user@backup-host:/srv/backups/gshsapp/ ./offsite-backup.sh
 ```
 
-## Scheduled Backup Runner
+## 정기 백업 러너 구조
 
-Automatic backups no longer run from the public web request path.
+정기 백업은 더 이상 웹 요청 경로에서 실행되지 않습니다.
 
-Current model:
+현재 구조:
 
-- the app keeps the same backup logic and `LAST_BACKUP_AT` / `BACKUP_INTERVAL_DAYS` settings
-- GitHub Actions triggers the backup on the self-hosted test runner
-- the runner executes [`run-scheduled-backup.sh`](./run-scheduled-backup.sh)
-- that host script enters the running app container and runs [`scripts/run-scheduled-backup.ts`](../scripts/run-scheduled-backup.ts)
+- GitHub Actions scheduler가 `gshs-test` runner를 깨움
+- runner가 [`run-scheduled-backup.sh`](./run-scheduled-backup.sh)를 실행
+- 호스트 스크립트가 실행 중인 앱 컨테이너 안으로 들어감
+- 컨테이너 내부에서 [`scripts/run-scheduled-backup.mjs`](../scripts/run-scheduled-backup.mjs)를 실행
 
-Workflow:
+워크플로우:
 
 - [`.github/workflows/scheduled-backup-test.yml`](../.github/workflows/scheduled-backup-test.yml)
 
-Server requirement:
-
-- `/opt/gshsapp/run-scheduled-backup.sh` must exist and be executable
-- the deployed container name defaults to `gshsapp-web`
-
-Manual run example:
+수동 실행 예시:
 
 ```bash
 cd /opt/gshsapp
 ./run-scheduled-backup.sh
 ```
+
+## 관련 문서
+
+- [DEPLOY.md](../DEPLOY.md)
+- [docs/server-bootstrap.md](../docs/server-bootstrap.md)
+- [docs/cicd-setup.md](../docs/cicd-setup.md)
+- [docs/production-launch-runbook.md](../docs/production-launch-runbook.md)

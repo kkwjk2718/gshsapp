@@ -1,101 +1,107 @@
-# Repository Governance
+﻿# 저장소 운영 규칙
 
-This document is the source of truth for repository operating rules, merge policy, branch protection behavior, and emergency exceptions.
+이 문서는 저장소 운영 규칙, 머지 정책, 브랜치 보호 동작, 긴급 예외 기준의 원문 기준 문서입니다.
 
-Use this together with:
+함께 읽을 문서:
 
-- `CONTRIBUTING.md`
-- `docs/cicd-setup.md`
-- `docs/production-launch-runbook.md`
-- `AGENTS.md`
+- [CONTRIBUTING.md](../CONTRIBUTING.md)
+- [docs/cicd-setup.md](./cicd-setup.md)
+- [docs/production-launch-runbook.md](./production-launch-runbook.md)
+- [AGENTS.md](../AGENTS.md)
 
-## 1. Why This Exists
+## 1. 왜 이 문서가 필요한가
 
-This repository already has CI/CD, automatic test deployment, Playwright E2E, restore drills, and production release workflows.
+이 저장소에는 이미 아래 운영 체계가 들어 있습니다.
 
-That only stays safe if the repository itself is operated consistently. The rules below exist to prevent:
+- CI/CD
+- 테스트 서버 자동 배포
+- Playwright E2E
+- 복원 리허설
+- 운영 배포 워크플로우
 
-- unreviewed changes landing on `main`
-- force-push or branch deletion accidents
-- merges that skip CI
-- production promotion of an unverified SHA
-- undocumented infra or secret handling changes
+이 구조가 안전하게 유지되려면 저장소 운영도 일관되어야 합니다. 아래 규칙은 다음 위험을 줄이기 위해 존재합니다.
 
-## 2. Current `main` Branch Protection
+- 리뷰 없는 변경이 `main`에 들어가는 상황
+- force push 또는 branch deletion 사고
+- CI를 건너뛴 머지
+- 검증되지 않은 SHA의 운영 승격
+- 문서화되지 않은 인프라 또는 시크릿 처리 변경
 
-The `main` branch is protected with the following baseline:
+## 2. 현재 `main` 브랜치 보호 상태
 
-- direct changes are expected to go through pull requests
-- required status checks must pass before merge
-- required checks are:
+현재 `main`은 아래 기준으로 보호됩니다.
+
+- 일반 변경은 Pull Request를 통해 들어오는 것을 전제로 함
+- 필수 status check 통과 전 머지 불가
+- 필수 체크:
   - `lint`
   - `test`
   - `build`
-- strict status checks are enabled
-  - this means the PR branch must be up to date with the latest `main` before merge
-- unresolved review conversations block merge
-- force pushing to `main` is blocked
-- deleting `main` is blocked
+- strict status check 활성화
+  - 즉, 머지 전 PR 브랜치는 최신 `main` 기준으로 갱신되어야 함
+- 미해결 리뷰 대화가 있으면 머지 불가
+- `main`에 대한 force push 금지
+- `main` branch deletion 금지
 
-Current exception model:
+현재 예외 모델:
 
-- admin enforcement is disabled
-- required approving review count is `0`
+- admin enforcement 비활성화
+- required approving review count는 `0`
 
-What that means in practice:
+실무 의미:
 
-- normal team flow should use PRs and green CI
-- the repository owner can still bypass protection in emergencies
-- bypass is allowed only for real incidents, not convenience
+- 평상시에는 PR + 초록 CI 흐름을 따라야 함
+- 저장소 소유자는 사고 대응 시 우회 가능
+- 이 우회는 편의 기능이 아니라 실제 장애 대응 용도여야 함
 
-## 3. Normal Development Flow
+## 3. 기본 개발 흐름
 
-Every normal change should follow this path:
+일반적인 변경은 아래 절차를 따릅니다.
 
-1. Create a feature branch.
-2. Make the change in the branch.
-3. Run the local checks that match the change.
-4. Open a pull request into `main`.
-5. Wait for required checks to pass.
-6. Resolve review comments and conversations.
-7. Merge only after the branch is current with `main`.
+1. 기능 브랜치 생성
+2. 브랜치에서 변경 진행
+3. 변경에 맞는 로컬 검증 실행
+4. `main` 대상 Pull Request 생성
+5. 필수 체크 통과 대기
+6. 리뷰 코멘트와 대화 스레드 정리
+7. 브랜치가 최신 `main` 기준일 때만 머지
 
-Expected branch naming:
+권장 브랜치 이름:
 
-- `feat/<short-description>`
-- `fix/<short-description>`
-- `chore/<short-description>`
-- `docs/<short-description>`
+- `feat/<짧은설명>`
+- `fix/<짧은설명>`
+- `chore/<짧은설명>`
+- `docs/<짧은설명>`
 
-Examples:
+예시:
 
 - `feat/song-request-admin-tools`
 - `fix/menu-auth-guard`
 - `docs/production-runbook`
 
-## 4. Merge Rules
+## 4. 머지 조건
 
-A pull request is merge-ready only when all of the following are true:
+Pull Request는 아래 조건을 모두 만족할 때만 머지 준비 완료로 봅니다.
 
-- `lint` is green
-- `test` is green
-- `build` is green
-- no unresolved review conversation remains
-- the PR branch is updated against the latest `main`
-- the change description explains user-facing impact and deployment impact when relevant
-- required docs were updated if behavior, infra, or process changed
+- `lint` 초록
+- `test` 초록
+- `build` 초록
+- 미해결 리뷰 대화 없음
+- PR 브랜치가 최신 `main` 기준으로 갱신됨
+- 변경 설명에 사용자 영향과 배포 영향이 필요한 만큼 포함됨
+- 동작, 인프라, 프로세스를 바꿨다면 관련 문서가 함께 업데이트됨
 
-Do not merge if any of the following are true:
+아래 경우에는 머지하지 않습니다.
 
-- CI is red
-- the PR fixes one thing but silently removes another behavior
-- auth, env, deploy, or backup changes are undocumented
-- a change introduces secrets, passwords, tokens, or copied `.env` content
-- the reviewer found a production-risk regression that is still open
+- CI가 빨간 상태
+- 한 문제를 고치면서 다른 기존 기능을 조용히 없앰
+- 인증, 환경 변수, 배포, 백업 변경이 문서화되지 않음
+- 시크릿, 비밀번호, 토큰, `.env` 내용이 포함됨
+- 운영 위험 회귀가 리뷰에서 지적됐는데 아직 해결되지 않음
 
-## 5. Required Local Checks Before Opening Or Updating A PR
+## 5. PR 전 로컬 필수 체크
 
-Default local verification:
+기본 검증 명령:
 
 ```bash
 npm run lint
@@ -103,139 +109,142 @@ npm test
 npm run build
 ```
 
-When the change touches deploy or high-risk user flows, also run or verify:
+배포 또는 고위험 사용자 흐름에 영향이 있다면 아래도 함께 실행하거나 확인합니다.
 
 ```bash
 npm run test:e2e:smoke
 ```
 
-When the change materially affects UI flows or admin workflows, perform a targeted manual verification on the affected pages.
+UI나 관리자 워크플로우를 많이 건드렸다면 관련 페이지 수동 확인도 함께 수행합니다.
 
-## 6. Review Expectations
+## 6. 리뷰 기준
 
-Review should prioritize risk over style.
+리뷰는 스타일보다 위험을 우선합니다.
 
-Primary review questions:
+핵심 질문:
 
-- Can this break login, admin access, redirects, or role checks?
-- Can this break writes to SQLite or backup/restore flows?
-- Can this break test or production domain behavior?
-- Can this break Docker deployment or health checks?
-- Does this change remove an existing user feedback path such as notifications or validation?
-- Are docs still correct after this change?
+- 로그인, 관리자 접근, 리다이렉트, 역할 검사에 문제를 만들지 않는가?
+- SQLite 쓰기, 백업, 복원 흐름을 깨지 않는가?
+- 테스트/운영 도메인 동작을 섞지 않는가?
+- Docker 배포나 헬스체크를 깨지 않는가?
+- 알림, 검증, 사용자 피드백 흐름을 조용히 제거하지 않는가?
+- 변경 후에도 문서가 여전히 맞는가?
 
-When leaving review feedback, prefer concrete findings:
+리뷰 코멘트는 가능하면 아래 정보를 포함해 구체적으로 남깁니다.
 
-- what breaks
-- where it breaks
-- how it was verified
-- what minimum fix is required before merge
+- 무엇이 깨지는지
+- 어디서 깨지는지
+- 어떻게 확인했는지
+- 머지 전 최소 수정 조건이 무엇인지
 
-## 7. Documentation Update Rules
+## 7. 문서 갱신 규칙
 
-Docs must be updated in the same PR when a change affects:
+아래 항목에 영향을 주는 변경은 같은 PR에서 문서도 함께 갱신합니다.
 
-- environment variables
-- GitHub Actions behavior
-- deploy scripts or deploy asset layout
-- server bootstrap steps
-- branch protection or merge policy
-- test or production domains
-- backup, restore, or rollback steps
-- admin operational workflows
-- AI agent instructions
+- 환경 변수
+- GitHub Actions 동작
+- 배포 스크립트 또는 배포 자산 구조
+- 서버 부트스트랩 절차
+- 브랜치 보호 또는 머지 정책
+- 테스트/운영 도메인
+- 백업, 복원, 롤백 절차
+- 관리자 운영 워크플로우
+- AI 에이전트 작업 규칙
 
-At minimum, update the most relevant document among:
+최소한 아래 문서 중 가장 관련 있는 파일은 갱신합니다.
 
-- `README.md`
-- `CONTRIBUTING.md`
-- `DEPLOY.md`
-- `docs/cicd-setup.md`
-- `docs/server-bootstrap.md`
-- `docs/production-launch-runbook.md`
-- `AGENTS.md`
+- [README.md](../README.md)
+- [CONTRIBUTING.md](../CONTRIBUTING.md)
+- [DEPLOY.md](../DEPLOY.md)
+- [docs/cicd-setup.md](./cicd-setup.md)
+- [docs/server-bootstrap.md](./server-bootstrap.md)
+- [docs/production-launch-runbook.md](./production-launch-runbook.md)
+- [AGENTS.md](../AGENTS.md)
 
-## 8. Secrets And Sensitive Data Rules
+## 8. 시크릿 및 민감 정보 규칙
 
-Never commit:
+절대 커밋하지 않는 항목:
 
 - `.env`
 - `.env.local`
-- copied server secret backups
-- API keys
-- Docker Hub tokens
-- SSH private keys
-- passwords
-- raw database files from production or test unless explicitly approved for a controlled recovery task
+- 서버에서 복사한 시크릿 백업 파일
+- API 키
+- Docker Hub 토큰
+- SSH 비밀키
+- 비밀번호
+- 통제되지 않은 테스트/운영 DB 원본 파일
 
-If a PR includes secret handling changes, the PR description must say:
+PR에 시크릿 처리 변경이 포함되면 설명에 아래를 명시합니다.
 
-- which runtime secret changed
-- where it is stored
-- whether GitHub secret or server `.env` changes are required
-- whether test and production both need updates
+- 어떤 시크릿이 바뀌는지
+- 어디에 저장되는지
+- GitHub secret 변경이 필요한지
+- 서버 `.env` 변경이 필요한지
+- 테스트와 운영 모두 수정해야 하는지
 
-## 9. Test-To-Production Promotion Rule
+## 9. 테스트에서 운영으로 승격하는 규칙
 
-Production releases must follow immutable SHA promotion.
+운영 배포는 항상 불변 SHA 승격 방식으로 진행합니다.
 
-Required promotion path:
+필수 순서:
 
-1. candidate change lands on `main`
-2. test deployment succeeds
-3. `Preproduction Rehearsal` succeeds for the same `sha-<commit>`
-4. human checks pass on `test.gshs.app`
-5. production deployment uses that same `sha-<commit>`
+1. 변경이 `main`에 반영됨
+2. 테스트 서버 자동 배포 성공
+3. 같은 `sha-<commit>`로 `Preproduction Rehearsal` 성공
+4. `test.gshs.app`에서 사람 확인 통과
+5. 운영 배포는 같은 `sha-<commit>` 사용
 
-Never promote to production using `latest` as the decision source.
+절대 하지 않는 것:
 
-Always verify:
+- `latest`를 운영 승격 판단 기준으로 사용
 
-- `/api/health` returns the expected SHA
-- `/admin/test` is green
-- recent backup exists
+항상 확인할 것:
 
-## 10. Emergency Exception Rule
+- `/api/health`가 기대한 SHA를 반환하는지
+- `/admin/test`가 초록인지
+- 최신 백업이 존재하는지
 
-Because admin enforcement is currently disabled, the repository owner can bypass the normal PR path if the service is down or a release must be stopped immediately.
+## 10. 긴급 예외 규칙
 
-This is allowed only when:
+현재 admin enforcement가 비활성화되어 있으므로, 실제 장애 상황에서는 저장소 소유자가 정상 PR 흐름을 우회할 수 있습니다.
 
-- production is broken
-- login or admin access is broken
-- deploy automation is blocking recovery
-- secret rotation or infra repair must happen immediately
+허용되는 상황:
 
-If an emergency bypass happens, follow up immediately with:
+- 운영 서비스가 내려감
+- 로그인 또는 관리자 접근이 깨짐
+- 배포 자동화가 복구를 막고 있음
+- 시크릿 교체나 인프라 복구를 즉시 해야 함
 
-1. a written summary in the related PR, issue, or incident note
-2. a normal follow-up PR if code changed outside the standard review flow
-3. documentation updates if the incident revealed a missing rule or missing runbook step
+긴급 우회가 발생하면 반드시 후속 조치를 남깁니다.
 
-Emergency bypass is not a substitute for review.
+1. 관련 PR, 이슈, 사고 노트 중 하나에 상황 요약 작성
+2. 표준 리뷰 흐름 밖에서 코드가 바뀌었다면 후속 PR 생성
+3. 이번 사고로 드러난 누락 규칙이 있다면 문서 업데이트
 
-## 11. Rules For AI Agents
+긴급 우회는 리뷰 대체 수단이 아닙니다.
 
-AI agents working in this repository must follow the same repository rules as human contributors.
+## 11. AI 에이전트용 추가 규칙
 
-Additional AI-specific requirements:
+AI 에이전트도 사람과 같은 저장소 규칙을 따릅니다.
 
-- read `AGENTS.md` before making non-trivial changes
-- do not bypass documented deploy or backup rules
-- do not invent environment values
-- do not push production-facing changes without preserving the documented SHA-based release flow
-- update docs when changing repo process or infra behavior
+추가 요구 사항:
 
-If an AI agent changes branch protection assumptions, workflow names, required checks, or release gates, it must update this document in the same change.
+- 비사소한 변경 전 [AGENTS.md](../AGENTS.md) 확인
+- 문서에 정의된 배포/백업 규칙 우회 금지
+- 확인되지 않은 환경 변수 값 추정 금지
+- SHA 기반 릴리스 흐름을 깨는 배포 변경 금지
+- 저장소 프로세스나 인프라 동작을 바꾸면 문서 동시 갱신
 
-## 12. Recommended Future Tightening
+브랜치 보호 가정, 워크플로우 이름, 필수 체크, 릴리스 게이트를 바꾸면 이 문서도 같은 변경에서 갱신합니다.
 
-The current baseline is intentionally practical.
+## 12. 향후 더 엄격하게 하고 싶을 때 권장 순서
 
-If the team wants stricter protection later, the next recommended upgrades are:
+현재 기준은 실용성을 우선한 기본선입니다.
 
-1. require at least 1 approving review
-2. enforce branch protection for admins too
-3. require review from a second maintainer for auth, deploy, or DB-risk changes
+추후 강화 후보:
 
-Do these only when the team is comfortable with the added friction.
+1. approving review 최소 1개 필수
+2. 관리자에게도 동일한 브랜치 보호 강제
+3. 인증, 배포, DB 위험 변경에는 두 번째 유지보수자 승인 필수
+
+팀이 감당 가능한 마찰 수준을 확인한 뒤 단계적으로 적용합니다.

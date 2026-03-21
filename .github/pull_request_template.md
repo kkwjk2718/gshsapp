@@ -1,41 +1,41 @@
-## Summary
+﻿## 요약
 - 
 
-## Why
+## 변경 이유
 - 
 
-## Detailed Changes
+## 상세 변경 내용
 - 
 
-## Verification
+## 검증
 - [ ] `npm run lint`
 - [ ] `npm test`
 - [ ] `npm run build`
-- [ ] I manually checked the changed UI or workflow when needed
+- [ ] 필요 시 변경된 UI 또는 워크플로우를 직접 확인함
 
-## Deployment Impact
-- [ ] None
-- [ ] Yes
+## 배포 영향
+- [ ] 없음
+- [ ] 있음
 
-If yes, describe:
+배포 영향이 있다면 설명:
 
-## Server / Environment Impact
-- [ ] None
-- [ ] Yes
+## 서버 / 환경 영향
+- [ ] 없음
+- [ ] 있음
 
-If yes, describe:
-- environment variable changes
-- test server impact
-- production server impact
-- GitHub Actions / Docker / CI/CD impact
+영향이 있다면 아래를 설명:
+- 환경 변수 변경 여부
+- 테스트 서버 영향
+- 운영 서버 영향
+- GitHub Actions / Docker / CI/CD 영향
 
-## Repository Rules
-- [ ] I checked `docs/repository-governance.md`
-- [ ] This PR is ready for `lint`, `test`, and `build`
-- [ ] If this changes deploy, auth, backup, env, or release flow, I updated the related docs
+## 저장소 규칙 확인
+- [ ] `docs/repository-governance.md`를 확인함
+- [ ] 이 PR은 `lint`, `test`, `build` 기준으로 머지 준비가 되어 있음
+- [ ] 배포, 인증, 백업, 환경 변수, 릴리스 흐름을 바꿨다면 관련 문서를 함께 수정함
 
-## Safety Checklist
-- [ ] No secrets were added
-- [ ] No passwords or private keys were added
-- [ ] DB/auth/permission changes are explained
-- [ ] Docs were updated when needed
+## 안전 체크리스트
+- [ ] 시크릿을 추가하지 않음
+- [ ] 비밀번호나 비밀키를 추가하지 않음
+- [ ] DB / 인증 / 권한 변경 내용을 설명함
+- [ ] 필요 시 문서를 업데이트함

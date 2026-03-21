@@ -1,32 +1,32 @@
-# AGENTS.md
+﻿# AGENTS.md
 
-## For LLM Agents
+## LLM 에이전트 안내
 
-Fetch the canonical agent guide and follow it:
+이 저장소를 다루는 AI 코딩 에이전트는 아래 원본 문서를 먼저 내려받아 기준 문서로 사용하세요.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/kkwjk2718/gshsapp/main/AGENTS.md
 ```
 
-Use the raw file, not summarized page previews. This file is the canonical machine-oriented onboarding guide for this repository.
+요약 페이지나 2차 정리본이 아니라, 이 파일 자체를 기준으로 삼습니다.
 
-## 1. Mission
+## 1. 프로젝트 목표
 
-GSHS.app is a student-facing integrated web service for Gyeongnam Science High School.
+GSHS.app은 경남과학고등학교 학생과 관리자를 위한 통합 웹 서비스입니다.
 
-Primary goals:
+에이전트가 이 저장소에서 우선해야 하는 목표:
 
-- keep public pages stable
-- keep admin workflows usable
-- avoid breaking test and production domain behavior
-- avoid deployment regressions
-- treat SQLite data and backups carefully
+- 공개 페이지 안정성 유지
+- 관리자 기능 사용성 유지
+- 테스트/운영 도메인 혼선 방지
+- 배포 회귀 방지
+- SQLite 데이터와 백업을 조심스럽게 다루기
 
-When you work in this repository, optimize for correctness and operational safety first. Fast changes are good only if they do not create hidden risk for authentication, database writes, backups, or deployment.
+즉, 빠른 수정 자체보다 인증, DB 쓰기, 백업, 배포 안전성을 먼저 고려합니다.
 
-## 2. Read Order
+## 2. 권장 문서 읽기 순서
 
-If you have enough context budget, read these in order:
+문맥 여유가 있다면 아래 순서대로 읽습니다.
 
 1. `AGENTS.md`
 2. `README.md`
@@ -35,8 +35,10 @@ If you have enough context budget, read these in order:
 5. `docs/server-bootstrap.md`
 6. `docs/cicd-setup.md`
 7. `deploy/README.md`
+8. `docs/production-launch-runbook.md`
+9. `docs/repository-governance.md`
 
-If context is tight, prioritize:
+문맥이 부족할 때 우선순위:
 
 1. `AGENTS.md`
 2. `README.md`
@@ -44,9 +46,9 @@ If context is tight, prioritize:
 4. `.github/workflows/publish-and-deploy-test.yml`
 5. `deploy/deploy.sh`
 
-## 3. Project Snapshot
+## 3. 프로젝트 개요
 
-Core stack:
+핵심 스택:
 
 - Next.js 16 App Router
 - React 19
@@ -56,66 +58,66 @@ Core stack:
 - Docker / Docker Compose
 - GitHub Actions
 
-Current environment model:
+현재 환경 모델:
 
-- local development: `http://localhost:3000`
-- test service domain: `https://test.gshs.app`
-- production service domain: `https://gshs.app`
+- 로컬 개발: `http://localhost:3000`
+- 테스트 서비스 도메인: `https://test.gshs.app`
+- 운영 서비스 도메인: `https://gshs.app`
 
-Critical invariants:
+중요 불변 조건:
 
-- SQLite in Docker must live at `file:/app/data/dev.db`
-- real deployments must use immutable `sha-<commit>` image tags
-- `latest` is never the authoritative production deployment target
-- Google Analytics is managed in `/admin/settings`, not through env-only configuration
-- private network VMs use self-hosted GitHub runners for deploy jobs
-- test and production URL values must never be mixed
+- Docker 내부 SQLite 경로는 `file:/app/data/dev.db`
+- 실제 배포 기준은 `sha-<commit>` 태그
+- `latest`는 운영 배포 판단 기준이 아님
+- Google Analytics는 `/admin/settings`에서 관리
+- 사설망 VM은 self-hosted GitHub runner로 배포
+- 테스트와 운영 URL 값을 절대 섞지 않음
+- 현재 서버 기본 바인딩은 `0.0.0.0:1234`
 
-## 4. Repository Map
+## 4. 저장소 구조 지도
 
-Top-level paths:
+상위 주요 경로:
 
-- `src/app`: App Router pages, layouts, route handlers, server actions
-- `src/components`: reusable UI pieces
-- `src/lib`: shared logic for DB, settings, backups, logging, utilities
-- `prisma/schema.prisma`: database schema
-- `deploy/`: deployment assets used on servers
-- `.github/workflows/`: CI/CD workflows
-- `docs/`: human-readable operational docs
+- `src/app`: App Router 페이지, 레이아웃, route handler, server action
+- `src/components`: 재사용 UI 컴포넌트
+- `src/lib`: DB, 설정, 백업, 로깅, 유틸리티
+- `prisma/schema.prisma`: 데이터베이스 스키마
+- `deploy/`: 서버 배포 자산
+- `.github/workflows/`: CI/CD 워크플로우
+- `docs/`: 사람용 운영 문서
 
-Important application paths:
+중요 애플리케이션 경로:
 
-- `src/app/api/health/route.ts`: health endpoint used by deploy verification
-- `src/app/api/public-settings/route.ts`: public settings loader for runtime config
-- `src/app/(main)/admin/settings`: admin settings UI and actions
-- `src/app/(main)/admin/settings/backup-actions.ts`: backup and restore flows
-- `src/app/(main)/admin/settings/actions.ts`: admin settings persistence
-- `src/auth.config.ts`: auth and route protection rules
-- `src/lib/backup.ts`: backup directory and file handling
-- `src/lib/db.ts`: Prisma client bootstrap
-- `src/components/analytics.tsx`: runtime analytics loading behavior
+- `src/app/api/health/route.ts`: 배포 검증용 헬스 엔드포인트
+- `src/app/api/public-settings/route.ts`: 공개 런타임 설정 로더
+- `src/app/api/me/summary/route.ts`: 공개 셸 사용자 상태 요약
+- `src/app/api/me/home/route.ts`: 홈 개인화 데이터 로더
+- `src/app/(main)/admin/settings`: 관리자 설정 UI
+- `src/app/(main)/admin/settings/backup-actions.ts`: 백업/복원 서버 액션
+- `src/app/(main)/admin/settings/actions.ts`: 관리자 설정 저장 액션
+- `src/auth.config.ts`: 인증 및 route guard 규칙
+- `src/lib/backup.ts`: 백업 디렉터리와 파일 처리
+- `src/lib/db.ts`: Prisma 클라이언트 초기화
+- `src/components/analytics.tsx`: 런타임 분석 스크립트 로딩
 
-Important deployment paths:
+중요 배포 경로:
 
-- `.github/workflows/ci.yml`: repo quality checks
-- `.github/workflows/publish-and-deploy-test.yml`: build, push, and test deployment
-- `.github/workflows/deploy-prod.yml`: manual production deployment
-- `deploy/compose.yml`: server compose template
-- `deploy/deploy.sh`: server deployment script
-- `deploy/smoke_check.py`: helper smoke-check asset
+- `.github/workflows/ci.yml`: 저장소 품질 검사
+- `.github/workflows/publish-and-deploy-test.yml`: 테스트 배포
+- `.github/workflows/preproduction-rehearsal.yml`: 후보 SHA 리허설
+- `.github/workflows/deploy-prod.yml`: 운영 배포
+- `.github/workflows/production-health-monitor.yml`: 운영 헬스 모니터링
+- `.github/workflows/scheduled-backup-test.yml`: 테스트 서버 정기 백업
+- `deploy/compose.yml`: 서버용 compose 템플릿
+- `deploy/deploy.sh`: 서버 배포 스크립트
+- `deploy/run-scheduled-backup.sh`: 정기 백업 호스트 스크립트
+- `deploy/restore-drill.sh`: 복원 리허설
+- `deploy/offsite-backup.sh`: 오프호스트 백업 내보내기
+- `scripts/run-scheduled-backup.mjs`: 컨테이너 내부 백업 진입점
 
-Important documentation paths:
+## 5. 제품 동작 지도
 
-- `README.md`: general project introduction
-- `DEPLOY.md`: deployment overview
-- `docs/server-bootstrap.md`: new Ubuntu VM preparation
-- `docs/cicd-setup.md`: GitHub Actions and runner setup
-- `deploy/README.md`: deploy asset reference
-- `.github/copilot-instructions.md`: Copilot-specific short context
-
-## 5. Product Behavior Map
-
-Main public areas:
+주요 공개 영역:
 
 - `/`
 - `/landing`
@@ -132,11 +134,11 @@ Main public areas:
 - `/stats`
 - `/menu`
 
-Authenticated user area:
+인증 필요 사용자 영역:
 
 - `/me`
 
-Admin area:
+관리자 영역:
 
 - `/admin`
 - `/admin/users`
@@ -151,35 +153,35 @@ Admin area:
 - `/admin/sites`
 - `/admin/test`
 
-Auth expectations:
+인증 관련 기대 동작:
 
-- `/me` requires login
-- `/admin` requires admin role
-- `/login` should redirect away if already logged in
-- `/menu` is public and must not be accidentally captured by `/me` route matching
+- `/me`는 로그인 필요
+- `/admin`은 관리자 권한 필요
+- `/login`은 이미 로그인된 사용자를 적절히 우회 처리
+- `/menu`는 공개 페이지이며 `/me` 관련 가드에 잘못 걸리면 안 됨
 
-If you touch auth behavior, always re-check:
+인증 로직을 건드렸다면 반드시 확인할 경로:
 
 - `/login`
 - `/me`
 - `/admin`
 - `/menu`
-- test-domain redirects staying on `test.gshs.app`
+- `test.gshs.app`에서의 리다이렉트 동작
 
-## 6. Local Setup
+## 6. 로컬 개발 기준
 
-Requirements:
+요구 사항:
 
-- Node.js 20+
-- npm 10+
+- Node.js 20 이상
+- npm 10 이상
 
-Install:
+설치:
 
 ```bash
 npm ci
 ```
 
-Local env baseline:
+기본 로컬 환경 변수:
 
 ```dotenv
 DATABASE_URL=file:./dev.db
@@ -191,19 +193,19 @@ NEXT_PUBLIC_APP_URL=http://localhost:3000
 NEXT_PUBLIC_NEIS_API_KEY=
 ```
 
-Database init:
+DB 초기화:
 
 ```bash
 npx prisma db push
 ```
 
-Run app:
+실행:
 
 ```bash
 npm run dev
 ```
 
-Primary verification commands:
+기본 검증 명령:
 
 ```bash
 npm run lint
@@ -211,24 +213,26 @@ npm test
 npm run build
 ```
 
-Notes:
+추가 검증 명령:
 
-- lint currently produces warnings but should still exit successfully
-- tests use `vitest`
-- UI and admin smoke checks can be done with Playwright when needed
+```bash
+npm run test:e2e
+npm run test:e2e:smoke
+```
 
-## 7. Secrets And Environment Rules
+## 7. 시크릿과 환경 변수 규칙
 
-Never commit:
+절대 커밋하지 않는 항목:
 
 - `.env`
 - `.env.local`
-- API keys
-- OAuth secrets
-- SSH private keys
-- copied server secret backups
+- API 키
+- OAuth 시크릿
+- SSH 비밀키
+- 서버에서 복사한 시크릿 백업
+- 원시 프로덕션 DB 파일
 
-Server runtime env keys typically include:
+서버 런타임 환경 변수 예시:
 
 - `DATABASE_URL`
 - `AUTH_SECRET`
@@ -238,74 +242,76 @@ Server runtime env keys typically include:
 - `NEXT_PUBLIC_APP_URL`
 - `NEXT_PUBLIC_NEIS_API_KEY`
 
-Domain-specific rule:
+도메인 규칙:
 
-- test server values must point to `https://test.gshs.app`
-- production server values must point to `https://gshs.app`
+- 테스트 서버 값은 `https://test.gshs.app`
+- 운영 서버 값은 `https://gshs.app`
 
-Analytics-specific rule:
+분석 도구 규칙:
 
-- Google Analytics Measurement ID is stored through admin settings
-- do not reintroduce env-only analytics configuration unless explicitly requested
+- Google Analytics Measurement ID는 `/admin/settings`에서 관리
+- 명시적 요청이 없는 한 env 전용 분석 설정으로 되돌리지 않음
 
-## 8. Database, Prisma, And Backup Rules
+## 8. 데이터베이스, Prisma, 백업 규칙
 
-Database model:
+현재 데이터 모델:
 
 - Prisma + SQLite
 
-Current schema workflow:
+현재 스키마 운영 방식:
 
-- local and current deploy flow use `prisma db push`
-- future migration to `prisma migrate deploy` is possible, but not the current baseline
+- 로컬 및 현재 배포는 `prisma db push` 기준
+- 향후 `prisma migrate deploy`로 옮길 수 있으나 현재 기본값은 아님
 
-SQLite rules:
+SQLite 규칙:
 
-- container DB path must remain writable
-- deployment volume path is `/app/data/dev.db`
-- backup files must be stored on a writable persistent volume
-- temporary restore/upload files must use writable temp locations
+- 컨테이너 DB 경로는 반드시 쓰기 가능해야 함
+- 배포 DB 경로는 `/app/data/dev.db`
+- 백업 파일은 영속 볼륨 위에 저장
+- 복원 임시 파일은 쓰기 가능한 temp 위치 사용
 
-Backup expectations:
+백업 관련 기대 동작:
 
-- backup directory should live alongside persistent DB storage
-- deployment should create a DB backup before container replacement
-- admin backup actions must fail safely without crashing the whole page
+- 백업 디렉터리는 DB와 같은 영속 볼륨 옆에 있어야 함
+- 배포 전 DB 백업을 먼저 생성해야 함
+- 관리자 백업 액션 실패가 페이지 전체 크래시로 이어지면 안 됨
+- 정기 백업은 웹 요청 경로가 아니라 scheduler에서 실행되어야 함
 
-When editing backup logic, verify:
+백업 로직 수정 시 반드시 확인할 것:
 
-- backup path is writable in Docker
-- restore temp files are cleaned up
-- invalid uploads fail gracefully
-- server actions return safe errors instead of raw crashes
+- Docker 안에서 백업 경로가 writable인지
+- 복원 임시 파일이 정리되는지
+- 잘못된 업로드가 안전하게 실패하는지
+- server action이 raw crash 대신 안전한 오류를 반환하는지
 
-## 9. Deployment Architecture
+## 9. 배포 아키텍처
 
-CI/CD structure:
+CI/CD 구조:
 
-- `ci.yml`: runs on PRs and pushes
-- `publish-and-deploy-test.yml`: runs on `main`
-- `deploy-prod.yml`: manual workflow for production
+- `ci.yml`: PR과 push에서 품질 검사
+- `publish-and-deploy-test.yml`: `main`에서 이미지 빌드 + 테스트 배포
+- `preproduction-rehearsal.yml`: 수동 후보 SHA 리허설
+- `deploy-prod.yml`: 운영 수동 배포
 
-Image policy:
+이미지 정책:
 
-- publish `sha-<commit>`
-- publish `main`
-- publish `latest`
-- deploy with `sha-<commit>` only
+- `sha-<commit>` 푸시
+- `main` 푸시
+- `latest` 푸시
+- 실제 배포는 `sha-<commit>`만 사용
 
-Why self-hosted runners are used:
+왜 self-hosted runner를 쓰는가:
 
-- deploy targets may live on `172.16.x.x` private networks
-- GitHub-hosted runners cannot SSH directly into private-only VMs
-- therefore build/push happens on GitHub-hosted runners, but deploy/smoke steps run on each server's self-hosted runner
+- 배포 대상 서버가 `172.16.x.x` 사설망에 있을 수 있음
+- GitHub-hosted runner는 이런 서버에 직접 SSH 하기 어려움
+- 따라서 빌드와 푸시는 GitHub-hosted runner가, 배포와 smoke check는 서버 내부 self-hosted runner가 담당
 
-Runner labels:
+Runner label:
 
-- test server runner: `gshs-test`
-- production runner: `gshs-prod`
+- 테스트 서버: `gshs-test`
+- 운영 서버: `gshs-prod`
 
-Server filesystem layout:
+서버 파일 구조:
 
 ```text
 /opt/gshsapp
@@ -317,96 +323,105 @@ Server filesystem layout:
   backup/
 ```
 
-Runtime network model:
+현재 네트워크 모델:
 
-- app binds to `127.0.0.1:1234`
-- reverse proxy or upstream gateway should forward public traffic
+- 앱은 기본적으로 `0.0.0.0:1234`에 바인딩
+- 리버스 프록시가 VM 외부에서 접근할 수 있게 설계됨
+- 서버 내부 smoke check는 여전히 `127.0.0.1:1234`를 사용해도 됨
 
-Test deployment flow:
+테스트 배포 흐름:
 
-1. run quality checks
-2. build Docker image
-3. push Docker tags
-4. self-hosted test runner receives deploy job
-5. copy `deploy/compose.yml` and `deploy/deploy.sh` into `/opt/gshsapp`
-6. run `deploy.sh`
-7. verify `/api/health`, `/`, `/menu`, `/notices` on `127.0.0.1:1234`
+1. 품질 검사 실행
+2. Docker 이미지 빌드
+3. Docker 태그 푸시
+4. 테스트 서버 runner가 배포 job 수신
+5. `deploy/compose.yml`, `deploy.sh` 등 최신 자산 반영
+6. `deploy.sh` 실행
+7. `/api/health`, `/`, `/menu`, `/notices` 서버 내부 확인
+8. `test.gshs.app` 기준 E2E 실행
 
-Production deployment flow:
+운영 배포 흐름:
 
-1. manual workflow dispatch
-2. provide `sha-<commit>` input
-3. require `production` environment approval
-4. production runner performs deploy
-5. smoke-check the deployed SHA
+1. GitHub Actions에서 수동 workflow 실행
+2. `sha-<commit>` 입력
+3. `production` environment 승인
+4. 운영 runner가 배포 수행
+5. smoke check와 운영 확인 수행
 
-## 10. Validation Expectations
+## 10. 검증 기대값
 
-Minimum validation after normal code changes:
+일반 변경 후 최소 검증:
 
 1. `npm run lint`
 2. `npm test`
 3. `npm run build`
 
-Add targeted checks when relevant:
+관련 영역에 따른 추가 검증:
 
-- auth changes: test `/login`, `/me`, `/admin`, `/menu`
-- admin settings changes: test `/admin/settings`
-- backup changes: test backup and restore failure paths
-- analytics changes: confirm runtime settings API behavior
-- deployment changes: validate workflow YAML and deploy script behavior
+- 인증 변경: `/login`, `/me`, `/admin`, `/menu`
+- 관리자 설정 변경: `/admin/settings`
+- 백업 변경: 백업/복원 실패 경로
+- 분석 변경: 공개 설정 API와 런타임 로딩 확인
+- 배포 변경: workflow YAML, deploy script, `/api/health.version`
 
-After deploy-related changes, verify:
+배포 관련 변경 후 필수 확인:
 
-- workflow parses
-- build pushes the expected SHA tag
-- `/api/health` returns `ok: true`
-- `/api/health.version` matches the deployed SHA
+- workflow가 실제로 파싱되는지
+- 기대한 SHA 태그가 push되는지
+- `/api/health`가 `ok: true`를 반환하는지
+- `/api/health.version`이 배포한 SHA와 일치하는지
 
-## 11. Common Failure Modes
+## 11. 자주 깨지는 지점
 
-1. Test domain redirects to production domain.
-Cause:
-- `AUTH_URL`, `NEXTAUTH_URL`, or `NEXT_PUBLIC_APP_URL` points at `gshs.app`
+1. 테스트 도메인이 운영 도메인으로 리다이렉트됨
+원인:
+- `AUTH_URL`, `NEXTAUTH_URL`, `NEXT_PUBLIC_APP_URL`이 `gshs.app`을 가리킴
 
-2. `/menu` suddenly requires auth.
-Cause:
-- route matching uses something like `startsWith('/me')` and accidentally captures `/menu`
+2. `/menu`가 갑자기 인증 필요 페이지가 됨
+원인:
+- `/me` route matching이 `/menu`까지 잡아버림
 
-3. `/admin/settings` throws a server-side application error in Docker.
-Cause:
-- backup or temp file path is not writable in the container
+3. `/admin/settings`가 Docker에서 서버 오류를 냄
+원인:
+- 백업 경로나 임시 파일 경로가 컨테이너에서 writable이 아님
 
-4. Deploy succeeds but smoke check fails on version mismatch.
-Cause:
-- `APP_VERSION` or `IMAGE_TAG` was not propagated correctly
+4. 배포는 성공했는데 smoke check에서 version mismatch 발생
+원인:
+- `APP_VERSION` 또는 `IMAGE_TAG` 전달 실패
 
-5. Container boot loops after deploy.
-Cause:
-- DB volume permissions
-- bad env values
-- missing runtime secret
+5. 컨테이너가 배포 직후 재시작 루프에 빠짐
+원인:
+- DB 볼륨 권한 문제
+- 잘못된 env 값
+- 누락된 런타임 시크릿
 
-6. Test deploy workflow cannot reach server.
-Cause:
-- trying to use GitHub-hosted SSH into a private IP instead of a self-hosted runner
+6. 테스트 배포 workflow가 서버에 접근하지 못함
+원인:
+- 사설망 서버에 GitHub-hosted SSH를 시도함
+- self-hosted runner 모델을 깨뜨림
 
-7. Repo accidentally contains secrets.
-Cause:
-- copying server `.env` or secret backups into the workspace without ignoring them
+7. 운영 모니터링이 계속 실패 메일을 보냄
+원인:
+- `gshs.app`이 아직 실제 앱이 아닌 점검 페이지인데 `PRODUCTION_MONITOR_ENABLED=true`로 켬
+- `/api/health`가 JSON이 아니라 HTML을 반환함
 
-## 12. Fast Debug Playbook
+8. 정기 백업 workflow가 실패함
+원인:
+- 컨테이너 내부 백업 진입점이 없거나 실행 파일 경로가 바뀜
+- `run-scheduled-backup.sh`와 `scripts/run-scheduled-backup.mjs`가 서로 맞지 않음
 
-If deploy looks wrong:
+## 12. 빠른 디버그 순서
 
-1. inspect GitHub Actions logs
-2. inspect runner status in repository Actions settings
-3. inspect server container state
-4. inspect `/api/health`
-5. inspect Docker logs
-6. inspect current `.env` domain values
+배포가 이상해 보이면 아래 순서로 확인합니다.
 
-Useful commands on the server:
+1. GitHub Actions 로그 확인
+2. repository의 runner 상태 확인
+3. 서버 컨테이너 상태 확인
+4. `/api/health` 확인
+5. Docker 로그 확인
+6. 현재 `.env`의 도메인 값 확인
+
+서버에서 유용한 명령:
 
 ```bash
 docker compose -f /opt/gshsapp/compose.yml --env-file /opt/gshsapp/.deploy.env ps
@@ -417,119 +432,131 @@ ls -la /opt/gshsapp/data
 ls -la /opt/gshsapp/backup
 ```
 
-If auth or redirects look wrong:
+인증 또는 리다이렉트가 이상하면:
 
-1. inspect `src/auth.config.ts`
-2. inspect server `.env`
-3. test public route and protected route side by side
-4. confirm no request leaks to the wrong domain
+1. `src/auth.config.ts` 확인
+2. 서버 `.env` 확인
+3. 공개 경로와 보호 경로를 나란히 확인
+4. 다른 도메인으로 요청이 새는지 확인
 
-## 13. Editing Rules For Agents
+## 13. 에이전트 편집 규칙
 
-Do:
+해야 할 것:
 
-- keep edits scoped
-- preserve existing user-visible behavior unless the task says otherwise
-- update docs when operational behavior changes
-- keep deploy logic, docs, and workflows aligned
-- state assumptions if you had to infer missing details
+- 변경 범위를 좁게 유지
+- 요청이 없는 한 기존 동작을 보존
+- 운영 동작이 바뀌면 문서도 함께 수정
+- deploy logic, docs, workflow를 일치시킴
+- 추정이 필요한 경우 가정을 명시
 
-Do not:
+하지 말아야 할 것:
 
-- commit secrets
-- switch deployments back to `latest`
-- move SQLite into ephemeral container paths
-- reintroduce env-only analytics configuration
-- remove self-hosted runner assumptions from private-server deploy docs without replacing them with a viable alternative
-- silently change auth boundaries
+- 시크릿 커밋
+- 배포 기준을 다시 `latest`로 되돌리기
+- SQLite를 임시 컨테이너 경로로 이동
+- 분석 설정을 env 전용으로 되돌리기
+- 사설망 서버 배포 문서에서 self-hosted runner 가정을 이유 없이 제거하기
+- 인증 경계를 조용히 변경하기
 
-If you change any of these areas, update docs in the same turn:
+아래 영역을 바꾸면 같은 턴에 문서도 수정합니다.
 
-- deployment
-- runner setup
-- env requirements
-- admin settings behavior
-- backup behavior
+- 배포
+- runner 설정
+- 환경 변수 요구 사항
+- 관리자 설정 동작
+- 백업 동작
+- 저장소 운영 규칙
 
-## 14. When You Must Update Documentation
+## 14. 문서를 반드시 업데이트해야 하는 경우
 
-Update the docs whenever you change:
+아래를 바꾸면 문서 갱신이 필요합니다.
 
-- workflow behavior
-- deployment layout under `/opt/gshsapp`
-- required env variables
-- auth boundary rules
-- admin settings behavior
-- backup / restore behavior
-- server bootstrap assumptions
+- workflow 동작
+- `/opt/gshsapp` 배포 구조
+- 필수 환경 변수
+- 인증 경계
+- 관리자 설정 동작
+- 백업 / 복원 동작
+- 서버 부트스트랩 가정
+- 운영 모니터링 활성화 방식
 
-Typical files to update together:
+자주 같이 수정해야 하는 문서:
 
 - `AGENTS.md`
 - `README.md`
+- `CONTRIBUTING.md`
 - `DEPLOY.md`
 - `docs/server-bootstrap.md`
 - `docs/cicd-setup.md`
+- `docs/production-launch-runbook.md`
 - `deploy/README.md`
+- `docs/repository-governance.md`
 
-## 15. Completion Checklist
+## 15. 작업 완료 전 체크리스트
 
-Before you finish, confirm:
+완료 전에 아래를 확인합니다.
 
-- the requested code or doc change is implemented
-- no secrets were added
-- relevant tests or checks were run
-- deployment docs still match actual workflows
-- test and production domains are not mixed
-- any changed health or deploy logic still validates the deployed SHA
+- 요청한 코드 또는 문서 변경이 실제 반영됨
+- 시크릿이 추가되지 않음
+- 관련 테스트 또는 검증을 실행함
+- 배포 문서와 실제 workflow가 여전히 일치함
+- 테스트와 운영 도메인이 섞이지 않음
+- 변경한 헬스/배포 로직이 배포 SHA를 계속 검증함
 
-## 16. Human Reference
+## 16. 사람용 참고 문서
 
-Human-oriented companion docs:
+사람 중심 문서:
 
 - [README.md](./README.md)
 - [CONTRIBUTING.md](./CONTRIBUTING.md)
 - [DEPLOY.md](./DEPLOY.md)
 - [docs/server-bootstrap.md](./docs/server-bootstrap.md)
 - [docs/cicd-setup.md](./docs/cicd-setup.md)
+- [docs/production-launch-runbook.md](./docs/production-launch-runbook.md)
 - [deploy/README.md](./deploy/README.md)
-## 17. Preproduction Extensions
 
-Additional operational files:
+## 17. 프리프로덕션 추가 요소
+
+현재 프리프로덕션 안전장치:
 
 - `.github/workflows/preproduction-rehearsal.yml`
 - `deploy/restore-drill.sh`
 - `playwright.config.ts`
 - `e2e/`
 
-Additional checks now expected after deploy-related changes:
+배포 관련 변경 후 추가로 기대되는 검증:
 
 - `npm run test:e2e`
 - `npm run test:e2e:smoke`
-- candidate SHA rehearsal on the test server when the change affects deployment safety
+- 배포 안전성에 영향을 주는 경우 후보 SHA 리허설 확인
 
-Additional test environment secrets:
+추가 테스트 environment 시크릿:
 
 - `E2E_ADMIN_USER`
 - `E2E_ADMIN_PASSWORD`
 
-The new default production gate is: candidate SHA passes smoke, Playwright E2E, restore drill, and `/admin/test` readiness checks on `https://test.gshs.app` before production deployment.
+현재 운영 승격 게이트는 아래와 같습니다.
 
-## 18. Repository Governance
+- 후보 SHA가 smoke check 통과
+- Playwright E2E 통과
+- restore drill 통과
+- `https://test.gshs.app/admin/test` 준비 상태 확인 통과
 
-Repository policy reference:
+## 18. 저장소 운영 규칙
+
+정책 기준 문서:
 
 - `docs/repository-governance.md`
 - `docs/repository-governance.ko.md`
 
-Agents must treat this as binding process documentation.
+에이전트는 이 문서를 강제되는 프로세스 문서로 취급해야 합니다.
 
-Current baseline:
+현재 기본선:
 
-- `main` is protected
-- required checks are `lint`, `test`, and `build`
-- unresolved review conversations block merge
-- force pushes and branch deletion on `main` are blocked
-- admin emergency bypass is still possible and must be treated as incident-only
+- `main` 보호 활성화
+- 필수 체크는 `lint`, `test`, `build`
+- 미해결 리뷰 대화는 머지 차단
+- `main`에 대한 force push 및 branch deletion 금지
+- 관리자 긴급 우회는 사고 대응 용도로만 허용
 
-If you change workflow names, branch protection assumptions, merge policy, or release gates, update the governance doc in the same change.
+워크플로우 이름, 브랜치 보호 가정, 머지 정책, 릴리스 게이트를 바꾸면 이 문서와 거버넌스 문서를 함께 갱신합니다.

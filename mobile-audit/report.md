@@ -1,47 +1,57 @@
-# Mobile UX Audit Report (iPhone 14)
+﻿# 모바일 UX 감사 보고서 (iPhone 14)
 
-## Audited pages
-- Main/key: `/`, `/login`, `/signup`, `/notices`, `/meals`, `/calendar`, `/notifications`, `/admin`
-- Auth-gated observed: `/songs`, `/timetable`, `/me`
-- Full route inventory/checklist: `mobile-audit/checklist.md`
+## 점검 페이지
 
-## Issues found
-1. Bottom navigation safe-area/bottom overlap risk (undefined safe classes + inconsistent page bottom padding).
-2. Several pages had cramped tap targets (<44px) for nav/control/delete actions.
-3. Mobile overflow/crowding in headers/forms (notices header action, me D-Day form, notification actions).
-4. Calendar view used fixed viewport-height container causing mobile scroll-trap pressure.
-5. Login/signup card spacing slightly tight on small mobile viewport + `min-h-screen` instability on iOS browser chrome.
-6. Admin dashboard had light-mode contrast/readability issues (`text-slate-100` on light surfaces) and non-mobile-first action layout.
-7. Horizontal overflow risk globally in edge cases.
+- 주요 페이지: `/`, `/login`, `/signup`, `/notices`, `/meals`, `/calendar`, `/notifications`, `/admin`
+- 인증 게이트 확인: `/songs`, `/timetable`, `/me`
+- 전체 라우트 체크리스트: [mobile-audit/checklist.md](./checklist.md)
 
-## Fixes applied
-### Batch A — shared mobile foundations
-- Added shared utilities in `globals.css`:
-  - `.mobile-page`, `.mobile-safe-bottom`, `.tap-target`
-  - `body { overflow-x: hidden; }`
-- Updated main layout bottom padding to include safe-area with bottom nav.
-- Updated bottom nav + mobile menu for safe-area and touch target sizing.
+## 발견된 문제
 
-### Batch B — key page/component UX
-- Applied `mobile-page mobile-safe-bottom` to major pages (`home/notices/meals/songs/timetable/calendar/me/notifications/admin`).
-- Timetable controls: wider mobile-friendly date nav container, larger prev/next tap targets, responsive grade/class filter layout.
-- Calendar view: removed hard fixed-height behavior on mobile, reduced cramped cell spacing, improved mobile sizing.
-- Notices header/button responsive wrapping and full-width CTA on small screens.
-- Me page: D-Day creation form responsive grid; larger destructive action tap targets.
-- Notifications item: action row wraps safely on mobile, larger delete target.
-- Login/signup: `min-h-[100dvh]` and responsive card padding.
-- Admin dashboard: fixed light-mode contrast and moved quick-actions to responsive grid layout.
+1. 하단 네비게이션과 안전 영역(safe area) 충돌 위험
+2. 일부 페이지에서 44px 미만 탭 타깃 존재
+3. 모바일 헤더/폼에서 요소 밀집 및 줄바꿈 불안정
+4. 캘린더가 고정 높이 컨테이너를 사용해 모바일에서 스크롤 압박 유발
+5. 로그인/회원가입 카드가 작은 화면에서 다소 답답함
+6. 관리자 대시보드의 라이트 모드 대비 부족 및 비모바일 우선 레이아웃
+7. 전역 가로 오버플로우 가능성
 
-## Verification
-- `npm run lint` ✅ (existing warnings only, no new errors)
-- `npm run build` ✅
-- Mobile screenshots captured before/after in `mobile-audit/before` and `mobile-audit/after`.
+## 적용한 수정
 
-## Residual issues / follow-up
-- Some protected flows remained auth-gated in scripted capture (songs/timetable/me), but gating behavior is correct.
-- There are many pre-existing lint warnings across unrelated files (not introduced by this UX batch).
-- Broader deep-pass can still be done for all admin subpages/forms/tables under real admin login to tune per-screen spacing and modal behaviors.
+### 1차 공통 기반 정리
 
-## Commits
-- `c2f4396` — Improve core mobile UX: safe-area spacing, tap targets, responsive key layouts
-- `c39b680` — Add mobile audit checklist/report and iPhone 14 screenshot capture scripts
+- `globals.css`에 공통 모바일 유틸리티 추가
+  - `.mobile-page`
+  - `.mobile-safe-bottom`
+  - `.tap-target`
+- `body { overflow-x: hidden; }` 적용
+- 메인 레이아웃 하단 패딩에 safe area 고려
+- 하단 네비게이션과 모바일 메뉴의 터치 영역 보정
+
+### 핵심 페이지 개선
+
+- 주요 페이지에 `mobile-page mobile-safe-bottom` 적용
+- 시간표 네비게이션 및 필터 UI를 모바일 친화적으로 확장
+- 캘린더의 과도한 고정 높이 제거
+- 공지 헤더와 CTA 줄바꿈 개선
+- 내 정보 페이지 D-Day 폼의 반응형 그리드 조정
+- 알림 아이템 액션 영역 줄바꿈 및 탭 타깃 확대
+- 로그인/회원가입 카드에 `100dvh` 기준 높이와 패딩 개선 적용
+- 관리자 대시보드 빠른 동작 영역을 반응형 그리드로 재구성
+
+## 검증
+
+- `npm run lint`: 기존 경고 외 신규 오류 없음
+- `npm run build`: 통과
+- `mobile-audit/before`, `mobile-audit/after`에 전후 스크린샷 확보
+
+## 남은 과제
+
+- 인증이 필요한 일부 흐름은 실제 로그인 상태에서 추가 점검 가능
+- 저장소 전체에 기존 lint 경고가 일부 남아 있음
+- 관리자 하위 화면과 모달에 대한 추가 모바일 미세조정 여지 있음
+
+## 관련 커밋
+
+- `c2f4396`: 모바일 핵심 UX 개선
+- `c39b680`: 모바일 감사 체크리스트와 보고서 추가

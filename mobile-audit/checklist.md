@@ -1,21 +1,23 @@
-# Mobile UX Audit Checklist (iPhone 14)
+﻿# 모바일 UX 감사 체크리스트 (iPhone 14)
 
-Date: 2026-02-23
-Scope: `src/app/(main)` routes + key flows
+- 점검일: 2026-02-23
+- 범위: `src/app/(main)` 라우트 및 핵심 사용자 흐름
 
-## Key flows
-- [x] Login (`/login`)
-- [x] Signup (`/signup`)
-- [x] Notices list/detail (`/notices`, `/notices/[id]`)
-- [x] Meals (`/meals`)
-- [x] Songs (`/songs`, auth gate observed)
-- [x] Timetable (`/timetable`, auth gate observed)
-- [x] Calendar (`/calendar`)
-- [x] Me (`/me`, auth gate observed)
-- [x] Notifications (`/notifications`)
-- [x] Admin mobile entry (`/admin`)
+## 핵심 흐름
 
-## Route inventory (`src/app/(main)`) 
+- [x] 로그인 (`/login`)
+- [x] 회원가입 (`/signup`)
+- [x] 공지 목록 및 상세 (`/notices`, `/notices/[id]`)
+- [x] 급식 (`/meals`)
+- [x] 음악 신청 (`/songs`, 인증 게이트 확인)
+- [x] 시간표 (`/timetable`, 인증 게이트 확인)
+- [x] 학사일정 (`/calendar`)
+- [x] 내 정보 (`/me`, 인증 게이트 확인)
+- [x] 알림 (`/notifications`)
+- [x] 관리자 진입 (`/admin`)
+
+## 라우트 인벤토리 (`src/app/(main)`)
+
 - [x] `/`
 - [x] `/admin`
 - [x] `/admin/categories`
@@ -55,7 +57,8 @@ Scope: `src/app/(main)` routes + key flows
 - [x] `/utils/random-number`
 - [x] `/utils/seat-arrangement`
 
-## Screenshot artifacts
-- Before: `mobile-audit/before/*.png`
-- After: `mobile-audit/after/*.png`
-- Key comparisons: `home`, `notices`, `meals`, `calendar`, `notifications`, `admin`, plus `login/signup`
+## 스크린샷 산출물
+
+- 수정 전: `mobile-audit/before/*.png`
+- 수정 후: `mobile-audit/after/*.png`
+- 핵심 비교 대상: `home`, `notices`, `meals`, `calendar`, `notifications`, `admin`, `login`, `signup`
