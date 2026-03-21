@@ -3,8 +3,8 @@
 import Script from "next/script";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { logPageView } from "@/lib/actions";
 import { pageview } from "@/lib/ga";
+import { sendNonBlockingJson } from "@/lib/client-event";
 
 export function Analytics() {
   const pathname = usePathname();
@@ -12,7 +12,7 @@ export function Analytics() {
   const [isGoogleAnalyticsReady, setIsGoogleAnalyticsReady] = useState(false);
 
   useEffect(() => {
-    logPageView(pathname);
+    sendNonBlockingJson("/api/log/page-view", { pathname });
   }, [pathname]);
 
   useEffect(() => {
@@ -38,7 +38,7 @@ export function Analytics() {
       }
     }
 
-    loadPublicSettings();
+    void loadPublicSettings();
 
     return () => controller.abort();
   }, []);

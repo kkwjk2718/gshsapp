@@ -68,6 +68,7 @@ jobs:
           install -m 644 deploy/compose.yml "$DEPLOY_PATH/compose.yml"
           install -m 755 deploy/deploy.sh "$DEPLOY_PATH/deploy.sh"
           install -m 755 deploy/offsite-backup.sh "$DEPLOY_PATH/offsite-backup.sh"
+          install -m 755 deploy/run-scheduled-backup.sh "$DEPLOY_PATH/run-scheduled-backup.sh"
           install -m 755 deploy/restore-drill.sh "$DEPLOY_PATH/restore-drill.sh"
       - name: Deploy candidate image to test server
         shell: bash
@@ -237,6 +238,7 @@ jobs:
           install -d "$DEPLOY_PATH" "$DEPLOY_PATH/data" "$DEPLOY_PATH/backup"
           install -m 644 deploy/compose.yml "$DEPLOY_PATH/compose.yml"
           install -m 755 deploy/offsite-backup.sh "$DEPLOY_PATH/offsite-backup.sh"
+          install -m 755 deploy/run-scheduled-backup.sh "$DEPLOY_PATH/run-scheduled-backup.sh"
           install -m 755 deploy/restore-drill.sh "$DEPLOY_PATH/restore-drill.sh"
       - name: Run isolated restore drill
         shell: bash

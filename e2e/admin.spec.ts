@@ -14,6 +14,12 @@ test("admin settings and diagnostics stay healthy after deploy @smoke", async ({
 
   await loginAsAdmin(page);
 
+  await page.goto("/");
+  await expect(page.getByTestId("sidebar-user-link")).toBeVisible();
+  await expect(page.getByTestId("home-welcome-authenticated")).toBeVisible();
+  await expect(page.getByTestId("home-timetable-authenticated")).toBeVisible();
+  await assertNoApplicationError(page);
+
   await page.goto("/admin");
   await expect(page).toHaveURL(/\/admin$/);
   await assertNoApplicationError(page);

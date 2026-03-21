@@ -1,13 +1,10 @@
-import { prisma } from "@/lib/db";
 import { User, Mail, MapPin } from "lucide-react";
+import { getTeacherDirectory } from "@/lib/public-content";
+
+export const dynamic = "force-dynamic";
 
 export default async function TeachersPage() {
-  // Fetch users who have role 'TEACHER' or have a TeacherProfile
-  // Since we don't have TeacherProfile seeded, let's just fetch by role or join
-  const teachers = await prisma.user.findMany({
-    where: { role: "TEACHER" },
-    include: { teacherProfile: true },
-  });
+  const teachers = await getTeacherDirectory();
 
   return (
     <div className="mobile-page mobile-safe-bottom space-y-6">

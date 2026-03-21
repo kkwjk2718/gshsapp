@@ -235,3 +235,32 @@ Implications for CI/CD:
 - green workflow runs from an outdated branch are not enough
 - release candidates should be merged only after required checks are green on the latest base
 - emergency admin bypass should be treated as an incident and documented
+
+## Scheduled Backup Automation
+
+Public page requests no longer trigger scheduled backups.
+
+Reason:
+
+- public TTFB should not depend on backup interval checks
+- backup timing belongs to infrastructure automation, not the page render path
+
+Current implementation:
+
+- workflow: [`.github/workflows/scheduled-backup-test.yml`](../.github/workflows/scheduled-backup-test.yml)
+- host script: [`deploy/run-scheduled-backup.sh`](../deploy/run-scheduled-backup.sh)
+- in-container command: [`scripts/run-scheduled-backup.ts`](../scripts/run-scheduled-backup.ts)
+
+Execution flow:
+
+1. GitHub Actions scheduler wakes up on the `gshs-test` self-hosted runner.
+2. The runner changes into `/opt/gshsapp`.
+3. `run-scheduled-backup.sh` verifies Docker and the running `gshsapp-web` container.
+4. The script runs the existing backup logic inside the container.
+5. The app updates `LAST_BACKUP_AT` only when a backup is actually due and completes successfully.
+
+Notes:
+
+- the current scheduled workflow targets the test environment
+- production can reuse the same pattern later with a `gshs-prod` runner once the production VM is ready
+- backup cadence is still controlled in the admin settings UI through `BACKUP_INTERVAL_DAYS`

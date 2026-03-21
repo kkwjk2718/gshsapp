@@ -2,11 +2,6 @@
 
 import { signIn } from '@/auth';
 import { AuthError } from 'next-auth';
-import { logAction } from "@/lib/logger";
-
-export async function logPageView(pathname: string) {
-  await logAction("PAGE_VIEW", undefined, pathname);
-}
 
 export async function authenticate(
   prevState: string | undefined,

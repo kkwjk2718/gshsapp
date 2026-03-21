@@ -7,6 +7,8 @@ import { ICalForm } from "./ical-form";
 import { RestoreUploadForm } from "./restore-upload-form";
 import { loadSettingsPageData } from "./settings-page-data";
 
+export const dynamic = "force-dynamic";
+
 export default async function SettingsPage() {
   const { mapping, iCalUrl, googleAnalyticsId, backups, intervalDays, warnings } =
     await loadSettingsPageData();

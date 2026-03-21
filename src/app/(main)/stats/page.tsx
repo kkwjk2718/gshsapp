@@ -3,6 +3,8 @@ import { format, differenceInDays } from "date-fns";
 import { Activity, Users, MousePointer2, Music, Utensils, Flame } from "lucide-react";
 import { Metadata } from "next";
 
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
     title: "서버 통계",
     description: "GSHS.app의 누적 사용 통계입니다.",

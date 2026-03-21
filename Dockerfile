@@ -51,10 +51,11 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
 # Copy Prisma schema and migrations (if any) for runtime initialization
 COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
+COPY --from=builder --chown=nextjs:nodejs /app/scripts ./scripts
 
 # Install Prisma CLI in the runner image so we can run 'prisma db push'
 # We install it after copying standalone to ensure it's added to the existing node_modules
-RUN npm install prisma && chown -R nextjs:nodejs /app/node_modules
+RUN npm install prisma tsx && chown -R nextjs:nodejs /app/node_modules
 
 # Copy the entrypoint script
 COPY --chown=nextjs:nodejs docker-entrypoint.sh ./

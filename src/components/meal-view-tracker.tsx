@@ -1,20 +1,19 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { logMealView } from "@/app/(main)/actions/logging";
+import { sendNonBlockingJson } from "@/lib/client-event";
 
 export function MealViewTracker() {
-    const logged = useRef(false);
+  const logged = useRef(false);
 
-    useEffect(() => {
-        // Prevent double logging in React Strict Mode (dev) if possible, 
-        // though strictly Effect runs twice.
-        // In production, runs once.
-        if (logged.current) return;
-        logged.current = true;
+  useEffect(() => {
+    if (logged.current) {
+      return;
+    }
 
-        logMealView();
-    }, []);
+    logged.current = true;
+    sendNonBlockingJson("/api/log/meal-view", {});
+  }, []);
 
-    return null; // Invisible component
+  return null;
 }

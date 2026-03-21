@@ -2,6 +2,8 @@ import { Metadata } from "next";
 import { TestRunner } from "./test-runner";
 import { ShieldCheck } from "lucide-react";
 
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "시스템 진단",
   description: "서버 기능 및 외부 연동 상태를 진단합니다.",

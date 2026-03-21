@@ -163,3 +163,30 @@ OFFSITE_TARGET=/mnt/backups/gshsapp ./offsite-backup.sh
 cd /opt/gshsapp
 OFFSITE_TARGET=backup-user@backup-host:/srv/backups/gshsapp/ ./offsite-backup.sh
 ```
+
+## Scheduled Backup Runner
+
+Automatic backups no longer run from the public web request path.
+
+Current model:
+
+- the app keeps the same backup logic and `LAST_BACKUP_AT` / `BACKUP_INTERVAL_DAYS` settings
+- GitHub Actions triggers the backup on the self-hosted test runner
+- the runner executes [`run-scheduled-backup.sh`](./run-scheduled-backup.sh)
+- that host script enters the running app container and runs [`scripts/run-scheduled-backup.ts`](../scripts/run-scheduled-backup.ts)
+
+Workflow:
+
+- [`.github/workflows/scheduled-backup-test.yml`](../.github/workflows/scheduled-backup-test.yml)
+
+Server requirement:
+
+- `/opt/gshsapp/run-scheduled-backup.sh` must exist and be executable
+- the deployed container name defaults to `gshsapp-web`
+
+Manual run example:
+
+```bash
+cd /opt/gshsapp
+./run-scheduled-backup.sh
+```
