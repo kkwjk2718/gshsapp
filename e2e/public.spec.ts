@@ -6,12 +6,19 @@ test("public routes render without server errors @smoke", async ({ page }) => {
 
   await page.goto("/");
   await expect(page.locator("body")).toContainText("GSHS.app");
+  await expect(page.getByTestId("desktop-home-meta")).toBeVisible();
+  await expect(page.getByTestId("desktop-home-weather")).toBeVisible();
+  await expect(page.getByTestId("desktop-header-notifications")).toBeVisible();
   await expect(page.getByTestId("desktop-utility-login-link")).toBeVisible();
+  await expect(page.locator("main h1").filter({ hasText: "GSHS.app" })).toHaveCount(0);
   await assertDesktopSidebarLayout(page);
   await assertNoApplicationError(page);
 
   await page.goto("/notices");
   await expect(page.locator("main")).toBeVisible();
+  await expect(page.getByTestId("desktop-home-meta")).toHaveCount(0);
+  await expect(page.getByTestId("desktop-home-weather")).toHaveCount(0);
+  await expect(page.getByTestId("desktop-header-notifications")).toBeVisible();
   if ((await page.locator('a[href^="/notices/"]').count()) > 0) {
     await expect(page.locator('a[href^="/notices/"]').first()).toBeVisible();
   }

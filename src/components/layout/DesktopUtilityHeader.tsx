@@ -1,13 +1,16 @@
 "use client";
 
-import { useEffect, useRef, useState, type ComponentType } from "react";
+import { useEffect, useRef, useState, type ComponentType, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ChevronDown, LogIn, Radio, ShieldCheck, User } from "lucide-react";
+import { Bell, ChevronDown, LogIn, Radio, ShieldCheck, User } from "lucide-react";
 import { ModeToggle } from "@/components/mode-toggle";
 import { LogoutButton } from "@/components/auth/logout-button";
 import { useUserSummary } from "@/components/user-summary-provider";
 import { cn } from "@/lib/utils";
+import { NotificationBadge } from "./notification-badge";
+import { RealtimeClock } from "@/components/dashboard-widgets";
+import { HomeHeaderMeta } from "@/app/(main)/home-personalization";
 
 function UtilityLink({
   href,
@@ -142,7 +145,13 @@ function UserMenuDropdown() {
   );
 }
 
-export function DesktopUtilityHeader() {
+export function DesktopUtilityHeader({
+  isHome,
+  homeWeather,
+}: {
+  isHome: boolean;
+  homeWeather?: ReactNode;
+}) {
   const pathname = usePathname();
   const { summary, isLoaded } = useUserSummary();
   const showMusicLink = summary.role === "BROADCAST" || summary.role === "ADMIN";
@@ -156,7 +165,38 @@ export function DesktopUtilityHeader() {
       style={{ borderColor: "var(--border)", backgroundColor: "color-mix(in srgb, var(--surface) 92%, transparent)" }}
     >
       <div className="mx-auto flex min-h-16 w-full items-center justify-between gap-4 px-6 py-3">
-        <div className="flex min-w-0 items-center gap-2">
+        <div className="flex min-w-0 flex-1 items-center gap-3">
+          {isHome ? (
+            <div
+              data-testid="desktop-home-meta"
+              className="flex min-w-0 items-center gap-3 text-xs"
+              style={{ color: "var(--muted)" }}
+            >
+              <RealtimeClock compact />
+              <HomeHeaderMeta />
+            </div>
+          ) : (
+            <div className="flex-1" />
+          )}
+        </div>
+
+        <div className="flex items-center gap-3">
+          {isHome && homeWeather ? (
+            <div data-testid="desktop-home-weather" className="shrink-0">
+              {homeWeather}
+            </div>
+          ) : null}
+
+          <Link
+            href="/notifications"
+            data-testid="desktop-header-notifications"
+            className="relative inline-flex h-11 w-11 items-center justify-center rounded-full border transition-colors"
+            style={{ backgroundColor: "var(--surface-2)", borderColor: "var(--border)", color: "var(--foreground)" }}
+          >
+            <Bell className="h-5 w-5" />
+            <NotificationBadge className="top-2 right-2 border-[color:var(--surface)]" />
+          </Link>
+
           {showMusicLink && (
             <UtilityLink
               href="/music"
@@ -175,9 +215,6 @@ export function DesktopUtilityHeader() {
               testId="desktop-quick-link-admin"
             />
           )}
-        </div>
-
-        <div className="flex items-center gap-3">
           {!isLoaded ? (
             <div
               className="h-11 w-40 animate-pulse rounded-full"
