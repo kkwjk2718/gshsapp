@@ -31,6 +31,10 @@ export function Sidebar({ open, onOpenChange, onNavigate }: SidebarProps) {
             boxShadow: "0 28px 80px color-mix(in srgb, var(--foreground) 14%, transparent)",
           }}
         >
+          <DialogPrimitive.Title className="sr-only">데스크톱 사이드바</DialogPrimitive.Title>
+          <DialogPrimitive.Description className="sr-only">
+            주요 페이지로 이동할 수 있는 데스크톱용 네비게이션 메뉴입니다.
+          </DialogPrimitive.Description>
           <aside className="sidebar-shell flex h-full w-full flex-col px-4 py-4">
             <div className="flex items-center justify-between gap-3 border-b pb-4" style={{ borderColor: "var(--border)" }}>
               <div className="min-w-0">
