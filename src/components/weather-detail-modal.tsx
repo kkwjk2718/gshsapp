@@ -48,10 +48,15 @@ export function WeatherDetailModal({ weather }: WeatherDetailModalProps) {
         <>
             <button
                 onClick={() => setOpen(true)}
-                className="flex items-center gap-2 glass px-3 py-2 rounded-xl hover:brightness-95 active:brightness-90 transition-all"
+                className="flex min-h-10 items-center gap-2 rounded-full border px-3 py-2 transition-all hover:brightness-95 active:brightness-90"
+                style={{
+                    backgroundColor: "color-mix(in srgb, var(--surface-2) 68%, var(--surface) 32%)",
+                    borderColor: "color-mix(in srgb, var(--border) 78%, var(--accent) 22%)",
+                    color: "var(--foreground)",
+                }}
             >
                 {getWeatherIcon(weather.code)}
-                <div className="text-sm font-bold text-slate-800 dark:text-slate-200">{weather.temp}°</div>
+                <div className="text-sm font-semibold">{weather.temp}°</div>
             </button>
 
             <Dialog open={open} onOpenChange={setOpen}>

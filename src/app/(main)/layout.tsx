@@ -1,4 +1,3 @@
-import { Sidebar } from "@/components/layout/Sidebar";
 import { BottomNav } from "@/components/layout/BottomNav";
 import { Footer } from "@/components/layout/Footer";
 import { MainLayoutShell } from "@/components/layout/MainLayoutShell";
@@ -13,7 +12,6 @@ export default function MainLayout({
   return (
     <UserSummaryProvider>
       <div className="flex min-h-screen">
-        <Sidebar />
         <MainLayoutShell footer={<Footer />} homeWeather={<WeatherWidget />}>
           {children}
         </MainLayoutShell>

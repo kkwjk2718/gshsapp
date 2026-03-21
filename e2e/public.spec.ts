@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { assertDesktopSidebarLayout, assertNoApplicationError } from "./utils";
+import { assertDesktopSidebarLayout, assertNoApplicationError, openDesktopSidebar } from "./utils";
 
 test("public routes render without server errors @smoke", async ({ page }) => {
   await page.setViewportSize({ width: 1366, height: 768 });
@@ -14,7 +14,10 @@ test("public routes render without server errors @smoke", async ({ page }) => {
   await assertDesktopSidebarLayout(page);
   await assertNoApplicationError(page);
 
-  await page.goto("/notices");
+  await openDesktopSidebar(page);
+  await page.getByRole("link", { name: "공지사항" }).click();
+  await expect(page).toHaveURL(/\/notices$/);
+  await expect(page.getByTestId("desktop-sidebar-drawer")).toHaveCount(0);
   await expect(page.locator("main")).toBeVisible();
   await expect(page.getByTestId("desktop-home-meta")).toHaveCount(0);
   await expect(page.getByTestId("desktop-home-weather")).toHaveCount(0);

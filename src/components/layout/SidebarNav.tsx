@@ -6,7 +6,7 @@ import { mainNavItems } from "@/config/nav";
 import { cn } from "@/lib/utils";
 import { NotificationBadge } from "./notification-badge";
 
-export function SidebarNav() {
+export function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
 
   return (
@@ -17,6 +17,7 @@ export function SidebarNav() {
           <Link
             key={item.href}
             href={item.href}
+            onClick={onNavigate}
             className={cn(
               "sidebar-nav-link flex w-full min-h-11 items-center gap-3 rounded-xl border px-3.5 py-2.5 text-sm font-medium transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent)]",
               isActive ? "" : "hover:bg-[color:var(--surface-2)]"

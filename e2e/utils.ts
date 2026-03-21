@@ -21,11 +21,20 @@ export async function assertNoApplicationError(page: Page) {
   await expect(page.locator("body")).not.toContainText("Digest:");
 }
 
+export async function openDesktopSidebar(page: Page) {
+  await page.getByTestId("desktop-sidebar-toggle").click();
+  await expect(page.getByTestId("desktop-sidebar-drawer")).toBeVisible();
+}
+
 export async function assertDesktopSidebarLayout(page: Page) {
-  await expect(page.locator("aside")).toBeVisible();
+  await expect(page.getByTestId("desktop-sidebar-toggle")).toBeVisible();
+  await expect(page.getByTestId("desktop-header-brand")).toBeVisible();
+  await expect(page.getByTestId("desktop-sidebar-drawer")).toHaveCount(0);
+
+  await openDesktopSidebar(page);
 
   const metrics = await page.evaluate(() => {
-    const aside = document.querySelector("aside");
+    const aside = document.querySelector('[data-testid="desktop-sidebar-drawer"]');
     const firstLink = aside?.querySelector("nav a");
 
     if (!(aside instanceof HTMLElement) || !(firstLink instanceof HTMLElement)) {
@@ -51,6 +60,13 @@ export async function assertDesktopSidebarLayout(page: Page) {
 
   expect(metrics.asideScrollHeight).toBeLessThanOrEqual(metrics.asideClientHeight + 1);
   expect(metrics.linkWidth).toBeGreaterThanOrEqual(metrics.asideWidth * 0.78);
+
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("desktop-sidebar-drawer")).toHaveCount(0);
+
+  await openDesktopSidebar(page);
+  await page.getByTestId("desktop-sidebar-overlay").click({ position: { x: 1240, y: 680 } });
+  await expect(page.getByTestId("desktop-sidebar-drawer")).toHaveCount(0);
 }
 
 export async function loginAsAdmin(page: Page) {

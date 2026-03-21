@@ -6,9 +6,16 @@ export async function WeatherWidget() {
     const weather = await getWeather();
 
     if (!weather) return (
-        <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400 glass px-3 py-2 rounded-xl h-[40px]">
-            <div className="w-4 h-4 rounded-full bg-slate-300 dark:bg-slate-700/50" />
-            <span className="text-xs">Unavailable</span>
+        <div
+            className="flex min-h-10 items-center gap-2 rounded-full border px-3 py-2 text-xs"
+            style={{
+                backgroundColor: "color-mix(in srgb, var(--surface-2) 68%, var(--surface) 32%)",
+                borderColor: "color-mix(in srgb, var(--border) 78%, var(--accent) 22%)",
+                color: "var(--muted)",
+            }}
+        >
+            <Cloud className="h-4 w-4" />
+            <span>Unavailable</span>
         </div>
     );
 

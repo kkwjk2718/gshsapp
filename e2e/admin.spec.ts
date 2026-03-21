@@ -20,12 +20,12 @@ test("admin settings and diagnostics stay healthy after deploy @smoke", async ({
   await expect(page.getByTestId("desktop-home-weather")).toBeVisible();
   await expect(page.getByTestId("desktop-header-notifications")).toBeVisible();
   await expect(page.getByTestId("desktop-user-menu-trigger")).toBeVisible();
-  await expect(page.getByTestId("desktop-quick-link-music")).toBeVisible();
-  await expect(page.getByTestId("desktop-quick-link-admin")).toBeVisible();
   await expect(page.locator("main h1").filter({ hasText: "GSHS.app" })).toHaveCount(0);
   await assertDesktopSidebarLayout(page);
   await page.getByTestId("desktop-user-menu-trigger").click();
   await expect(page.getByTestId("desktop-user-menu")).toBeVisible();
+  await expect(page.getByTestId("desktop-user-menu-link-music")).toBeVisible();
+  await expect(page.getByTestId("desktop-user-menu-link-admin")).toBeVisible();
   await expect(page.getByTestId("desktop-user-menu-link-me")).toBeVisible();
   await expect(page.getByTestId("desktop-user-menu-theme")).toBeVisible();
   await expect(page.getByTestId("desktop-user-menu-logout")).toBeVisible();
