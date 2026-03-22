@@ -11,29 +11,6 @@ const externalLinks = [
   { label: "GitHub", href: "https://github.com/kkwjk2718/gshsapp" },
 ];
 
-const sidePageLinks = [
-  {
-    label: "About",
-    href: "https://kkwjk2718.github.io/gshs-about-pages/",
-    description: "서비스 소개와 핵심 개요",
-  },
-  {
-    label: "Docs",
-    href: "https://kkwjk2718.github.io/gshs-docs-pages/",
-    description: "사용법과 자주 묻는 질문",
-  },
-  {
-    label: "Status",
-    href: "https://kkwjk2718.github.io/gshs-status-pages/",
-    description: "gshs.app 운영 상태 확인",
-  },
-  {
-    label: "Updates",
-    href: "https://kkwjk2718.github.io/gshs-updates-pages/",
-    description: "배포 이력과 업데이트 소식",
-  },
-];
-
 export function Footer() {
   const currentYear = new Date().getFullYear();
 
@@ -67,32 +44,6 @@ export function Footer() {
                 {link.label}
               </a>
             ))}
-
-            <details className="group relative">
-              <summary className="list-none cursor-pointer rounded-lg border border-slate-200 px-3 py-1.5 font-medium text-slate-600 transition hover:border-indigo-400 hover:text-indigo-500 dark:border-slate-700 dark:text-slate-300">
-                Sites
-              </summary>
-
-              <div className="mt-3 w-full min-w-[18rem] max-w-sm rounded-2xl border border-slate-200 bg-white/95 p-3 shadow-xl backdrop-blur md:absolute md:right-0 md:mt-2 dark:border-slate-700 dark:bg-slate-900/95">
-                <div className="mb-2 text-left text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
-                  사이드 페이지
-                </div>
-                <div className="grid gap-2">
-                  {sidePageLinks.map((link) => (
-                    <a
-                      key={link.href}
-                      href={link.href}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="rounded-xl border border-slate-200 px-3 py-2 text-left transition hover:border-indigo-400 hover:bg-indigo-50/70 dark:border-slate-700 dark:hover:bg-slate-800"
-                    >
-                      <div className="font-semibold text-slate-700 dark:text-slate-100">{link.label}</div>
-                      <div className="mt-0.5 text-[11px] text-slate-500">{link.description}</div>
-                    </a>
-                  ))}
-                </div>
-              </div>
-            </details>
           </div>
 
           <div>

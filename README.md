@@ -1,28 +1,9 @@
-﻿# GSHS.app
+# GSHS.app
 
 경남과학고등학교 학생용 통합 웹 서비스 저장소입니다.
 
 - GitHub: <https://github.com/kkwjk2718/gshsapp>
 - Docker Hub: <https://hub.docker.com/r/kkwjk2718git/gshsapp>
-
-## 사이드 페이지 저장소
-
-GitHub Pages 기반 보조 사이트와 연결된 저장소는 아래와 같습니다.
-
-- About 페이지
-  - 라이브: <https://kkwjk2718.github.io/gshs-about-pages/>
-  - 저장소: <https://github.com/kkwjk2718/gshs-about-pages>
-- Docs 페이지
-  - 라이브: <https://kkwjk2718.github.io/gshs-docs-pages/>
-  - 저장소: <https://github.com/kkwjk2718/gshs-docs-pages>
-- Status 페이지
-  - 라이브: <https://kkwjk2718.github.io/gshs-status-pages/>
-  - 저장소: <https://github.com/kkwjk2718/gshs-status-pages>
-- Updates 페이지
-  - 라이브: <https://kkwjk2718.github.io/gshs-updates-pages/>
-  - 저장소: <https://github.com/kkwjk2718/gshs-updates-pages>
-
-현재는 GitHub Pages 기본 주소를 사용하고 있으며, `about.gshs.app`, `docs.gshs.app`, `status.gshs.app`, `updates.gshs.app` 커스텀 도메인은 DNS 연결 후 전환할 예정입니다.
 
 ## LLM 에이전트 안내
 
