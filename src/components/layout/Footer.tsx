@@ -1,47 +1,56 @@
 import Link from "next/link";
 
+const serviceLinks = [
+  { label: "도움말", href: "/help" },
+  { label: "개인정보처리방침", href: "/privacy" },
+  { label: "서버 통계", href: "/stats" },
+];
+
+const externalLinks = [
+  { label: "학교 홈페이지", href: "https://gshs-h.gne.go.kr" },
+  { label: "About", href: "https://about.gshs.app" },
+  { label: "Docs", href: "https://docs.gshs.app" },
+  { label: "Status", href: "https://status.gshs.app" },
+  { label: "Updates", href: "https://updates.gshs.app" },
+  { label: "GitHub", href: "https://github.com/kkwjk2718/gshsapp" },
+];
+
 export function Footer() {
   const currentYear = new Date().getFullYear();
 
   return (
     <footer className="mt-12 border-t border-slate-200 py-8 text-center text-sm text-slate-500 dark:border-slate-800">
-      <div className="mx-auto flex max-w-5xl flex-col items-center justify-between gap-4 px-4 md:flex-row">
+      <div className="mx-auto flex max-w-5xl flex-col gap-5 px-4 md:flex-row md:items-start md:justify-between">
         <div className="text-left">
           <p className="font-semibold text-slate-700 dark:text-slate-300">GSHS.app</p>
-          <p className="mt-1 text-xs">경남과학고등학교 정보부 &middot; IEUM</p>
+          <p className="mt-1 text-xs">경남과학고등학교 정보부 · IEUM</p>
           <p className="mt-1 text-xs">&copy; {currentYear} GSHS.app. All rights reserved.</p>
         </div>
 
-        <div className="flex flex-col items-center gap-4 text-xs md:flex-row">
-          <div className="flex flex-wrap items-center justify-center gap-4">
-            <Link href="/help" className="transition-colors hover:text-indigo-500">
-              도움말
-            </Link>
-            <Link href="/privacy" className="transition-colors hover:text-indigo-500">
-              개인정보처리방침
-            </Link>
-            <Link href="/stats" className="transition-colors hover:text-indigo-500">
-              서버 통계
-            </Link>
-            <a
-              href="https://gshs-h.gne.go.kr"
-              target="_blank"
-              rel="noreferrer"
-              className="transition-colors hover:text-indigo-500"
-            >
-              학교 홈페이지
-            </a>
-            <a
-              href="https://github.com/kkwjk2718/gshsapp"
-              target="_blank"
-              rel="noreferrer"
-              className="transition-colors hover:text-indigo-500"
-            >
-              GitHub
-            </a>
+        <div className="flex flex-1 flex-col items-center gap-4 text-xs md:items-end">
+          <div className="flex flex-wrap items-center justify-center gap-4 md:justify-end">
+            {serviceLinks.map((link) => (
+              <Link key={link.href} href={link.href} className="transition-colors hover:text-indigo-500">
+                {link.label}
+              </Link>
+            ))}
           </div>
 
-          <div className="md:ml-4 md:border-l md:border-slate-300 md:pl-4 dark:md:border-slate-700">
+          <div className="flex flex-wrap items-center justify-center gap-4 md:justify-end">
+            {externalLinks.map((link) => (
+              <a
+                key={link.href}
+                href={link.href}
+                target="_blank"
+                rel="noreferrer"
+                className="transition-colors hover:text-indigo-500"
+              >
+                {link.label}
+              </a>
+            ))}
+          </div>
+
+          <div>
             <Link
               href="/report"
               className="inline-flex items-center gap-1.5 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-1.5 font-medium text-rose-400 transition-colors hover:bg-rose-500/20"

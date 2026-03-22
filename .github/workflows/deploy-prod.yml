@@ -9,7 +9,7 @@ on:
         type: string
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: deploy-production
@@ -228,3 +228,81 @@ jobs:
           if [[ "$DEPLOY_RESULT" != "success" || "$SMOKE_RESULT" != "success" || "$E2E_RESULT" != "success" ]]; then
             exit 1
           fi
+
+  release:
+    runs-on: ubuntu-latest
+    needs:
+      - deploy
+      - smoke
+      - e2e
+      - report
+    if: ${{ needs.deploy.result == 'success' && needs.smoke.result == 'success' && needs.e2e.result == 'success' && needs.report.result == 'success' }}
+    steps:
+      - name: Create or update GitHub Release
+        uses: actions/github-script@v8
+        env:
+          IMAGE_TAG: ${{ inputs.image_tag }}
+          HEALTH_VERSION: ${{ needs.smoke.outputs.health_version }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          TZ: Asia/Seoul
+        with:
+          script: |
+            const imageTag = process.env.IMAGE_TAG;
+            const healthVersion = process.env.HEALTH_VERSION || imageTag;
+            const runUrl = process.env.RUN_URL;
+            const shortSha = imageTag.replace(/^sha-/, "").slice(0, 7);
+            const now = new Date();
+            const seoulDate = new Intl.DateTimeFormat("en-CA", {
+              timeZone: "Asia/Seoul",
+              year: "numeric",
+              month: "2-digit",
+              day: "2-digit",
+            }).format(now);
+            const releaseName = `Production ${shortSha} - ${seoulDate}`;
+            const body = [
+              `- 배포 태그: ${imageTag}`,
+              `- 헬스 버전: ${healthVersion}`,
+              `- 운영 주소: https://gshs.app`,
+              `- 배포 실행 기록: ${runUrl}`,
+            ].join("\n");
+
+            let existingRelease = null;
+
+            try {
+              const { data } = await github.rest.repos.getReleaseByTag({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                tag: imageTag,
+              });
+              existingRelease = data;
+            } catch (error) {
+              if (error.status !== 404) {
+                throw error;
+              }
+            }
+
+            if (existingRelease) {
+              await github.rest.repos.updateRelease({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                release_id: existingRelease.id,
+                tag_name: imageTag,
+                name: releaseName,
+                body,
+                draft: false,
+                prerelease: false,
+              });
+              core.info(`Updated existing release for ${imageTag}`);
+            } else {
+              await github.rest.repos.createRelease({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                tag_name: imageTag,
+                name: releaseName,
+                body,
+                draft: false,
+                prerelease: false,
+                generate_release_notes: false,
+              });
+              core.info(`Created release for ${imageTag}`);
+            }
