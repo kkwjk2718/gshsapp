@@ -11,7 +11,7 @@ export type DiagnosticResult = {
 };
 
 export const DEFAULT_BACKUP_MAX_AGE_HOURS = 24;
-export const MIN_FREE_DISK_BYTES = 1024 ** 3;
+export const MIN_FREE_DISK_BYTES = 768 * 1024 ** 2;
 export const EXPECTED_DATABASE_URL = "file:/app/data/dev.db";
 
 type StatFsLike = {
