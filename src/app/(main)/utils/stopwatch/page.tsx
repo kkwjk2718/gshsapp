@@ -1,10 +1,10 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Clock3, Flag, Pause, Play, RotateCcw } from "lucide-react";
+import { Clock3, Flag, Pause, Play, RotateCcw } from "lucide-react";
 
 import { formatClock } from "../time-format";
+import { UtilsBackLink } from "../utils-back-link";
 
 type LapRecord = {
   id: number;
@@ -37,9 +37,9 @@ export default function StopwatchPage() {
       return null;
     }
 
-    return laps.reduce((fastest, current) => (
-      current.lapMs < fastest.lapMs ? current : fastest
-    )).id;
+    return laps.reduce((fastest, current) =>
+      current.lapMs < fastest.lapMs ? current : fastest,
+    ).id;
   }, [laps]);
 
   const slowestLapId = useMemo(() => {
@@ -47,9 +47,9 @@ export default function StopwatchPage() {
       return null;
     }
 
-    return laps.reduce((slowest, current) => (
-      current.lapMs > slowest.lapMs ? current : slowest
-    )).id;
+    return laps.reduce((slowest, current) =>
+      current.lapMs > slowest.lapMs ? current : slowest,
+    ).id;
   }, [laps]);
 
   const handleStart = () => {
@@ -90,19 +90,15 @@ export default function StopwatchPage() {
   return (
     <div className="mobile-page mobile-safe-bottom mx-auto max-w-5xl space-y-6">
       <div className="mb-6 flex items-center gap-3">
-        <Link
-          href="/utils"
-          aria-label="도구 모음으로 돌아가기"
-          className="tap-target -ml-2 mr-2 rounded-full p-2 transition-colors hover:bg-slate-100 dark:hover:bg-slate-800"
-        >
-          <ArrowLeft className="h-5 w-5 text-slate-500" />
-        </Link>
+        <UtilsBackLink />
         <div className="rounded-full bg-amber-100 p-3 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400">
           <Clock3 className="h-6 w-6" />
         </div>
         <div>
           <h1 className="text-2xl font-bold">스톱워치</h1>
-          <p className="text-slate-500">경과 시간을 재고 랩 기록을 남겨 활동이나 측정 시간을 추적합니다.</p>
+          <p className="text-slate-500">
+            경과 시간을 재고 랩 기록을 남겨 구간별 시간을 비교할 수 있습니다.
+          </p>
         </div>
       </div>
 
@@ -111,7 +107,9 @@ export default function StopwatchPage() {
           <div className="mb-6 flex items-center justify-between">
             <div>
               <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100">실시간 측정</h2>
-              <p className="text-sm text-slate-500 dark:text-slate-400">랩 버튼으로 구간 시간을 바로 남길 수 있습니다.</p>
+              <p className="text-sm text-slate-500 dark:text-slate-400">
+                랩 버튼으로 구간 시간을 바로 기록할 수 있습니다.
+              </p>
             </div>
             <span
               className="rounded-full px-3 py-1 text-xs font-medium"
@@ -233,7 +231,7 @@ export default function StopwatchPage() {
           ) : (
             <div className="flex min-h-[18rem] flex-col items-center justify-center gap-3 rounded-3xl border border-dashed border-slate-200 text-center text-slate-400 dark:border-slate-700">
               <Clock3 className="h-10 w-10 opacity-30" />
-              <p>스톱워치를 시작한 뒤 랩 기록 버튼을 눌러 구간 시간을 남겨보세요.</p>
+              <p>스톱워치를 시작한 뒤 랩 기록 버튼으로 구간 시간을 남겨 보세요.</p>
             </div>
           )}
         </div>

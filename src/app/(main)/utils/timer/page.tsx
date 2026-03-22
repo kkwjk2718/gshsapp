@@ -1,11 +1,11 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Pause, Play, RotateCcw, Timer } from "lucide-react";
+import { Pause, Play, RotateCcw, Timer } from "lucide-react";
 import { toast } from "sonner";
 
 import { formatClock } from "../time-format";
+import { UtilsBackLink } from "../utils-back-link";
 
 const PRESETS = [
   { label: "1분", minutes: 1, seconds: 0 },
@@ -65,9 +65,10 @@ export default function TimerPage() {
     return () => window.clearInterval(timer);
   }, [isRunning]);
 
-  const progress = initialDurationMs > 0
-    ? Math.min(100, Math.max(0, ((initialDurationMs - remainingMs) / initialDurationMs) * 100))
-    : 0;
+  const progress =
+    initialDurationMs > 0
+      ? Math.min(100, Math.max(0, ((initialDurationMs - remainingMs) / initialDurationMs) * 100))
+      : 0;
 
   const handleStart = () => {
     if (remainingMs <= 0) {
@@ -125,19 +126,15 @@ export default function TimerPage() {
   return (
     <div className="mobile-page mobile-safe-bottom mx-auto max-w-5xl space-y-6">
       <div className="mb-6 flex items-center gap-3">
-        <Link
-          href="/utils"
-          aria-label="도구 모음으로 돌아가기"
-          className="tap-target -ml-2 mr-2 rounded-full p-2 transition-colors hover:bg-slate-100 dark:hover:bg-slate-800"
-        >
-          <ArrowLeft className="h-5 w-5 text-slate-500" />
-        </Link>
+        <UtilsBackLink />
         <div className="rounded-full bg-emerald-100 p-3 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400">
           <Timer className="h-6 w-6" />
         </div>
         <div>
           <h1 className="text-2xl font-bold">타이머</h1>
-          <p className="text-slate-500">집중 시간, 발표 시간, 쉬는 시간을 빠르게 설정해 카운트다운합니다.</p>
+          <p className="text-slate-500">
+            집중 시간, 발표 시간, 쉬는 시간을 빠르게 설정해 카운트다운합니다.
+          </p>
         </div>
       </div>
 
@@ -146,7 +143,9 @@ export default function TimerPage() {
           <div className="mb-6 flex items-center justify-between gap-3">
             <div>
               <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100">카운트다운</h2>
-              <p className="text-sm text-slate-500 dark:text-slate-400">시작 후에는 일시정지와 재시작을 반복할 수 있습니다.</p>
+              <p className="text-sm text-slate-500 dark:text-slate-400">
+                시작 전에 미리 설정하고, 일시정지와 재시작을 반복할 수 있습니다.
+              </p>
             </div>
             <span
               className="rounded-full px-3 py-1 text-xs font-medium"
@@ -259,8 +258,8 @@ export default function TimerPage() {
           </div>
 
           <div className="mt-6 rounded-2xl bg-slate-50 p-4 text-sm text-slate-500 dark:bg-slate-900/70 dark:text-slate-400">
-            <p>타이머가 끝나면 화면 알림이 표시됩니다.</p>
-            <p className="mt-2">분이나 초를 수정하면 대기 상태에서 즉시 새 시간으로 반영됩니다.</p>
+            <p>타이머가 끝나면 알림 토스트가 표시됩니다.</p>
+            <p className="mt-2">분과 초를 수정하면 대기 상태에서 즉시 새 시간으로 반영됩니다.</p>
           </div>
         </div>
       </div>
