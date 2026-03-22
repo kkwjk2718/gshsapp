@@ -1,5 +1,6 @@
 import { CalendarView } from "./calendar-view";
 import { getCalendarSchedules } from "@/lib/public-content";
+import { getKSTDate } from "@/lib/date-utils";
 import { Metadata } from "next";
 
 export const dynamic = "force-dynamic";
@@ -11,10 +12,11 @@ export const metadata: Metadata = {
 
 export default async function CalendarPage() {
   const allSchedules = await getCalendarSchedules();
+  const initialDateIso = getKSTDate().toISOString();
 
   return (
     <div className="mobile-page mobile-safe-bottom">
-      <CalendarView schedules={allSchedules} />
+      <CalendarView schedules={allSchedules} initialDateIso={initialDateIso} />
     </div>
   );
 }

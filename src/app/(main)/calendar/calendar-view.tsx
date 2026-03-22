@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { format, addMonths, subMonths, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, isSameMonth, isSameDay, isToday } from "date-fns";
 import { ko } from "date-fns/locale";
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, ExternalLink } from "lucide-react";
@@ -17,9 +17,16 @@ interface ScheduleItem {
     isNEIS?: boolean;
 }
 
-export function CalendarView({ schedules }: { schedules: ScheduleItem[] }) {
-    const [currentDate, setCurrentDate] = useState(new Date());
-    const [selectedDate, setSelectedDate] = useState(new Date());
+export function CalendarView({
+    schedules,
+    initialDateIso,
+}: {
+    schedules: ScheduleItem[];
+    initialDateIso: string;
+}) {
+    const initialDate = useMemo(() => new Date(initialDateIso), [initialDateIso]);
+    const [currentDate, setCurrentDate] = useState(() => new Date(initialDate));
+    const [selectedDate, setSelectedDate] = useState(() => new Date(initialDate));
 
     const monthStart = startOfMonth(currentDate);
     const monthEnd = endOfMonth(monthStart);
