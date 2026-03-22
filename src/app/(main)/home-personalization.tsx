@@ -182,7 +182,7 @@ export function HomeWelcomeCard({ publicDDay }: { publicDDay: HomeDdayPayload | 
           </p>
         ) : (
           <p className="text-xs" style={{ color: "var(--muted)" }}>
-            {"\uc624\ub298\uc740 \uac1c\uc778 \uc77c\uc815\uc774 \uc5c6\uc2b5\ub2c8\ub2e4."}
+            {"\uc624\ub298\uc740 \uc77c\uc815\uc774 \uc5c6\uc2b5\ub2c8\ub2e4."}
           </p>
         )}
       </div>

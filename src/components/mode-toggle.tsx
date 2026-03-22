@@ -5,7 +5,15 @@ import { Moon, Sun } from "lucide-react"
 import { useTheme } from "next-themes"
 import { cn } from "@/lib/utils"
 
-export function ModeToggle({ className }: { className?: string }) {
+export function ModeToggle({
+  className,
+  testId,
+  style,
+}: {
+  className?: string
+  testId?: string
+  style?: React.CSSProperties
+}) {
   const { setTheme, resolvedTheme } = useTheme()
   const [mounted, setMounted] = React.useState(false)
 
@@ -15,7 +23,7 @@ export function ModeToggle({ className }: { className?: string }) {
 
   if (!mounted) {
     return (
-      <div className={cn("relative p-2 w-9 h-9", className)}>
+      <div data-testid={testId} className={cn("relative p-2 w-9 h-9", className)} style={style}>
         <div className="w-5 h-5 rounded-full" style={{ backgroundColor: "var(--border)" }} />
       </div>
     )
@@ -23,8 +31,9 @@ export function ModeToggle({ className }: { className?: string }) {
 
   return (
     <button
+      data-testid={testId}
       className={cn("relative p-2 rounded-full transition-colors", className)}
-      style={{ color: "var(--foreground)", backgroundColor: "transparent" }}
+      style={{ color: "var(--foreground)", backgroundColor: "transparent", ...style }}
       onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
       title="테마 변경"
     >

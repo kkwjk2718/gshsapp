@@ -31,6 +31,7 @@ test("public routes render without server errors @smoke", async ({ page }) => {
   await expect(page.locator("body")).toContainText("GSHS.app");
   await expect(page.getByTestId("desktop-home-meta")).toBeVisible();
   await expect(page.getByTestId("desktop-home-weather")).toBeVisible();
+  await expect(page.getByTestId("desktop-header-theme-toggle")).toBeVisible();
   await expect(page.getByTestId("desktop-header-notifications")).toBeVisible();
   await expect(page.getByTestId("desktop-utility-login-link")).toBeVisible();
   await expect(page.locator("main h1").filter({ hasText: "GSHS.app" })).toHaveCount(0);
@@ -74,6 +75,11 @@ test("public routes render without server errors @smoke", async ({ page }) => {
   await page.goto("/login");
   await expect(page.locator("#userId")).toBeVisible();
   await expect(page.locator("#password")).toBeVisible();
+  await assertNoApplicationError(page);
+
+  await page.goto("/help");
+  await expect(page.locator("main")).toContainText("문의/제안");
+  await expect(page.locator("main")).toContainText("데이터 출처 및 갱신 기준");
   await assertNoApplicationError(page);
 
   await page.goto("/utils");

@@ -56,11 +56,11 @@ const guideSections = [
     title: "주요 기능 사용법",
     icon: BookOpen,
     items: [
-      "공지사항: 학교 공지와 행사 안내를 카테고리별로 확인할 수 있고, 관리자 권한이 있으면 작성과 수정이 가능합니다.",
-      "급식/학사일정: 외부 학교 정보 API를 바탕으로 오늘의 급식과 예정된 일정을 빠르게 확인합니다.",
-      "링크모음/교내 사이트: 자주 쓰는 학습 링크와 학교 관련 사이트를 분리해 제공하며, 교내 사이트는 로그인 후 접근할 수 있습니다.",
-      "기상곡: 신청 가능한 요일에만 곡을 제출할 수 있고, 진행 상태는 알림과 방송부 화면에서 확인됩니다.",
-      "도구: 계산기, 타이머, 스톱워치 등 학교 생활에 자주 쓰는 보조 기능을 제공합니다.",
+      "공지사항: 공지 목록에서 카테고리와 최신 글을 확인하고, 상세 페이지에서 첨부 정보와 작성일을 함께 볼 수 있습니다.",
+      "급식/학사일정: 오늘 기준 정보를 먼저 보여주고, 이전·다음 날짜 이동으로 원하는 일정을 빠르게 확인할 수 있습니다.",
+      "링크모음/교내 사이트: 자주 쓰는 공개 링크와 로그인 후 접근 가능한 학교 전용 링크를 나누어 제공합니다.",
+      "기상곡: 신청 가능한 요일에만 곡을 제출할 수 있고, 승인·반려·재생 상태는 알림 센터와 방송부 화면에서 이어서 확인됩니다.",
+      "도구: 바이트 계산기, 랜덤 숫자, 타이머, 스톱워치, 자리 뽑기처럼 수업과 행사 때 자주 쓰는 기능을 모아 제공합니다.",
     ],
   },
   {
@@ -118,41 +118,85 @@ export default function HelpPage() {
         </div>
       </section>
 
-      <section className="grid gap-6 border-t border-slate-200 pt-8 dark:border-slate-800 md:grid-cols-2">
-        <div className="glass rounded-2xl p-6 transition-colors hover:border-indigo-500/30">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-rose-500/10 text-rose-500">
-            <AlertCircle className="h-5 w-5" />
-          </div>
-          <h3 className="mt-4 text-lg font-bold text-slate-900 dark:text-white">문제가 발생했나요?</h3>
-          <p className="mt-2 text-sm leading-6 text-slate-500">
-            오류 화면, 데이터 누락, 버튼 동작 문제처럼 서비스 이용 중 문제가 생겼다면 오류 신고를 남겨 주세요.
-            가능한 한 어떤 화면에서 무슨 문제가 났는지 같이 적어 주시면 처리 속도가 빨라집니다.
+      <section id="data-sources" className="space-y-4 border-t border-slate-200 pt-8 dark:border-slate-800">
+        <div className="space-y-2 px-2">
+          <h2 className="text-xl font-bold text-slate-900 dark:text-white">데이터 출처 및 갱신 기준</h2>
+          <p className="text-sm leading-6 text-slate-500">
+            GSHS.app은 학교 생활에 필요한 정보를 여러 출처에서 모아 제공합니다. 화면에 보이는 정보는 아래 기준으로
+            수집·캐시되며, 원본 시스템의 지연이나 점검 상황에 따라 반영 시간이 조금 달라질 수 있습니다.
           </p>
-          <Link
-            href="/report"
-            className="mt-4 inline-flex items-center gap-2 text-sm font-bold text-rose-500 transition-colors hover:text-rose-600"
-          >
-            오류 신고하러 가기 &rarr;
-          </Link>
+        </div>
+        <div className="grid gap-4 md:grid-cols-3">
+          <div className="glass rounded-2xl p-6">
+            <h3 className="text-base font-bold text-slate-900 dark:text-white">급식</h3>
+            <p className="mt-3 text-sm leading-6 text-slate-500">
+              NEIS Open API를 기준으로 불러오며, 일반적으로 최대 1시간 단위 캐시 후 새로 갱신됩니다.
+            </p>
+          </div>
+          <div className="glass rounded-2xl p-6">
+            <h3 className="text-base font-bold text-slate-900 dark:text-white">학사일정</h3>
+            <p className="mt-3 text-sm leading-6 text-slate-500">
+              내부 일정, Google Calendar iCal, NEIS 학사일정 정보를 함께 사용합니다. 화면 캐시는 보통 5분 단위이며,
+              일부 NEIS 원본 데이터는 최대 24시간 캐시 구간이 포함됩니다.
+            </p>
+          </div>
+          <div className="glass rounded-2xl p-6">
+            <h3 className="text-base font-bold text-slate-900 dark:text-white">공지사항</h3>
+            <p className="mt-3 text-sm leading-6 text-slate-500">
+              관리자 작성 내부 데이터가 기준이며, 공개 화면에는 보통 최대 5분 이내로 반영됩니다.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section
+        id="contact"
+        className="space-y-4 border-t border-slate-200 pt-8 dark:border-slate-800"
+      >
+        <div className="space-y-2 px-2">
+          <h2 className="text-xl font-bold text-slate-900 dark:text-white">문의/제안</h2>
+          <p className="text-sm leading-6 text-slate-500">
+            오류 신고는 별도 화면에서 접수하고, 기능 제안이나 일반 운영 문의는 이메일로 받습니다. 내용에 따라 가장 빠른
+            경로를 선택해 주세요.
+          </p>
         </div>
 
-        <div className="glass rounded-2xl p-6 transition-colors hover:border-indigo-500/30">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-500/10 text-indigo-500">
-            <Mail className="h-5 w-5" />
+        <div className="grid gap-6 md:grid-cols-2">
+          <div className="glass rounded-2xl p-6 transition-colors hover:border-indigo-500/30">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-rose-500/10 text-rose-500">
+              <AlertCircle className="h-5 w-5" />
+            </div>
+            <h3 className="mt-4 text-lg font-bold text-slate-900 dark:text-white">문제가 발생했나요?</h3>
+            <p className="mt-2 text-sm leading-6 text-slate-500">
+              오류 화면, 데이터 누락, 버튼 동작 문제처럼 서비스 이용 중 문제가 생겼다면 오류 신고를 남겨 주세요.
+              가능한 한 어떤 화면에서 무슨 문제가 났는지 같이 적어 주시면 처리 속도가 빨라집니다.
+            </p>
+            <Link
+              href="/report"
+              className="mt-4 inline-flex items-center gap-2 text-sm font-bold text-rose-500 transition-colors hover:text-rose-600"
+            >
+              오류 신고하러 가기 &rarr;
+            </Link>
           </div>
-          <h3 className="mt-4 text-lg font-bold text-slate-900 dark:text-white">개발자에게 문의하기</h3>
-          <p className="mt-2 text-sm leading-6 text-slate-500">
-            기능 제안, 계정 관련 문의, 서비스 개선 의견은 아래 메일로 보내 주세요. 오류 신고가 아니라 운영 문의라면 이메일이 가장 빠릅니다.
-          </p>
-          <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-200">
-            admin@gshs.app
+
+          <div className="glass rounded-2xl p-6 transition-colors hover:border-indigo-500/30">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-500/10 text-indigo-500">
+              <Mail className="h-5 w-5" />
+            </div>
+            <h3 className="mt-4 text-lg font-bold text-slate-900 dark:text-white">개발자에게 문의하기</h3>
+            <p className="mt-2 text-sm leading-6 text-slate-500">
+              기능 제안, 계정 관련 문의, 서비스 개선 의견은 아래 메일로 보내 주세요. 오류 신고가 아니라 운영 문의라면 이메일이 가장 빠릅니다.
+            </p>
+            <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-200">
+              admin@gshs.app
+            </div>
+            <a
+              href="mailto:admin@gshs.app"
+              className="mt-4 inline-flex items-center gap-2 text-sm font-bold text-indigo-500 transition-colors hover:text-indigo-600"
+            >
+              메일 보내기 &rarr;
+            </a>
           </div>
-          <a
-            href="mailto:admin@gshs.app"
-            className="mt-4 inline-flex items-center gap-2 text-sm font-bold text-indigo-500 transition-colors hover:text-indigo-600"
-          >
-            메일 보내기 &rarr;
-          </a>
         </div>
       </section>
     </div>

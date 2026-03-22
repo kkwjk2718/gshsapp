@@ -1,12 +1,15 @@
 import Link from "next/link";
+import { APP_SEMVER_TAG } from "@/lib/app-version";
 
 const serviceLinks = [
   { label: "도움말", href: "/help" },
+  { label: "문의/제안", href: "/help#contact" },
   { label: "개인정보 처리방침", href: "/privacy" },
   { label: "서비스 통계", href: "/stats" },
 ];
 
 const externalLinks = [
+  { label: "Status", href: "https://status.gshs.app" },
   { label: "학교 홈페이지", href: "https://gshs-h.gne.go.kr" },
   { label: "GitHub", href: "https://github.com/kkwjk2718/gshsapp" },
 ];
@@ -20,6 +23,7 @@ export function Footer() {
         <div className="text-left">
           <p className="font-semibold text-slate-700 dark:text-slate-300">GSHS.app</p>
           <p className="mt-1 text-xs">경남과학고등학교 정보부 · IEUM</p>
+          <p className="mt-1 text-xs">현재 버전 {APP_SEMVER_TAG}</p>
           <p className="mt-1 text-xs">&copy; {currentYear} GSHS.app. All rights reserved.</p>
         </div>
 

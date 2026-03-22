@@ -173,15 +173,6 @@ function UserMenuDropdown({
             <span>내 정보</span>
           </Link>
 
-          <div
-            data-testid="desktop-user-menu-theme"
-            className="mt-1 flex min-h-10 items-center justify-between gap-3 rounded-2xl px-3 py-2"
-            style={{ color: "var(--foreground)" }}
-          >
-            <span className="text-sm font-medium">테마 변경</span>
-            <ModeToggle className="border border-[color:var(--border)] bg-[color:var(--surface-2)]" />
-          </div>
-
           <LogoutButton
             className="mt-1 min-h-10 rounded-2xl px-3 py-2 text-sm font-medium hover:bg-[color:var(--surface-2)]"
             next={pathname === "/login" ? "/" : pathname}
@@ -270,6 +261,15 @@ export function DesktopUtilityHeader({
                 {homeWeather}
               </div>
             ) : null}
+
+            <ModeToggle
+              testId="desktop-header-theme-toggle"
+              className="inline-flex h-11 w-11 items-center justify-center rounded-full border"
+              style={{
+                backgroundColor: "color-mix(in srgb, var(--surface-2) 68%, var(--surface) 32%)",
+                borderColor: "color-mix(in srgb, var(--border) 78%, var(--accent) 22%)",
+              }}
+            />
 
             <Link
               href="/notifications"

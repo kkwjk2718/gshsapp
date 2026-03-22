@@ -238,19 +238,29 @@ jobs:
       - report
     if: ${{ needs.deploy.result == 'success' && needs.smoke.result == 'success' && needs.e2e.result == 'success' && needs.report.result == 'success' }}
     steps:
+      - uses: actions/checkout@v5
+      - id: package_version
+        name: Read package version
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf 'value=%s\n' "$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
       - name: Create or update GitHub Release
         uses: actions/github-script@v8
         env:
           IMAGE_TAG: ${{ inputs.image_tag }}
           HEALTH_VERSION: ${{ needs.smoke.outputs.health_version }}
+          PACKAGE_VERSION: ${{ steps.package_version.outputs.value }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           TZ: Asia/Seoul
         with:
           script: |
             const imageTag = process.env.IMAGE_TAG;
             const healthVersion = process.env.HEALTH_VERSION || imageTag;
+            const packageVersion = process.env.PACKAGE_VERSION;
             const runUrl = process.env.RUN_URL;
-            const shortSha = imageTag.replace(/^sha-/, "").slice(0, 7);
+            const releaseTag = `v${packageVersion}`;
+            const targetCommitish = imageTag.replace(/^sha-/, "");
             const now = new Date();
             const seoulDate = new Intl.DateTimeFormat("en-CA", {
               timeZone: "Asia/Seoul",
@@ -258,8 +268,9 @@ jobs:
               month: "2-digit",
               day: "2-digit",
             }).format(now);
-            const releaseName = `Production ${shortSha} - ${seoulDate}`;
+            const releaseName = `${releaseTag} - ${seoulDate}`;
             const body = [
+              `- 서비스 버전: ${releaseTag}`,
               `- 배포 태그: ${imageTag}`,
               `- 헬스 버전: ${healthVersion}`,
               `- 운영 주소: https://gshs.app`,
@@ -267,12 +278,26 @@ jobs:
             ].join("\n");
 
             let existingRelease = null;
+            let existingTagRef = null;
+
+            try {
+              const { data } = await github.rest.git.getRef({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                ref: `tags/${releaseTag}`,
+              });
+              existingTagRef = data;
+            } catch (error) {
+              if (error.status !== 404) {
+                throw error;
+              }
+            }
 
             try {
               const { data } = await github.rest.repos.getReleaseByTag({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                tag: imageTag,
+                tag: releaseTag,
               });
               existingRelease = data;
             } catch (error) {
@@ -281,28 +306,50 @@ jobs:
               }
             }
 
+            if (existingTagRef && !existingRelease) {
+              throw new Error(
+                `${releaseTag} 태그가 이미 존재합니다. package.json 버전을 먼저 올린 뒤 다시 배포해 주세요.`
+              );
+            }
+
             if (existingRelease) {
+              const existingBody = existingRelease.body || "";
+              const existingImageTag = existingBody.match(/^- 배포 태그: (.+)$/m)?.[1]?.trim();
+
+              if (!existingImageTag) {
+                throw new Error(
+                  `${releaseTag} 릴리스가 이미 존재하지만 기존 배포 태그를 확인할 수 없습니다. 버전을 새로 올린 뒤 다시 배포해 주세요.`
+                );
+              }
+
+              if (existingImageTag !== imageTag) {
+                throw new Error(
+                  `${releaseTag} 릴리스가 이미 ${existingImageTag}에 사용되었습니다. package.json 버전을 먼저 올린 뒤 다시 배포해 주세요.`
+                );
+              }
+
               await github.rest.repos.updateRelease({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 release_id: existingRelease.id,
-                tag_name: imageTag,
+                tag_name: releaseTag,
                 name: releaseName,
                 body,
                 draft: false,
                 prerelease: false,
               });
-              core.info(`Updated existing release for ${imageTag}`);
+              core.info(`Updated existing release for ${releaseTag}`);
             } else {
               await github.rest.repos.createRelease({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                tag_name: imageTag,
+                tag_name: releaseTag,
                 name: releaseName,
                 body,
                 draft: false,
                 prerelease: false,
+                target_commitish: targetCommitish,
                 generate_release_notes: false,
               });
-              core.info(`Created release for ${imageTag}`);
+              core.info(`Created release for ${releaseTag}`);
             }

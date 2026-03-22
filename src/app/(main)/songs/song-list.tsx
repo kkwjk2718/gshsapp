@@ -88,18 +88,33 @@ export function SongList({ songs, currentUser, emptyMessage = "아직 신청된 
 
         return (
           <div key={song.id} className="glass p-4 rounded-2xl flex flex-col gap-2 group hover:scale-[1.02] transition-transform duration-300 border" style={{ borderColor: "var(--border)" }}>
-            <div className="aspect-video rounded-xl overflow-hidden relative" style={{ backgroundColor: "var(--surface-2)" }}>
-              {thumbnailUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={thumbnailUrl} alt={song.videoTitle} className="w-full h-full object-cover" />
-              ) : (
-                <div className="absolute inset-0 flex items-center justify-center text-xs" style={{ color: "var(--muted)" }}>
-                  No Thumbnail
-                </div>
-              )}
-            </div>
+            <a
+              href={song.youtubeUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="block rounded-xl focus:outline-none focus:ring-2 focus:ring-[color:var(--accent)] focus:ring-offset-2 focus:ring-offset-[color:var(--surface)]"
+            >
+              <div className="aspect-video rounded-xl overflow-hidden relative" style={{ backgroundColor: "var(--surface-2)" }}>
+                {thumbnailUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={thumbnailUrl} alt={song.videoTitle} className="w-full h-full object-cover" />
+                ) : (
+                  <div className="absolute inset-0 flex items-center justify-center text-xs" style={{ color: "var(--muted)" }}>
+                    No Thumbnail
+                  </div>
+                )}
+              </div>
+            </a>
             <div className="mt-2">
-              <h3 className="font-semibold truncate" style={{ color: "var(--foreground)" }}>{song.videoTitle}</h3>
+              <a
+                href={song.youtubeUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="block truncate font-semibold transition-colors hover:text-[color:var(--accent)]"
+                style={{ color: "var(--foreground)" }}
+              >
+                {song.videoTitle}
+              </a>
               <div className="flex items-center justify-between text-xs mt-1" style={{ color: "var(--muted)" }}>
                 {/* Replaced masking logic here */}
                 {renderRequesterInfo(song)}
