@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { getCurrentUser } from "@/lib/session";
 import { randomUUID } from "crypto";
 import { redirect } from "next/navigation";
+import { sendInviteTokenEmail } from "@/lib/token-distribution";
 
 export async function createTokens(formData: FormData) {
   const user = await getCurrentUser();
@@ -43,6 +44,60 @@ export async function createTokens(formData: FormData) {
   });
 
   revalidatePath("/admin/tokens");
+}
+
+export type TokenMailActionResult = {
+  success?: string;
+  error?: string;
+};
+
+export async function sendTokenByEmail(
+  prevState: TokenMailActionResult,
+  formData: FormData,
+): Promise<TokenMailActionResult> {
+  const user = await getCurrentUser();
+  if (!user || !user.id || user.role !== "ADMIN") {
+    throw new Error("Unauthorized");
+  }
+
+  const email = (formData.get("email") as string | null)?.trim().toLowerCase() || "";
+  const targetRole = (formData.get("targetRole") as string | null)?.trim() || "";
+  const targetGisuValue = (formData.get("targetGisu") as string | null)?.trim() || "";
+  const targetGisu = targetGisuValue ? Number.parseInt(targetGisuValue, 10) : null;
+
+  if (!email) {
+    return { error: "이메일 주소를 입력해주세요." };
+  }
+
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return { error: "이메일 주소 형식이 올바르지 않습니다." };
+  }
+
+  if (!["STUDENT", "TEACHER", "ADMIN"].includes(targetRole)) {
+    return { error: "허용되지 않은 토큰 권한입니다." };
+  }
+
+  if (targetRole === "STUDENT" && (!Number.isFinite(targetGisu) || (targetGisu ?? 0) <= 0)) {
+    return { error: "학생용 토큰은 기수를 함께 입력해주세요." };
+  }
+
+  const result = await sendInviteTokenEmail({
+    source: "ADMIN_MANUAL",
+    createdBy: user.id,
+    target: {
+      email,
+      targetRole,
+      targetGisu: targetRole === "STUDENT" ? targetGisu : null,
+    },
+  });
+
+  revalidatePath("/admin/tokens");
+
+  if (result.error) {
+    return { error: result.error };
+  }
+
+  return { success: result.success };
 }
 
 export async function deleteToken(id: string) {

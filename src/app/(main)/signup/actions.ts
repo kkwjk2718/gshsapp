@@ -4,21 +4,7 @@ import { prisma } from "@/lib/db";
 import { redirect } from "next/navigation";
 import { differenceInDays } from "date-fns";
 import bcrypt from "bcryptjs";
-
-function isValidStudentId(studentId: string) {
-    // 4자리 고정: [학년][반][번호(2자리)]
-    // 학년: 1~3
-    // 반: 1,2학년은 1~5 / 3학년은 1~4
-    // 번호: 00~99
-    if (!/^\d{4}$/.test(studentId)) return false;
-
-    const grade = Number(studentId[0]);
-    const classNum = Number(studentId[1]);
-
-    if (grade < 1 || grade > 3) return false;
-    if (grade === 3) return classNum >= 1 && classNum <= 4;
-    return classNum >= 1 && classNum <= 5;
-}
+import { isValidStudentId } from "@/lib/student-id";
 
 export async function signup(formData: FormData) {
     const tokenStr = formData.get("token") as string;

@@ -1,22 +1,15 @@
 import { prisma } from "@/lib/db";
 import { unstable_cache } from "next/cache";
+import { parseGradeMapping } from "@/lib/grade-mapping";
 
 // Cached function to get mapping
-const getGradeMapping = unstable_cache(
+export const getGradeMapping = unstable_cache(
   async () => {
     const setting = await prisma.systemSetting.findUnique({
       where: { key: "GRADE_MAPPING" },
     });
 
-    let mapping = { "1": 42, "2": 41, "3": 40 }; // Default fallback
-    if (setting) {
-      try {
-        mapping = JSON.parse(setting.value);
-      } catch (e) {
-        console.error("Failed to parse GRADE_MAPPING", e);
-      }
-    }
-    return mapping;
+    return parseGradeMapping(setting?.value);
   },
   ["grade-mapping-key"], // Key parts
   { tags: ["grade-mapping"] } // Revalidation tags

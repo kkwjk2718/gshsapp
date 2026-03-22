@@ -1,13 +1,10 @@
 import { prisma } from "@/lib/db";
 import { getBackupIntervalDays, listBackups } from "@/lib/backup";
-
-export const DEFAULT_GRADE_MAPPING = {
-  "1": 42,
-  "2": 41,
-  "3": 40,
-} as const;
-
-export type GradeMapping = Record<keyof typeof DEFAULT_GRADE_MAPPING, number>;
+import { hasBrevoConfiguration } from "@/lib/brevo";
+import { DEFAULT_GRADE_MAPPING, parseGradeMapping, type GradeMapping } from "@/lib/grade-mapping";
+import { DEFAULT_TOKEN_PORTAL_EMAIL_GUIDANCE, TOKEN_DISTRIBUTION_DAILY_LIMIT } from "@/lib/token-portal-config";
+import { getDistributionQuotaSummary } from "@/lib/token-distribution";
+import { getTokenPortalSettings } from "@/lib/system-settings";
 export type BackupItem = Awaited<ReturnType<typeof listBackups>>[number];
 export type SystemSettingRecord = {
   key: string;
@@ -15,12 +12,24 @@ export type SystemSettingRecord = {
   description?: string | null;
 } | null;
 
+export type TokenPortalSettingsData = {
+  enabled: boolean;
+  guidance: string;
+  hasPassword: boolean;
+  sessionVersion: number;
+  hasBrevoConfiguration: boolean;
+  todaySentCount: number;
+  remainingDailyQuota: number;
+  isQuotaReached: boolean;
+};
+
 export type SettingsPageData = {
   mapping: GradeMapping;
   iCalUrl: string;
   googleAnalyticsId: string;
   backups: BackupItem[];
   intervalDays: number;
+  tokenPortal: TokenPortalSettingsData;
   warnings: string[];
 };
 
@@ -28,35 +37,28 @@ type SettingsPageDependencies = {
   findSetting: (key: string) => Promise<SystemSettingRecord>;
   listBackups: () => Promise<BackupItem[]>;
   getBackupIntervalDays: () => Promise<number>;
+  getTokenPortalSettings: () => Promise<{
+    enabled: boolean;
+    guidance: string;
+    hasPassword: boolean;
+    sessionVersion: number;
+  }>;
+  getDistributionQuotaSummary: () => Promise<{
+    used: number;
+    remaining: number;
+    isLimitReached: boolean;
+  }>;
+  hasBrevoConfiguration: () => boolean;
 };
 
 const defaultDependencies: SettingsPageDependencies = {
   findSetting: (key) => prisma.systemSetting.findUnique({ where: { key } }),
   listBackups,
   getBackupIntervalDays,
+  getTokenPortalSettings,
+  getDistributionQuotaSummary,
+  hasBrevoConfiguration,
 };
-
-function isValidGradeValue(value: unknown): value is number {
-  return typeof value === "number" && Number.isInteger(value) && value > 0;
-}
-
-export function parseGradeMapping(rawValue: string | null | undefined): GradeMapping {
-  if (!rawValue) {
-    return { ...DEFAULT_GRADE_MAPPING };
-  }
-
-  try {
-    const parsedValue = JSON.parse(rawValue) as Record<string, unknown>;
-
-    return {
-      "1": isValidGradeValue(parsedValue["1"]) ? parsedValue["1"] : DEFAULT_GRADE_MAPPING["1"],
-      "2": isValidGradeValue(parsedValue["2"]) ? parsedValue["2"] : DEFAULT_GRADE_MAPPING["2"],
-      "3": isValidGradeValue(parsedValue["3"]) ? parsedValue["3"] : DEFAULT_GRADE_MAPPING["3"],
-    };
-  } catch {
-    return { ...DEFAULT_GRADE_MAPPING };
-  }
-}
 
 export async function loadSettingsPageData(
   dependencies: SettingsPageDependencies = defaultDependencies,
@@ -68,6 +70,16 @@ export async function loadSettingsPageData(
       googleAnalyticsId: "",
       backups: [],
       intervalDays: 1,
+      tokenPortal: {
+        enabled: false,
+        guidance: DEFAULT_TOKEN_PORTAL_EMAIL_GUIDANCE,
+        hasPassword: false,
+        sessionVersion: 1,
+        hasBrevoConfiguration: false,
+        todaySentCount: 0,
+        remainingDailyQuota: TOKEN_DISTRIBUTION_DAILY_LIMIT,
+        isQuotaReached: false,
+      },
       warnings: [],
     };
   }
@@ -95,6 +107,16 @@ export async function loadSettingsPageData(
 
   let backups: BackupItem[] = [];
   let intervalDays = 1;
+  let tokenPortal: TokenPortalSettingsData = {
+    enabled: false,
+    guidance: DEFAULT_TOKEN_PORTAL_EMAIL_GUIDANCE,
+    hasPassword: false,
+    sessionVersion: 1,
+    hasBrevoConfiguration: dependencies.hasBrevoConfiguration(),
+    todaySentCount: 0,
+    remainingDailyQuota: TOKEN_DISTRIBUTION_DAILY_LIMIT,
+    isQuotaReached: false,
+  };
 
   try {
     [backups, intervalDays] = await Promise.all([
@@ -106,12 +128,39 @@ export async function loadSettingsPageData(
     warnings.push("Backup metadata could not be loaded. Backup tools may be temporarily unavailable.");
   }
 
+  try {
+    const [portalSettings, quota] = await Promise.all([
+      dependencies.getTokenPortalSettings(),
+      dependencies.getDistributionQuotaSummary(),
+    ]);
+
+    tokenPortal = {
+      ...portalSettings,
+      hasBrevoConfiguration: dependencies.hasBrevoConfiguration(),
+      todaySentCount: quota.used,
+      remainingDailyQuota: quota.remaining,
+      isQuotaReached: quota.isLimitReached,
+    };
+
+    if (tokenPortal.enabled && !tokenPortal.hasPassword) {
+      warnings.push("Token portal is enabled but no access password is configured yet.");
+    }
+
+    if (!tokenPortal.hasBrevoConfiguration) {
+      warnings.push("Brevo email delivery is not configured. Token emails cannot be sent until BREVO settings are added.");
+    }
+  } catch (error) {
+    console.error("[admin/settings] Failed to load token portal settings:", error);
+    warnings.push("Token distribution portal settings could not be loaded.");
+  }
+
   return {
     mapping,
     iCalUrl,
     googleAnalyticsId,
     backups,
     intervalDays,
+    tokenPortal,
     warnings,
   };
 }

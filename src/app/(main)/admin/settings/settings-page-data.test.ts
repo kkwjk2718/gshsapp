@@ -1,9 +1,11 @@
-import { describe, expect, it } from "vitest";
-import {
-  DEFAULT_GRADE_MAPPING,
-  loadSettingsPageData,
-  parseGradeMapping,
-} from "./settings-page-data";
+import { describe, expect, it, vi } from "vitest";
+import { DEFAULT_GRADE_MAPPING, parseGradeMapping } from "@/lib/grade-mapping";
+import { DEFAULT_TOKEN_PORTAL_EMAIL_GUIDANCE, TOKEN_DISTRIBUTION_DAILY_LIMIT } from "@/lib/token-portal-config";
+import { loadSettingsPageData } from "./settings-page-data";
+
+vi.mock("@/lib/token-distribution", () => ({
+  getDistributionQuotaSummary: vi.fn(),
+}));
 
 describe("settings-page-data", () => {
   describe("parseGradeMapping", () => {
@@ -33,8 +35,24 @@ describe("settings-page-data", () => {
   });
 
   describe("loadSettingsPageData", () => {
+    const baseDependencies = {
+      hasBrevoConfiguration: () => true,
+      getTokenPortalSettings: async () => ({
+        enabled: true,
+        guidance: "guide",
+        hasPassword: true,
+        sessionVersion: 3,
+      }),
+      getDistributionQuotaSummary: async () => ({
+        used: 12,
+        remaining: 288,
+        isLimitReached: false,
+      }),
+    };
+
     it("loads settings and backups without warnings", async () => {
       const result = await loadSettingsPageData({
+        ...baseDependencies,
         findSetting: async (key) => {
           if (key === "GRADE_MAPPING") {
             return { key, value: '{"1":1,"2":2,"3":3}' };
@@ -74,12 +92,23 @@ describe("settings-page-data", () => {
           },
         ],
         intervalDays: 7,
+        tokenPortal: {
+          enabled: true,
+          guidance: "guide",
+          hasPassword: true,
+          sessionVersion: 3,
+          hasBrevoConfiguration: true,
+          todaySentCount: 12,
+          remainingDailyQuota: 288,
+          isQuotaReached: false,
+        },
         warnings: [],
       });
     });
 
     it("falls back to defaults when settings loading fails", async () => {
       const result = await loadSettingsPageData({
+        ...baseDependencies,
         findSetting: async () => {
           throw new Error("db unavailable");
         },
@@ -95,6 +124,7 @@ describe("settings-page-data", () => {
 
     it("falls back to safe backup defaults when backup metadata fails", async () => {
       const result = await loadSettingsPageData({
+        ...baseDependencies,
         findSetting: async (key) => ({ key, value: "" }),
         listBackups: async () => {
           throw new Error("disk unavailable");
@@ -111,36 +141,31 @@ describe("settings-page-data", () => {
       );
     });
 
-    it("keeps good settings data even when backup metadata fails", async () => {
+    it("surfaces token portal warnings when password or brevo config is missing", async () => {
       const result = await loadSettingsPageData({
-        findSetting: async (key) => {
-          if (key === "GRADE_MAPPING") {
-            return { key, value: '{"1":9,"2":8,"3":7}' };
-          }
-
-          if (key === "ICAL_URL") {
-            return { key, value: "https://ok.example.com" };
-          }
-
-          if (key === "GOOGLE_ANALYTICS_ID") {
-            return { key, value: "G-OK12345" };
-          }
-
-          return null;
-        },
-        listBackups: async () => {
-          throw new Error("disk unavailable");
-        },
-        getBackupIntervalDays: async () => {
-          throw new Error("disk unavailable");
-        },
+        findSetting: async (key) => ({ key, value: "" }),
+        listBackups: async () => [],
+        getBackupIntervalDays: async () => 1,
+        hasBrevoConfiguration: () => false,
+        getTokenPortalSettings: async () => ({
+          enabled: true,
+          guidance: DEFAULT_TOKEN_PORTAL_EMAIL_GUIDANCE,
+          hasPassword: false,
+          sessionVersion: 1,
+        }),
+        getDistributionQuotaSummary: async () => ({
+          used: TOKEN_DISTRIBUTION_DAILY_LIMIT,
+          remaining: 0,
+          isLimitReached: true,
+        }),
       });
 
-      expect(result.mapping).toEqual({ "1": 9, "2": 8, "3": 7 });
-      expect(result.iCalUrl).toBe("https://ok.example.com");
-      expect(result.googleAnalyticsId).toBe("G-OK12345");
-      expect(result.backups).toEqual([]);
-      expect(result.intervalDays).toBe(1);
+      expect(result.tokenPortal.hasBrevoConfiguration).toBe(false);
+      expect(result.tokenPortal.isQuotaReached).toBe(true);
+      expect(result.warnings).toContain("Token portal is enabled but no access password is configured yet.");
+      expect(result.warnings).toContain(
+        "Brevo email delivery is not configured. Token emails cannot be sent until BREVO settings are added.",
+      );
     });
   });
 });

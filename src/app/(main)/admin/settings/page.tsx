@@ -1,4 +1,4 @@
-import { BarChart3, DatabaseBackup, Link, Save, Settings } from "lucide-react";
+import { BarChart3, DatabaseBackup, KeyRound, Link, Mail, Save, Settings } from "lucide-react";
 import { updateGradeMapping } from "./actions";
 import { BackupIntervalForm } from "./backup-interval-form";
 import { BackupNowForm } from "./backup-now-form";
@@ -6,12 +6,15 @@ import { GoogleAnalyticsForm } from "./google-analytics-form";
 import { ICalForm } from "./ical-form";
 import { RestoreUploadForm } from "./restore-upload-form";
 import { loadSettingsPageData } from "./settings-page-data";
+import { TokenPortalSettingsForm } from "./token-portal-settings-form";
+import { TokenPortalPasswordForm } from "./token-portal-password-form";
 
 export const dynamic = "force-dynamic";
 
 export default async function SettingsPage() {
-  const { mapping, iCalUrl, googleAnalyticsId, backups, intervalDays, warnings } =
+  const { mapping, iCalUrl, googleAnalyticsId, backups, intervalDays, tokenPortal, warnings } =
     await loadSettingsPageData();
+  const portalUrl = `${process.env.NEXT_PUBLIC_APP_URL || "https://gshs.app"}/signup/request`;
 
   return (
     <div className="p-8 space-y-8">
@@ -88,6 +91,43 @@ export default async function SettingsPage() {
             Configure the measurement ID here instead of relying on environment variables.
           </p>
           <GoogleAnalyticsForm initialValue={googleAnalyticsId} />
+        </div>
+      </div>
+
+      <div className="glass p-8 rounded-3xl space-y-8">
+        <div className="space-y-2">
+          <h2 className="text-lg font-bold flex items-center gap-2">
+            <Mail className="w-5 h-5" />
+            Token distribution portal
+          </h2>
+          <p className="text-sm text-slate-500">
+            Share a temporary portal URL with students so they can receive their signup token by email.
+          </p>
+        </div>
+
+        <div className="grid gap-8 xl:grid-cols-[1.4fr_1fr]">
+          <TokenPortalSettingsForm
+            enabled={tokenPortal.enabled}
+            guidance={tokenPortal.guidance}
+            portalUrl={portalUrl}
+            todaySentCount={tokenPortal.todaySentCount}
+            remainingDailyQuota={tokenPortal.remainingDailyQuota}
+            isQuotaReached={tokenPortal.isQuotaReached}
+            hasBrevoConfiguration={tokenPortal.hasBrevoConfiguration}
+          />
+
+          <div className="space-y-4 rounded-3xl border border-dashed p-5" style={{ borderColor: "var(--border)" }}>
+            <div className="space-y-2">
+              <h3 className="text-base font-bold flex items-center gap-2">
+                <KeyRound className="w-4 h-4" />
+                Portal password
+              </h3>
+              <p className="text-sm text-slate-500">
+                Rotate the shared access password whenever you think it may have leaked.
+              </p>
+            </div>
+            <TokenPortalPasswordForm hasPassword={tokenPortal.hasPassword} />
+          </div>
         </div>
       </div>
 

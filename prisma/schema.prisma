@@ -59,9 +59,32 @@ model InviteToken {
   
   batchId     String?
   batch       TokenBatch? @relation(fields: [batchId], references: [id])
+  distributionLogs TokenDistributionLog[]
 
   usedByUserId String? @unique
   usedBy       User?   @relation("TokenUsedByUser", fields: [usedByUserId], references: [id])
+}
+
+model TokenDistributionLog {
+  id             String   @id @default(uuid())
+  source         String   // PORTAL_AUTO, ADMIN_MANUAL
+  recipientEmail String
+  requesterName  String?
+  studentId      String?
+  targetRole     String
+  targetGisu     Int?
+  inviteTokenId  String?
+  inviteToken    InviteToken? @relation(fields: [inviteTokenId], references: [id])
+  status         String   // SENT, FAILED, BLOCKED
+  brevoMessageId String?
+  errorMessage   String?
+  clientKey      String?
+  createdBy      String
+  createdAt      DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([status, createdAt])
+  @@index([recipientEmail, studentId, createdAt])
 }
 
 // B. 기능 및 콘텐츠
