@@ -6,8 +6,8 @@ import { getPublicStats } from "@/lib/stats";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "서버 통계",
-  description: "GSHS.app의 전체 사용 통계를 확인할 수 있습니다.",
+  title: "서비스 통계",
+  description: "GSHS.app 전체 이용 통계를 확인할 수 있습니다.",
 };
 
 export default async function StatsPage() {
@@ -18,7 +18,7 @@ export default async function StatsPage() {
     <div className="mx-auto max-w-5xl space-y-12 p-4 md:p-12">
       <div className="space-y-4 text-center">
         <h1 className="text-3xl font-bold text-slate-800 dark:text-slate-100">
-          GSHS.app 서버 통계
+          GSHS.app 서비스 통계
         </h1>
         <p className="text-lg text-slate-500">
           서비스 시작일{" "}
@@ -40,16 +40,18 @@ export default async function StatsPage() {
         <div className="relative z-10 flex flex-col items-center gap-4">
           <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-white/20 px-4 py-1.5 text-sm font-semibold text-white/90 backdrop-blur-md">
             <Flame className="h-4 w-4 animate-pulse text-amber-300" />
-            경과고 학생들의 급식 조회 열기
+            경남과고 학생들의 급식에 대한 열기
           </div>
           <h2 className="break-keep text-2xl font-bold opacity-90 md:text-3xl">
-            지금까지 학생들이 확인한 급식 수예요
+            지금까지 학생들이 확인한 급식 횟수
           </h2>
           <div className="my-4 font-mono text-6xl font-black tracking-tight drop-shadow-lg md:text-8xl">
             {stats.totalMealViews.toLocaleString()}
           </div>
           <p className="mx-auto max-w-lg text-sm text-white/70 md:text-base">
-            하루의 시작과 함께 가장 자주 확인되는 기능입니다. 급식 조회 기록을 기준으로 서비스 이용 흐름을 보여줍니다.
+            하루의 시작과 함께 가장 자주 확인되는 기능입니다.
+            <br />
+            급식 조회 기록을 기준으로 서비스 이용 흐름을 보여줍니다.
           </p>
         </div>
       </div>
@@ -92,14 +94,14 @@ export default async function StatsPage() {
         <div className="mb-8 flex flex-col items-center justify-between gap-6 md:flex-row">
           <h2 className="flex items-center gap-2 text-xl font-bold text-slate-800 dark:text-slate-100">
             <Activity className="h-6 w-6 text-indigo-500" />
-            주간 서버 트래픽 추이
+            주간 서비스 트래픽 추이
           </h2>
 
           <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 dark:border-slate-700 dark:bg-slate-800">
-            <div className="text-xs text-slate-500">현재 서버 상태</div>
+            <div className="text-xs text-slate-500">현재 서비스 상태</div>
             <div className="h-4 w-px bg-slate-300 dark:bg-slate-600" />
             <div className={`flex items-center gap-2 text-sm font-bold ${stats.currentLoad.color}`}>
-              <div className="h-2 w-2 rounded-full bg-current animate-pulse" />
+              <div className="h-2 w-2 animate-pulse rounded-full bg-current" />
               {stats.currentLoad.status}
             </div>
             <div className="font-mono text-xs text-slate-400">
@@ -143,7 +145,7 @@ export default async function StatsPage() {
       </div>
 
       <div className="pb-8 text-center text-xs text-slate-400">
-        * 통계는 실시간으로 집계되며, 내부 호출이나 비정상적인 접근 기록은 일부 제외될 수 있습니다.
+        * 통계는 실시간으로 집계되며, 내부 점검이나 비정상적인 접근 기록은 일부 제외될 수 있습니다.
       </div>
     </div>
   );

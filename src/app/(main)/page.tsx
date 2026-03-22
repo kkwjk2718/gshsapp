@@ -118,7 +118,7 @@ export default async function Home() {
               >
                 <BookOpen className="w-5 h-5" />
               </div>
-              <span className="text-xs font-bold" style={{ color: "var(--foreground)" }}>바로가기</span>
+              <span className="text-xs font-bold" style={{ color: "var(--foreground)" }}>링크모음</span>
             </Link>
           </div>
         </div>

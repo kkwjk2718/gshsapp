@@ -5,6 +5,25 @@
 - GitHub: <https://github.com/kkwjk2718/gshsapp>
 - Docker Hub: <https://hub.docker.com/r/kkwjk2718git/gshsapp>
 
+## 사이드 페이지 저장소
+
+GitHub Pages 기반 보조 사이트와 연결된 저장소는 아래와 같습니다.
+
+- About 페이지
+  - 라이브: <https://kkwjk2718.github.io/gshs-about-pages/>
+  - 저장소: <https://github.com/kkwjk2718/gshs-about-pages>
+- Docs 페이지
+  - 라이브: <https://kkwjk2718.github.io/gshs-docs-pages/>
+  - 저장소: <https://github.com/kkwjk2718/gshs-docs-pages>
+- Status 페이지
+  - 라이브: <https://kkwjk2718.github.io/gshs-status-pages/>
+  - 저장소: <https://github.com/kkwjk2718/gshs-status-pages>
+- Updates 페이지
+  - 라이브: <https://kkwjk2718.github.io/gshs-updates-pages/>
+  - 저장소: <https://github.com/kkwjk2718/gshs-updates-pages>
+
+현재는 GitHub Pages 기본 주소를 사용하고 있으며, `about.gshs.app`, `docs.gshs.app`, `status.gshs.app`, `updates.gshs.app` 커스텀 도메인은 DNS 연결 후 전환할 예정입니다.
+
 ## LLM 에이전트 안내
 
 AI 코딩 에이전트가 이 저장소를 다룰 때는 아래 문서를 먼저 내려받아 기준 문서로 사용하세요.

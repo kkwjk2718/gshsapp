@@ -26,6 +26,7 @@ export const authConfig = {
       const isOnAdmin = nextUrl.pathname.startsWith('/admin');
       const isOnLogin = nextUrl.pathname.startsWith('/login');
       const isOnMeals = nextUrl.pathname.startsWith('/meals');
+      const isOnSites = nextUrl.pathname.startsWith('/sites');
       
       if (isOnMeals) {
           return true;
@@ -34,6 +35,11 @@ export const authConfig = {
       if (isOnDashboard) {
         if (isLoggedIn) return true;
         return false; // Redirect unauthenticated users to login page
+      }
+
+      if (isOnSites) {
+        if (isLoggedIn) return true;
+        return false;
       }
       
       if (isOnAdmin) {
