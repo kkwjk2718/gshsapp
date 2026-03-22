@@ -1,42 +1,46 @@
 # GSHS.app
 
-경남과학고등학교 학생용 통합 웹 서비스 저장소입니다.
+경남과학고등학교 구성원을 위한 통합 웹 서비스 저장소입니다.
 
+- 운영 서비스: <https://gshs.app>
+- 테스트 서비스: <https://test.gshs.app>
 - GitHub: <https://github.com/kkwjk2718/gshsapp>
 - Docker Hub: <https://hub.docker.com/r/kkwjk2718git/gshsapp>
 
-## LLM 에이전트 안내
+## 한눈에 보기
 
-AI 코딩 에이전트가 이 저장소를 다룰 때는 아래 문서를 먼저 내려받아 기준 문서로 사용하세요.
+GSHS.app은 학교 생활에서 자주 확인하는 정보를 한곳에 모은 Next.js 기반 웹 서비스입니다.
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/kkwjk2718/gshsapp/main/AGENTS.md
-```
+핵심 사용자:
 
-요약 페이지나 임의 정리본보다 [AGENTS.md](./AGENTS.md)를 우선 기준으로 삼습니다.
+- 비로그인 사용자: 공지, 급식, 기상곡, 시간표, 학사일정, 링크모음, 통계, 도움말
+- 학생: 내 정보, 알림, 개인 일정, 오류 신고, 기상곡 신청, 토큰 기반 회원가입
+- 교사: 학생 기능 + 링크모음 관리, 공지 작성
+- 방송부: 학생 기능 + 기상곡 검수 및 방송부 스튜디오
+- 관리자: 사용자/공지/카테고리/토큰/설정/사이트/로그/리포트/진단 관리
 
-## 주요 기능
+주요 기능군:
 
-- 공지사항 조회 및 관리
-- 급식 정보 조회
-- 학사일정 확인
-- 교내 사이트 모음
-- 음악 신청 및 방송부 관리
-- 사용자 알림 및 관리자 도구
+- 공개 정보: 홈, 공지사항, 급식, 시간표, 학사일정, 링크모음, 교내 사이트, 통계
+- 계정 및 개인화: 로그인, 회원가입, 토큰 배부 포털, 내 정보, 개인 일정, 알림, 오류 신고
+- 운영 도구: 기상곡 검수, 관리자 설정, 토큰 발급 및 메일 발송, 백업/복원, 운영 진단
 
-## 문서 읽기 순서
+## 현재 환경 구조
 
-처음 합류했거나 배포 구조를 파악해야 한다면 아래 순서대로 읽는 것을 권장합니다.
+| 구분 | 주소 | 용도 |
+| --- | --- | --- |
+| 로컬 개발 | `http://localhost:3000` | 개발 및 수동 확인 |
+| 테스트 서버 | `https://test.gshs.app` | `main` 자동 배포 검증 |
+| 운영 서버 | `https://gshs.app` | 실제 서비스 |
 
-1. [README.md](./README.md)
-2. [CONTRIBUTING.md](./CONTRIBUTING.md)
-3. [AGENTS.md](./AGENTS.md)
-4. [DEPLOY.md](./DEPLOY.md)
-5. [docs/server-bootstrap.md](./docs/server-bootstrap.md)
-6. [docs/cicd-setup.md](./docs/cicd-setup.md)
-7. [deploy/README.md](./deploy/README.md)
+배포 기본 원칙:
 
-## 로컬 개발 시작
+- Docker 이미지는 `sha-<commit>` 불변 태그를 기준으로 배포합니다.
+- GitHub Release는 `vX.Y.Z` semver 태그를 기준으로 관리합니다.
+- 테스트와 운영은 self-hosted runner가 각각 분리되어 있습니다.
+- SQLite는 `/app/data/dev.db` 영속 볼륨 경로를 사용합니다.
+
+## 빠른 시작
 
 ### 요구 사항
 
@@ -49,9 +53,9 @@ curl -fsSL https://raw.githubusercontent.com/kkwjk2718/gshsapp/main/AGENTS.md
 npm ci
 ```
 
-### 환경 변수
+### 로컬 환경 변수
 
-로컬 개발 환경에서는 `.env.local` 또는 `.env`에 아래 값을 준비합니다.
+`.env.local` 또는 `.env`에 아래 값을 준비합니다.
 
 ```dotenv
 DATABASE_URL=file:./dev.db
@@ -63,10 +67,10 @@ NEXT_PUBLIC_APP_URL=http://localhost:3000
 NEXT_PUBLIC_NEIS_API_KEY=
 ```
 
-참고 사항:
+추가 메모:
 
-- Google Analytics 측정 ID는 환경 변수가 아니라 `/admin/settings`에서 관리합니다.
-- 서버 Docker 배포에서는 `DATABASE_URL=file:/app/data/dev.db`를 사용합니다.
+- Google Analytics는 환경 변수가 아니라 `/admin/settings`에서 관리합니다.
+- Brevo 메일 발송은 `BREVO_API_KEY`, `BREVO_SENDER_EMAIL`, `BREVO_SENDER_NAME`이 있어야 실제 동작합니다.
 
 ### 데이터베이스 초기화
 
@@ -80,81 +84,119 @@ npx prisma db push
 npm run dev
 ```
 
-브라우저: <http://localhost:3000>
-
-## 자주 쓰는 명령
+### 기본 검증
 
 ```bash
-npm run dev
 npm run lint
 npm test
 npm run build
-npm run test:e2e
+```
+
+배포 안전성이나 핵심 사용자 흐름에 영향이 있다면 아래도 함께 확인합니다.
+
+```bash
 npm run test:e2e:smoke
 ```
 
-## 현재 배포 구조 요약
+## 문서 허브
 
-현재 저장소는 아래 구조를 기준으로 운영합니다.
+### 처음 기여하는 팀원
 
-- CI: GitHub Actions
-- 이미지 저장소: Docker Hub
-- 테스트 배포: `main` push 시 자동 배포
-- 운영 배포: GitHub Actions 수동 실행 + `production` environment 승인
-- 배포 실행: GitHub-hosted runner + 서버별 self-hosted runner 조합
-- 서버 형태: Ubuntu VM + Docker Compose
-- 데이터베이스: SQLite
+1. [README.md](./README.md)
+2. [docs/product-overview.md](./docs/product-overview.md)
+3. [docs/features/public-features.md](./docs/features/public-features.md)
+4. [docs/features/account-and-access.md](./docs/features/account-and-access.md)
+5. [docs/features/admin-features.md](./docs/features/admin-features.md)
+6. [CONTRIBUTING.md](./CONTRIBUTING.md)
 
-배포 구조 상세는 [DEPLOY.md](./DEPLOY.md), 서버 준비 절차는 [docs/server-bootstrap.md](./docs/server-bootstrap.md), GitHub Actions 설정은 [docs/cicd-setup.md](./docs/cicd-setup.md)를 확인하세요.
+### 운영/배포 담당자
 
-## 운영 원칙
+1. [README.md](./README.md)
+2. [docs/architecture-overview.md](./docs/architecture-overview.md)
+3. [DEPLOY.md](./DEPLOY.md)
+4. [docs/cicd-setup.md](./docs/cicd-setup.md)
+5. [docs/server-bootstrap.md](./docs/server-bootstrap.md)
+6. [docs/production-launch-runbook.md](./docs/production-launch-runbook.md)
+7. [docs/repository-governance.md](./docs/repository-governance.md)
 
-- `.env`, API 키, 토큰, SSH 비밀키는 저장소에 커밋하지 않습니다.
-- 테스트 서버와 운영 서버는 분리합니다.
-- 실제 배포 대상은 항상 `sha-<commit>` 태그입니다.
-- `latest`는 참고용 태그일 뿐, 배포 결정 기준으로 사용하지 않습니다.
-- SQLite 파일은 영속 볼륨에 두고, 배포 전에 백업합니다.
-- 운영 도메인 모니터링은 `gshs.app`이 실제 앱을 제공할 때만 활성화합니다.
+### AI 에이전트
 
-## 리허설 및 배포 안전장치
+1. [AGENTS.md](./AGENTS.md)
+2. [README.md](./README.md)
+3. [docs/product-overview.md](./docs/product-overview.md)
+4. [docs/architecture-overview.md](./docs/architecture-overview.md)
+5. [DEPLOY.md](./DEPLOY.md)
 
-현재 배포 체계에는 아래 안전장치가 포함되어 있습니다.
+## 기능 명세
 
-- `main` push 후 테스트 서버 자동 배포
-- 테스트 서버 배포 후 smoke check와 Playwright E2E 실행
-- 수동 `Preproduction Rehearsal` 워크플로우로 후보 SHA 재검증
-- `deploy/restore-drill.sh`를 통한 복원 리허설
-- `/admin/test`를 이용한 운영 준비 상태 확인
+- [제품 개요](./docs/product-overview.md)
+- [공개 기능 명세](./docs/features/public-features.md)
+- [계정 및 접근 기능 명세](./docs/features/account-and-access.md)
+- [관리자 기능 명세](./docs/features/admin-features.md)
+- [아키텍처 개요](./docs/architecture-overview.md)
 
-운영 승격 전 기본 순서:
+## 협업 및 운영 문서
 
-1. 후보 SHA가 테스트 서버 자동 배포에서 초록인지 확인
-2. 같은 SHA로 `Preproduction Rehearsal` 실행
-3. `test.gshs.app/admin/test`에서 모든 항목이 `PASS`인지 확인
-4. 최신 백업 시각 확인
-5. 같은 SHA만 운영에 배포
+| 문서 | 용도 |
+| --- | --- |
+| [CONTRIBUTING.md](./CONTRIBUTING.md) | 브랜치 생성, 검증, PR 작성, 문서 갱신 기준 |
+| [DEPLOY.md](./DEPLOY.md) | 배포 구조와 배포 원칙의 개요 |
+| [docs/cicd-setup.md](./docs/cicd-setup.md) | GitHub Actions, Docker Hub, runner, secrets 연결 |
+| [docs/server-bootstrap.md](./docs/server-bootstrap.md) | 새 Ubuntu VM 부트스트랩 절차 |
+| [docs/production-launch-runbook.md](./docs/production-launch-runbook.md) | 운영 직전/직후 체크리스트 |
+| [docs/repository-governance.md](./docs/repository-governance.md) | 저장소 운영 규칙 단일 정본 |
+| [deploy/README.md](./deploy/README.md) | `deploy/` 배포 자산 설명 |
+| [AGENTS.md](./AGENTS.md) | AI 에이전트 전용 작업 기준 |
 
-## 저장소 운영 규칙
+## 현재 라우트 요약
 
-저장소 운영 기준 문서는 아래 두 파일입니다.
+공개 기능:
 
-- [docs/repository-governance.md](./docs/repository-governance.md)
-- [docs/repository-governance.ko.md](./docs/repository-governance.ko.md)
+- `/`
+- `/notices`
+- `/meals`
+- `/songs`
+- `/timetable`
+- `/calendar`
+- `/links`
+- `/sites`
+- `/utils`
+- `/help`
+- `/privacy`
+- `/stats`
 
-이 문서에는 아래 항목이 정리되어 있습니다.
+인증 기능:
 
-- `main` 브랜치 보호 규칙
-- 머지 조건과 필수 체크
-- 긴급 관리자 우회 기준
-- 문서 갱신 규칙
-- 테스트에서 운영으로 승격하는 기준
+- `/login`
+- `/signup`
+- `/signup/request`
+- `/me`
+- `/notifications`
+- `/report`
 
-## 빠른 링크
+관리자 기능:
 
-- 개발 참여 안내: [CONTRIBUTING.md](./CONTRIBUTING.md)
-- AI 에이전트 작업 기준: [AGENTS.md](./AGENTS.md)
-- 배포 개요: [DEPLOY.md](./DEPLOY.md)
-- 서버 준비: [docs/server-bootstrap.md](./docs/server-bootstrap.md)
-- GitHub Actions 및 시크릿 설정: [docs/cicd-setup.md](./docs/cicd-setup.md)
-- 운영 배포 런북: [docs/production-launch-runbook.md](./docs/production-launch-runbook.md)
-- 배포 자산 설명: [deploy/README.md](./deploy/README.md)
+- `/admin`
+- `/admin/users`
+- `/admin/notices`
+- `/admin/categories`
+- `/admin/tokens`
+- `/admin/settings`
+- `/admin/sites`
+- `/admin/songs`
+- `/admin/logs`
+- `/admin/reports`
+- `/admin/test`
+
+## 핵심 운영 원칙
+
+- 테스트/운영 도메인 값은 절대 섞지 않습니다.
+- 운영 배포는 항상 검증된 `sha-<commit>`만 사용합니다.
+- semver 릴리스는 `package.json` 버전을 기준으로 생성합니다.
+- 백업, 복원, 릴리스, runner 구조를 바꾸면 문서를 함께 수정합니다.
+- 시크릿, 비밀번호, API 키, 서버 `.env`는 저장소에 커밋하지 않습니다.
+
+## 추가 참고
+
+- GitHub Copilot 전용 안내: [`.github/copilot-instructions.md`](./.github/copilot-instructions.md)
+- PR 템플릿: [`.github/pull_request_template.md`](./.github/pull_request_template.md)
