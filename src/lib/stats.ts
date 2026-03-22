@@ -1,33 +1,28 @@
 import { unstable_cache } from "next/cache";
-import { subDays, startOfDay, endOfDay, subMinutes } from "date-fns";
+import { endOfDay, startOfDay, subDays, subMinutes } from "date-fns";
 import { prisma } from "@/lib/db";
 
 const getCachedPublicStats = unstable_cache(
   async () => {
-    // 1. 珥??섏씠吏 酉?
     const totalPageViews = await prisma.systemLog.count({
       where: { action: "PAGE_VIEW" },
     });
 
-    // 2. 珥?諛⑸Ц????
     const visitorsGroup = await prisma.systemLog.groupBy({
       by: ["ip"],
       _count: { ip: true },
     });
     const totalVisitors = visitorsGroup.length;
 
-    // 3. 珥?湲곗긽怨??좎껌 ??
     const totalSongRequests = await prisma.songRequest.count();
 
-    // 4. ?쒕퉬???쒖옉??
     const firstLog = await prisma.systemLog.findFirst({
       orderBy: { createdAt: "asc" },
     });
     const sinceDate = firstLog?.createdAt || new Date();
 
-    // 5. 理쒓렐 7?쇨컙 ?쇰퀎 ?몃옒??(蹂묐젹 泥섎━濡??깅뒫 理쒖쟻??
     const dailyTrafficPromises = Array.from({ length: 7 }, (_, i) => {
-      const date = subDays(new Date(), 6 - i); // 6?쇱쟾 ~ ?ㅻ뒛
+      const date = subDays(new Date(), 6 - i);
       return prisma.systemLog
         .count({
           where: {
@@ -43,26 +38,23 @@ const getCachedPublicStats = unstable_cache(
     const dailyTraffic = await Promise.all(dailyTrafficPromises);
     const maxDailyTraffic = Math.max(...dailyTraffic.map((d) => d.count)) || 1;
 
-    // 6. ?꾩옱 ?쒕쾭 遺??(理쒓렐 10遺꾧컙 ?붿껌 ??
     const recentRequestCount = await prisma.systemLog.count({
       where: {
         createdAt: { gte: subMinutes(new Date(), 10) },
       },
     });
 
-    // 遺???곹깭 怨꾩궛
-    let loadStatus = "?먰솢";
+    let loadStatus = "여유";
     let loadColor = "text-emerald-500";
 
     if (recentRequestCount > 500) {
-      loadStatus = "?쇱옟";
+      loadStatus = "혼잡";
       loadColor = "text-rose-500";
     } else if (recentRequestCount > 100) {
-      loadStatus = "蹂댄넻";
+      loadStatus = "보통";
       loadColor = "text-amber-500";
     }
 
-    // 7. 珥?湲됱떇 ?뺤씤 ?잛닔
     const totalMealViews = await prisma.systemLog.count({
       where: { action: "MEAL_VIEW" },
     });
@@ -76,7 +68,7 @@ const getCachedPublicStats = unstable_cache(
       dailyTraffic,
       maxDailyTraffic,
       currentLoad: {
-        rpm: (recentRequestCount / 10).toFixed(1), // Requests Per Minute
+        rpm: (recentRequestCount / 10).toFixed(1),
         status: loadStatus,
         color: loadColor,
       },
@@ -108,7 +100,7 @@ export async function getPublicStats() {
       maxDailyTraffic: 1,
       currentLoad: {
         rpm: "0.0",
-        status: "?먰솢",
+        status: "여유",
         color: "text-emerald-500",
       },
     };
