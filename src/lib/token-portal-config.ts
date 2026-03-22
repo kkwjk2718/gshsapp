@@ -1,4 +1,4 @@
-export const TOKEN_DISTRIBUTION_DAILY_LIMIT = 300;
+export const TOKEN_DISTRIBUTION_DAILY_LIMIT = 250;
 
 export const DEFAULT_TOKEN_PORTAL_EMAIL_GUIDANCE = [
   "이 메일은 GSHS.app 계정 생성을 위한 초대 안내입니다.",

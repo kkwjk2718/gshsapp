@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 import { Loader2, Mail, Power, Save } from "lucide-react";
 import { type ActionResult, updateTokenPortalConfig } from "./actions";
+import { TOKEN_DISTRIBUTION_DAILY_LIMIT } from "@/lib/token-portal-config";
 
 const initialState: ActionResult = {};
 
@@ -55,7 +56,7 @@ export function TokenPortalSettingsForm({
         <div className="flex items-center justify-between gap-3">
           <span className="font-medium">오늘 발송량</span>
           <span className={`text-sm font-semibold ${isQuotaReached ? "text-rose-500" : ""}`}>
-            {todaySentCount} / 300
+            {todaySentCount} / {TOKEN_DISTRIBUTION_DAILY_LIMIT}
           </span>
         </div>
         <div className="flex items-center justify-between gap-3">

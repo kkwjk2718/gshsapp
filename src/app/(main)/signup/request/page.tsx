@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Mail, Ticket } from "lucide-react";
+import { TOKEN_DISTRIBUTION_DAILY_LIMIT } from "@/lib/token-portal-config";
 import { hasValidPortalSession } from "@/lib/token-portal-session";
 import { getPublicPortalState } from "@/lib/token-portal";
 import { PortalAccessForm } from "./portal-access-form";
@@ -54,7 +55,7 @@ export default async function SignupRequestPage() {
           <div className="flex items-center justify-between gap-3">
             <span className="font-medium">오늘 발송량</span>
             <span className={`font-semibold ${quota.isLimitReached ? "text-rose-500" : ""}`}>
-              {quota.used} / 300
+              {quota.used} / {TOKEN_DISTRIBUTION_DAILY_LIMIT}
             </span>
           </div>
         </div>

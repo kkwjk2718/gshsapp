@@ -5,6 +5,7 @@ import { ChevronRight, FileText, MailPlus, Send, Users } from "lucide-react";
 import Link from "next/link";
 import { ManualSendForm } from "./manual-send-form";
 import { getDistributionQuotaSummary } from "@/lib/token-distribution";
+import { TOKEN_DISTRIBUTION_DAILY_LIMIT } from "@/lib/token-portal-config";
 
 const ROLE_LABELS: Record<string, string> = {
   STUDENT: "학생",
@@ -130,7 +131,7 @@ export default async function TokenManagerPage() {
                 개별 메일 발송
               </h2>
               <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600 dark:border-slate-800 dark:bg-slate-900/50 dark:text-slate-300">
-                오늘 발송량 <span className="font-semibold">{quota.used} / 300</span>
+                오늘 발송량 <span className="font-semibold">{quota.used} / {TOKEN_DISTRIBUTION_DAILY_LIMIT}</span>
                 <span className="mx-2 text-slate-300">|</span>
                 남은 발송량 <span className="font-semibold">{quota.remaining}건</span>
               </div>

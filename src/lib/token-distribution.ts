@@ -316,7 +316,7 @@ export async function sendInviteTokenEmail(input: SendDistributionEmailInput): P
   const quota = await enforceDailyQuota(input);
   if (quota.isLimitReached) {
     return {
-      error: "오늘 메일 발송 한도(300건)에 도달했습니다. 내일 다시 시도해주세요.",
+      error: `일일 메일 발송 한도(${TOKEN_DISTRIBUTION_DAILY_LIMIT}건)에 도달했습니다. 내일 다시 시도해주세요.`,
       quotaUsed: quota.used,
     };
   }
