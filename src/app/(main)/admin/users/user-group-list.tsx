@@ -1,9 +1,10 @@
 "use client"
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { ChevronDown, ChevronRight, User as UserIcon, Shield, GraduationCap, Radio, Search, KeyRound, Copy, Check, X } from "lucide-react";
 import { format } from "date-fns";
-import { resetPassword } from "./actions";
+import { changeUserRole, resetPassword } from "./actions";
 
 interface User {
     id: string;
@@ -17,6 +18,7 @@ interface User {
 
 interface UserGroupListProps {
     users: User[];
+    currentAdminId: string;
 }
 
 interface NewPasswordInfo {
@@ -24,13 +26,42 @@ interface NewPasswordInfo {
     pass: string;
 }
 
-export function UserGroupList({ users }: UserGroupListProps) {
+const ROLE_LABELS: Record<User["role"], string> = {
+    STUDENT: "학생",
+    TEACHER: "선생님",
+    BROADCAST: "방송부",
+    ADMIN: "관리자",
+};
+
+function getRoleChangeSummary(role: User["role"]) {
+    if (role === "ADMIN") {
+        return "관리자로 변경되면 기수는 제거되고, 기존 학번은 유지됩니다.";
+    }
+
+    if (role === "BROADCAST") {
+        return "방송부 권한은 학생 메타데이터를 그대로 유지합니다.";
+    }
+
+    if (role === "TEACHER") {
+        return "선생님 권한으로 변경되면 학번과 기수가 모두 제거됩니다.";
+    }
+
+    return "학생 권한으로 변경하려면 4자리 학생번호를 입력해야 하며, 기수는 자동 계산됩니다.";
+}
+
+export function UserGroupList({ users, currentAdminId }: UserGroupListProps) {
+    const router = useRouter();
     const [activeTab, setActiveTab] = useState<"STUDENT" | "TEACHER" | "BROADCAST" | "ADMIN">("STUDENT");
     const [expandedGisu, setExpandedGisu] = useState<number | null>(null);
     const [search, setSearch] = useState("");
     const [newPasswordInfo, setNewPasswordInfo] = useState<NewPasswordInfo | null>(null);
     const [copied, setCopied] = useState(false);
-    const [isPending, startTransition] = useTransition();
+    const [selectedRoleUser, setSelectedRoleUser] = useState<User | null>(null);
+    const [nextRole, setNextRole] = useState<User["role"]>("STUDENT");
+    const [nextStudentId, setNextStudentId] = useState("");
+    const [roleChangeError, setRoleChangeError] = useState<string | null>(null);
+    const [isResetPending, startResetTransition] = useTransition();
+    const [isRolePending, startRoleTransition] = useTransition();
 
     const isSearching = search.length > 0;
     const lowerSearch = search.toLowerCase();
@@ -38,7 +69,7 @@ export function UserGroupList({ users }: UserGroupListProps) {
     const handleResetPassword = (user: User) => {
         if (!confirm(`${user.name}님의 비밀번호를 초기화하시겠습니까?`)) return;
 
-        startTransition(async () => {
+        startResetTransition(async () => {
             const formData = new FormData();
             formData.append('userId', user.id);
             const result = await resetPassword(formData);
@@ -61,6 +92,42 @@ export function UserGroupList({ users }: UserGroupListProps) {
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
     }
+
+    const handleOpenRoleModal = (user: User) => {
+        setSelectedRoleUser(user);
+        setNextRole(user.role);
+        setNextStudentId(user.studentId ?? "");
+        setRoleChangeError(null);
+    };
+
+    const handleRoleChange = () => {
+        if (!selectedRoleUser) return;
+
+        setRoleChangeError(null);
+
+        startRoleTransition(async () => {
+            const formData = new FormData();
+            formData.append("userId", selectedRoleUser.id);
+            formData.append("targetRole", nextRole);
+            formData.append("studentId", nextStudentId);
+
+            const result = await changeUserRole(formData);
+            if (result.error) {
+                setRoleChangeError(result.error);
+                return;
+            }
+
+            setSelectedRoleUser(null);
+            router.refresh();
+            alert(result.success ?? "권한이 변경되었습니다.");
+        });
+    };
+
+    const isSelfAdminDemotion =
+        !!selectedRoleUser &&
+        selectedRoleUser.id === currentAdminId &&
+        selectedRoleUser.role === "ADMIN" &&
+        nextRole !== "ADMIN";
 
     // Filter & Grouping Logic...
     const filteredUsers = users.filter(u => {
@@ -118,8 +185,16 @@ export function UserGroupList({ users }: UserGroupListProps) {
                     {format(new Date(u.createdAt), "yyyy.MM.dd")}
                 </div>
                 <button
+                    onClick={() => handleOpenRoleModal(u)}
+                    disabled={isRolePending}
+                    className="rounded-lg border border-slate-700 px-3 py-2 text-xs font-medium text-slate-300 transition-colors hover:border-indigo-500 hover:text-indigo-300 disabled:opacity-50"
+                    title="권한 변경"
+                >
+                    권한 변경
+                </button>
+                <button
                     onClick={() => handleResetPassword(u)}
-                    disabled={isPending}
+                    disabled={isResetPending}
                     className="p-2 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-indigo-500 transition-colors disabled:opacity-50"
                     title="비밀번호 초기화"
                 >
@@ -150,6 +225,89 @@ export function UserGroupList({ users }: UserGroupListProps) {
                                 className="p-2 rounded-lg bg-slate-700 text-slate-500 hover:text-indigo-500"
                             >
                                 {copied ? <Check className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4" />}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+            {selectedRoleUser && (
+                <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <div className="glass rounded-3xl p-8 max-w-md w-full relative space-y-6">
+                        <button
+                            onClick={() => setSelectedRoleUser(null)}
+                            className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-200"
+                            aria-label="권한 변경 모달 닫기"
+                        >
+                            <X className="w-5 h-5" />
+                        </button>
+                        <div className="space-y-2">
+                            <h2 className="text-lg font-bold text-slate-100">권한 변경</h2>
+                            <p className="text-sm text-slate-400">
+                                <span className="font-semibold text-indigo-300">{selectedRoleUser.name}</span>
+                                {" "}({selectedRoleUser.userId}) 계정의 권한을 변경합니다.
+                            </p>
+                        </div>
+                        <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-4 text-sm text-slate-300 space-y-1">
+                            <div>현재 권한: <span className="font-semibold text-slate-100">{ROLE_LABELS[selectedRoleUser.role]}</span></div>
+                            <div>현재 학번: <span className="font-semibold text-slate-100">{selectedRoleUser.studentId ?? "없음"}</span></div>
+                            <div>현재 기수: <span className="font-semibold text-slate-100">{selectedRoleUser.gisu ? `${selectedRoleUser.gisu}기` : "없음"}</span></div>
+                        </div>
+                        <div className="space-y-3">
+                            <label className="block space-y-2">
+                                <span className="text-sm font-medium text-slate-200">변경할 권한</span>
+                                <select
+                                    value={nextRole}
+                                    onChange={(event) => setNextRole(event.target.value as User["role"])}
+                                    className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                >
+                                    <option value="STUDENT">학생</option>
+                                    <option value="TEACHER">선생님</option>
+                                    <option value="BROADCAST">방송부</option>
+                                    <option value="ADMIN">관리자</option>
+                                </select>
+                            </label>
+                            {nextRole === "STUDENT" && (
+                                <label className="block space-y-2">
+                                    <span className="text-sm font-medium text-slate-200">학생번호</span>
+                                    <input
+                                        value={nextStudentId}
+                                        onChange={(event) => setNextStudentId(event.target.value)}
+                                        inputMode="numeric"
+                                        maxLength={4}
+                                        placeholder="예: 1304"
+                                        className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                    />
+                                </label>
+                            )}
+                            <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4 text-sm text-slate-300">
+                                {getRoleChangeSummary(nextRole)}
+                            </div>
+                            {isSelfAdminDemotion && (
+                                <div className="rounded-2xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm text-amber-200">
+                                    현재 로그인한 관리자 계정의 ADMIN 권한은 해제할 수 없습니다.
+                                </div>
+                            )}
+                            {roleChangeError && (
+                                <div className="rounded-2xl border border-rose-500/40 bg-rose-500/10 p-4 text-sm text-rose-200">
+                                    {roleChangeError}
+                                </div>
+                            )}
+                        </div>
+                        <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+                            <button
+                                type="button"
+                                onClick={() => setSelectedRoleUser(null)}
+                                className="rounded-xl border border-slate-700 px-4 py-2.5 text-sm font-medium text-slate-200 transition-colors hover:border-slate-500"
+                            >
+                                취소
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleRoleChange}
+                                disabled={isRolePending || nextRole === selectedRoleUser.role || isSelfAdminDemotion}
+                                className="rounded-xl bg-indigo-500 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-indigo-400 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                                {isRolePending ? "변경 중..." : "권한 변경 적용"}
                             </button>
                         </div>
                     </div>

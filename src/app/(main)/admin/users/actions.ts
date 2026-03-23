@@ -5,6 +5,9 @@ import { revalidatePath } from "next/cache";
 import bcrypt from "bcryptjs";
 import { getCurrentUser } from "@/lib/session";
 import { createNotification } from "@/lib/notifications";
+import { getGradeMapping } from "@/lib/grade-utils";
+import { logAction } from "@/lib/logger";
+import { resolveUserRoleChange, UserRoleChangeError, isUserRole } from "@/lib/user-role-change";
 
 export async function importUsersBackup(_: any, formData: FormData) {
     const sessionUser = await getCurrentUser();
@@ -133,6 +136,163 @@ export async function resetPassword(formData: FormData) {
         return { success: `Password reset successfully. New password is: ${newPassword}` };
     } catch (error) {
         return { error: "Failed to reset password." };
+    }
+}
+
+export type ChangeUserRoleResult = {
+    success?: string;
+    error?: string;
+};
+
+function getRoleChangeErrorMessage(error: unknown) {
+    if (error instanceof UserRoleChangeError) {
+        if (error.code === "STUDENT_ID_REQUIRED") {
+            return "학생 권한으로 변경하려면 4자리 학생번호를 입력하세요.";
+        }
+
+        if (error.code === "INVALID_STUDENT_ID") {
+            return "학생번호 형식이 올바르지 않습니다.";
+        }
+
+        if (error.code === "GRADE_MAPPING_MISSING") {
+            return "학년-기수 매핑을 찾을 수 없습니다. 설정을 확인하세요.";
+        }
+    }
+
+    if (error instanceof Error) {
+        if (error.message === "TARGET_USER_NOT_FOUND") {
+            return "대상 사용자를 찾을 수 없습니다.";
+        }
+
+        if (error.message === "ROLE_UNCHANGED") {
+            return "현재와 같은 권한으로는 변경할 수 없습니다.";
+        }
+
+        if (error.message === "SELF_ADMIN_PROTECTED") {
+            return "현재 로그인한 관리자 계정의 ADMIN 권한은 해제할 수 없습니다.";
+        }
+
+        if (error.message === "LAST_ADMIN_PROTECTED") {
+            return "마지막 관리자 계정은 다른 권한으로 변경할 수 없습니다.";
+        }
+    }
+
+    return "권한 변경 중 오류가 발생했습니다.";
+}
+
+export async function changeUserRole(formData: FormData): Promise<ChangeUserRoleResult> {
+    const sessionUser = await getCurrentUser();
+    if (!sessionUser?.id || sessionUser.role !== "ADMIN") {
+        return { error: "Permission denied." };
+    }
+
+    const userId = String(formData.get("userId") || "").trim();
+    const targetRole = String(formData.get("targetRole") || "").trim();
+    const studentIdInput = String(formData.get("studentId") || "").trim();
+
+    if (!userId) {
+        return { error: "대상 사용자를 찾을 수 없습니다." };
+    }
+
+    if (!isUserRole(targetRole)) {
+        return { error: "변경할 권한이 올바르지 않습니다." };
+    }
+
+    try {
+        const gradeMapping = targetRole === "STUDENT" ? await getGradeMapping() : undefined;
+
+        const result = await prisma.$transaction(async (tx) => {
+            const targetUser = await tx.user.findUnique({
+                where: { id: userId },
+                select: {
+                    id: true,
+                    userId: true,
+                    name: true,
+                    role: true,
+                    studentId: true,
+                    gisu: true,
+                },
+            });
+
+            if (!targetUser) {
+                throw new Error("TARGET_USER_NOT_FOUND");
+            }
+
+            if (targetUser.role === targetRole) {
+                throw new Error("ROLE_UNCHANGED");
+            }
+
+            if (targetUser.id === sessionUser.id && targetUser.role === "ADMIN" && targetRole !== "ADMIN") {
+                throw new Error("SELF_ADMIN_PROTECTED");
+            }
+
+            if (targetUser.role === "ADMIN" && targetRole !== "ADMIN") {
+                const adminCount = await tx.user.count({
+                    where: { role: "ADMIN" },
+                });
+
+                if (adminCount <= 1) {
+                    throw new Error("LAST_ADMIN_PROTECTED");
+                }
+            }
+
+            const nextRole = resolveUserRoleChange({
+                currentStudentId: targetUser.studentId,
+                currentGisu: targetUser.gisu,
+                targetRole,
+                studentIdInput,
+                gradeMapping,
+            });
+
+            const updatedUser = await tx.user.update({
+                where: { id: userId },
+                data: {
+                    role: nextRole.role,
+                    studentId: nextRole.studentId,
+                    gisu: nextRole.gisu,
+                },
+                select: {
+                    id: true,
+                    userId: true,
+                    name: true,
+                    role: true,
+                    studentId: true,
+                    gisu: true,
+                },
+            });
+
+            return {
+                before: targetUser,
+                after: updatedUser,
+            };
+        });
+
+        revalidatePath("/admin/users");
+
+        await logAction("user_role_changed", {
+            actorUserId: sessionUser.id,
+            targetUserId: result.before.id,
+            targetLoginId: result.before.userId,
+            fromRole: result.before.role,
+            toRole: result.after.role,
+            previousStudentId: result.before.studentId,
+            nextStudentId: result.after.studentId,
+            previousGisu: result.before.gisu,
+            nextGisu: result.after.gisu,
+        });
+
+        return {
+            success: `${result.before.name}님의 권한이 ${result.before.role}에서 ${result.after.role}(으)로 변경되었습니다. 변경된 권한은 다음 로그인부터 완전히 반영될 수 있습니다.`,
+        };
+    } catch (error) {
+        await logAction("user_role_change_failed", {
+            actorUserId: sessionUser.id,
+            targetUserId: userId,
+            targetRole,
+            reason: error instanceof Error ? error.message : "UNKNOWN",
+        });
+
+        return { error: getRoleChangeErrorMessage(error) };
     }
 }
 
