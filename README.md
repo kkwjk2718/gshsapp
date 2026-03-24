@@ -109,6 +109,12 @@ npm run test:e2e:smoke
 5. [docs/features/admin-features.md](./docs/features/admin-features.md)
 6. [CONTRIBUTING.md](./CONTRIBUTING.md)
 
+### 실제 사용자 안내
+
+1. [USER_GUIDE.md](./USER_GUIDE.md)
+2. [docs/features/public-features.md](./docs/features/public-features.md)
+3. [docs/features/account-and-access.md](./docs/features/account-and-access.md)
+
 ### 운영/배포 담당자
 
 1. [README.md](./README.md)
@@ -130,6 +136,7 @@ npm run test:e2e:smoke
 ## 기능 명세
 
 - [제품 개요](./docs/product-overview.md)
+- [사용자 안내문](./USER_GUIDE.md)
 - [공개 기능 명세](./docs/features/public-features.md)
 - [계정 및 접근 기능 명세](./docs/features/account-and-access.md)
 - [관리자 기능 명세](./docs/features/admin-features.md)
