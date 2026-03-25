@@ -22,11 +22,17 @@ export const authConfig = {
   callbacks: {
     authorized({ auth, request: { nextUrl } }) {
       const isLoggedIn = !!auth?.user;
+      const role = auth?.user?.role;
       const isOnDashboard = nextUrl.pathname === '/me' || nextUrl.pathname.startsWith('/me/');
       const isOnAdmin = nextUrl.pathname.startsWith('/admin');
       const isOnLogin = nextUrl.pathname.startsWith('/login');
       const isOnMeals = nextUrl.pathname.startsWith('/meals');
       const isOnSites = nextUrl.pathname.startsWith('/sites');
+      const isOnSongs = nextUrl.pathname.startsWith('/songs');
+      const isOnTimetable = nextUrl.pathname.startsWith('/timetable');
+      const isOnLinks = nextUrl.pathname.startsWith('/links');
+
+      const redirectHome = () => Response.redirect(new URL('/', nextUrl));
       
       if (isOnMeals) {
           return true;
@@ -38,12 +44,19 @@ export const authConfig = {
       }
 
       if (isOnSites) {
-        if (isLoggedIn) return true;
-        return false;
+        if (!isLoggedIn) return false;
+        if (role === 'GRADUATE') return redirectHome();
+        return true;
+      }
+
+      if (isOnSongs || isOnTimetable || isOnLinks) {
+        if (!isLoggedIn) return false;
+        if (role === 'GRADUATE') return redirectHome();
+        return true;
       }
       
       if (isOnAdmin) {
-          if (isLoggedIn && auth?.user?.role === 'ADMIN') return true;
+          if (isLoggedIn && role === 'ADMIN') return true;
           return false; 
       }
 

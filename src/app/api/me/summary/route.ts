@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
 import {
   anonymousUserSummary,
   type UserSummaryPayload,
 } from "@/lib/user-state";
+import { getCurrentUser } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -13,9 +13,9 @@ const noStoreHeaders = {
 };
 
 export async function GET() {
-  const session = await auth();
+  const user = await getCurrentUser();
 
-  if (!session?.user) {
+  if (!user) {
     return NextResponse.json(anonymousUserSummary, { headers: noStoreHeaders });
   }
 
@@ -24,7 +24,7 @@ export async function GET() {
   try {
     unreadNotificationCount = await prisma.notification.count({
       where: {
-        userId: session.user.id,
+        userId: user.id,
         isRead: false,
       },
     });
@@ -34,9 +34,9 @@ export async function GET() {
 
   const payload: UserSummaryPayload = {
     authenticated: true,
-    role: session.user.role ?? null,
-    name: session.user.name ?? null,
-    studentId: session.user.studentId ?? null,
+    role: user.role ?? null,
+    name: user.name ?? null,
+    studentId: user.studentId ?? null,
     unreadNotificationCount,
   };
 

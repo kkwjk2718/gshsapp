@@ -2,16 +2,21 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { mainNavItems } from "@/config/nav";
+import { getVisibleNavItems } from "@/config/nav";
 import { cn } from "@/lib/utils";
 import { NotificationBadge } from "./notification-badge";
+import { useUserSummary } from "@/components/user-summary-provider";
 
 export function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
+  const {
+    summary: { role },
+  } = useUserSummary();
+  const visibleNavItems = getVisibleNavItems(role);
 
   return (
     <nav className="sidebar-nav flex w-full flex-col gap-1.5">
-      {mainNavItems.map((item) => {
+      {visibleNavItems.map((item) => {
         const isActive = pathname === item.href;
         return (
           <Link

@@ -89,6 +89,7 @@ Route group 기준:
 현재 주요 역할:
 
 - `STUDENT`
+- `GRADUATE`
 - `TEACHER`
 - `BROADCAST`
 - `ADMIN`
@@ -99,6 +100,8 @@ Route group 기준:
 - `/me`는 로그인 필요
 - `/music`은 방송부 또는 관리자
 - `/admin/*`는 대부분 관리자 전용
+- `/songs`, `/timetable`, `/links`, `/sites`는 로그인 필요
+- `GRADUATE`는 로그인은 가능하지만 학생 전용 핵심 정보에는 접근하지 않음
 - 일부 공개 화면은 로그인 시 개인화 정보를 추가 표시
 
 ## 7. 배포 아키텍처

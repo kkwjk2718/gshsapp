@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 import { Building2, ExternalLink, School, Users } from "lucide-react";
 import { getRelatedSites } from "@/lib/public-content";
+import { getCurrentUser } from "@/lib/session";
+import { canAccessCoreMemberFeatures } from "@/lib/user-roles";
 
 export const dynamic = "force-dynamic";
 
@@ -10,6 +13,10 @@ export const metadata: Metadata = {
 };
 
 export default async function SitesPage() {
+  const user = await getCurrentUser();
+  if (!user) redirect("/login");
+  if (!canAccessCoreMemberFeatures(user.role)) redirect("/");
+
   const sites = await getRelatedSites();
 
   const groupedSites = {

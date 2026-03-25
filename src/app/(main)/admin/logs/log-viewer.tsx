@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { getSystemLogs } from "./actions";
 import { Loader2, ChevronLeft, ChevronRight, Search, Eye, X } from "lucide-react";
 import { format } from "date-fns";
+import { ROLE_LABELS, type UserRole } from "@/lib/user-roles";
 
 export function LogViewer() {
     const [logs, setLogs] = useState<any[]>([]);
@@ -43,10 +44,11 @@ export function LogViewer() {
     const actionTypes = ["ALL", "LOGIN", "LOGOUT", "PAGE_VIEW", "SONG_REQUEST", "ADMIN_ACTION", "ERROR"];
     const roles = [
         { label: "전체 역할", value: "ALL" },
-        { label: "학생", value: "STUDENT" },
-        { label: "교사", value: "TEACHER" },
-        { label: "관리자", value: "ADMIN" },
-        { label: "방송부", value: "BROADCAST" }
+        { label: ROLE_LABELS.STUDENT, value: "STUDENT" },
+        { label: ROLE_LABELS.GRADUATE, value: "GRADUATE" },
+        { label: ROLE_LABELS.TEACHER, value: "TEACHER" },
+        { label: ROLE_LABELS.BROADCAST, value: "BROADCAST" },
+        { label: ROLE_LABELS.ADMIN, value: "ADMIN" }
     ];
 
     return (
@@ -172,7 +174,9 @@ export function LogViewer() {
                                         <td className="px-6 py-4">
                                             <div className="flex flex-col">
                                                 <span className="text-slate-200 font-medium">{log.user?.name || "Guest"}</span>
-                                                <span className="text-xs text-slate-500">{log.user?.studentId || "-"}</span>
+                                                <span className="text-xs text-slate-500">
+                                                    {log.user?.studentId || (log.user?.role ? ROLE_LABELS[log.user.role as UserRole] ?? log.user.role : "-")}
+                                                </span>
                                             </div>
                                         </td>
                                         <td className="px-6 py-4 max-w-[200px]">
@@ -219,7 +223,9 @@ export function LogViewer() {
                             </div>
                             <div className="space-y-1">
                                 <label className="text-slate-500 text-xs">User</label>
-                                <p className="text-slate-200">{selectedLog.user?.name} ({selectedLog.user?.studentId || "N/A"})</p>
+                                <p className="text-slate-200">
+                                    {selectedLog.user?.name} ({selectedLog.user?.studentId || (selectedLog.user?.role ? ROLE_LABELS[selectedLog.user.role as UserRole] ?? selectedLog.user.role : "N/A")})
+                                </p>
                             </div>
                             <div className="space-y-1">
                                 <label className="text-slate-500 text-xs">IP Address</label>

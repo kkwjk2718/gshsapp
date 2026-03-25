@@ -148,6 +148,7 @@ GSHS.app은 경남과학고등학교 구성원을 위한 통합 웹 서비스입
 역할 모델:
 
 - `STUDENT`
+- `GRADUATE`
 - `TEACHER`
 - `BROADCAST`
 - `ADMIN`
@@ -252,6 +253,8 @@ SQLite 규칙:
 - 토큰 배부 포털 `/signup/request`
 - 관리자 수동 토큰 메일 발송
 - Brevo API 기반 초대 메일 발송
+- 기존 계정 역할 변경, 기수 변경, 사용자 삭제
+- `GRADUATE` 역할과 핵심 학생 정보 접근 제한
 - `/admin/test` 운영 진단
 - 정기 백업과 restore drill
 - 푸터 semver 표기와 GitHub Release 추적

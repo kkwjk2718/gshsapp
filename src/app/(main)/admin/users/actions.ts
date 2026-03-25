@@ -8,6 +8,7 @@ import { createNotification } from "@/lib/notifications";
 import { getGradeMapping } from "@/lib/grade-utils";
 import { logAction } from "@/lib/logger";
 import { resolveUserRoleChange, UserRoleChangeError, isUserRole } from "@/lib/user-role-change";
+import { canChangeGisu } from "@/lib/user-roles";
 
 export async function importUsersBackup(_: any, formData: FormData) {
     const sessionUser = await getCurrentUser();
@@ -143,6 +144,27 @@ export type ChangeUserRoleResult = {
     success?: string;
     error?: string;
 };
+
+export type ChangeUserGisuResult = {
+    success?: string;
+    error?: string;
+};
+
+export type DeleteUserResult = {
+    success?: string;
+    error?: string;
+};
+
+function revalidateUserManagementPaths() {
+    revalidatePath("/admin/users");
+    revalidatePath("/admin/logs");
+    revalidatePath("/admin/reports");
+    revalidatePath("/admin/notices");
+    revalidatePath("/admin/songs");
+    revalidatePath("/notices");
+    revalidatePath("/calendar");
+    revalidatePath("/songs");
+}
 
 function getRoleChangeErrorMessage(error: unknown) {
     if (error instanceof UserRoleChangeError) {
@@ -282,7 +304,7 @@ export async function changeUserRole(formData: FormData): Promise<ChangeUserRole
         });
 
         return {
-            success: `${result.before.name}님의 권한이 ${result.before.role}에서 ${result.after.role}(으)로 변경되었습니다. 변경된 권한은 다음 로그인부터 완전히 반영될 수 있습니다.`,
+            success: `${result.before.name}님의 권한이 ${result.before.role}에서 ${result.after.role}(으)로 변경되었습니다.`,
         };
     } catch (error) {
         await logAction("user_role_change_failed", {
@@ -293,6 +315,261 @@ export async function changeUserRole(formData: FormData): Promise<ChangeUserRole
         });
 
         return { error: getRoleChangeErrorMessage(error) };
+    }
+}
+
+function getGisuChangeErrorMessage(error: unknown) {
+    if (error instanceof Error) {
+        if (error.message === "TARGET_USER_NOT_FOUND") {
+            return "대상 사용자를 찾을 수 없습니다.";
+        }
+
+        if (error.message === "GISU_REQUIRED") {
+            return "변경할 기수를 입력하세요.";
+        }
+
+        if (error.message === "GISU_INVALID") {
+            return "기수는 1 이상의 정수여야 합니다.";
+        }
+
+        if (error.message === "GISU_ROLE_NOT_SUPPORTED") {
+            return "현재 역할에서는 기수를 직접 변경할 수 없습니다.";
+        }
+
+        if (error.message === "GISU_UNCHANGED") {
+            return "현재와 같은 기수로는 변경할 수 없습니다.";
+        }
+    }
+
+    return "기수 변경 중 오류가 발생했습니다.";
+}
+
+export async function changeUserGisu(formData: FormData): Promise<ChangeUserGisuResult> {
+    const sessionUser = await getCurrentUser();
+    if (!sessionUser?.id || sessionUser.role !== "ADMIN") {
+        return { error: "Permission denied." };
+    }
+
+    const userId = String(formData.get("userId") || "").trim();
+    const nextGisuRaw = String(formData.get("gisu") || "").trim();
+
+    if (!userId) {
+        return { error: "대상 사용자를 찾을 수 없습니다." };
+    }
+
+    try {
+        const nextGisu = Number(nextGisuRaw);
+        if (!nextGisuRaw) {
+            throw new Error("GISU_REQUIRED");
+        }
+
+        if (!Number.isInteger(nextGisu) || nextGisu <= 0) {
+            throw new Error("GISU_INVALID");
+        }
+
+        const result = await prisma.$transaction(async (tx) => {
+            const targetUser = await tx.user.findUnique({
+                where: { id: userId },
+                select: {
+                    id: true,
+                    userId: true,
+                    name: true,
+                    role: true,
+                    gisu: true,
+                    studentId: true,
+                },
+            });
+
+            if (!targetUser) {
+                throw new Error("TARGET_USER_NOT_FOUND");
+            }
+
+            if (!canChangeGisu(targetUser.role)) {
+                throw new Error("GISU_ROLE_NOT_SUPPORTED");
+            }
+
+            if (targetUser.gisu === nextGisu) {
+                throw new Error("GISU_UNCHANGED");
+            }
+
+            const updatedUser = await tx.user.update({
+                where: { id: targetUser.id },
+                data: { gisu: nextGisu },
+                select: {
+                    id: true,
+                    userId: true,
+                    name: true,
+                    role: true,
+                    gisu: true,
+                },
+            });
+
+            return { before: targetUser, after: updatedUser };
+        });
+
+        revalidateUserManagementPaths();
+
+        await logAction("user_gisu_changed", {
+            actorUserId: sessionUser.id,
+            targetUserId: result.before.id,
+            targetLoginId: result.before.userId,
+            targetRole: result.before.role,
+            previousGisu: result.before.gisu,
+            nextGisu: result.after.gisu,
+        });
+
+        return {
+            success: `${result.before.name}님의 기수가 ${result.before.gisu ?? "미설정"}에서 ${result.after.gisu ?? "미설정"}(으)로 변경되었습니다.`,
+        };
+    } catch (error) {
+        await logAction("user_gisu_change_failed", {
+            actorUserId: sessionUser.id,
+            targetUserId: userId,
+            requestedGisu: nextGisuRaw,
+            reason: error instanceof Error ? error.message : "UNKNOWN",
+        });
+
+        return { error: getGisuChangeErrorMessage(error) };
+    }
+}
+
+function getDeleteUserErrorMessage(error: unknown) {
+    if (error instanceof Error) {
+        if (error.message === "TARGET_USER_NOT_FOUND") {
+            return "대상 사용자를 찾을 수 없습니다.";
+        }
+
+        if (error.message === "DELETE_CONFIRM_MISMATCH") {
+            return "삭제 확인용 로그인 ID가 일치하지 않습니다.";
+        }
+
+        if (error.message === "SELF_DELETE_PROTECTED") {
+            return "현재 로그인한 관리자 계정은 삭제할 수 없습니다.";
+        }
+
+        if (error.message === "LAST_ADMIN_PROTECTED") {
+            return "마지막 관리자 계정은 삭제할 수 없습니다.";
+        }
+    }
+
+    return "사용자 삭제 중 오류가 발생했습니다.";
+}
+
+export async function deleteUserAccount(formData: FormData): Promise<DeleteUserResult> {
+    const sessionUser = await getCurrentUser();
+    if (!sessionUser?.id || sessionUser.role !== "ADMIN") {
+        return { error: "Permission denied." };
+    }
+
+    const userId = String(formData.get("userId") || "").trim();
+    const confirmLoginId = String(formData.get("confirmLoginId") || "").trim();
+
+    if (!userId) {
+        return { error: "대상 사용자를 찾을 수 없습니다." };
+    }
+
+    try {
+        const result = await prisma.$transaction(async (tx) => {
+            const targetUser = await tx.user.findUnique({
+                where: { id: userId },
+                select: {
+                    id: true,
+                    userId: true,
+                    name: true,
+                    role: true,
+                },
+            });
+
+            if (!targetUser) {
+                throw new Error("TARGET_USER_NOT_FOUND");
+            }
+
+            if (targetUser.userId !== confirmLoginId) {
+                throw new Error("DELETE_CONFIRM_MISMATCH");
+            }
+
+            if (targetUser.id === sessionUser.id) {
+                throw new Error("SELF_DELETE_PROTECTED");
+            }
+
+            if (targetUser.role === "ADMIN") {
+                const adminCount = await tx.user.count({
+                    where: { role: "ADMIN" },
+                });
+
+                if (adminCount <= 1) {
+                    throw new Error("LAST_ADMIN_PROTECTED");
+                }
+            }
+
+            const [noticeCount, scheduleCount, songRequestCount, personalEventCount, notificationCount, errorReportCount, auditLogCount, systemLogCount] = await Promise.all([
+                tx.notice.count({ where: { writerId: targetUser.id } }),
+                tx.schedule.count({ where: { writerId: targetUser.id } }),
+                tx.songRequest.count({ where: { requesterId: targetUser.id } }),
+                tx.personalEvent.count({ where: { userId: targetUser.id } }),
+                tx.notification.count({ where: { userId: targetUser.id } }),
+                tx.errorReport.count({ where: { userId: targetUser.id } }),
+                tx.auditLog.count({ where: { actorId: targetUser.id } }),
+                tx.systemLog.count({ where: { userId: targetUser.id } }),
+            ]);
+
+            await tx.systemLog.updateMany({
+                where: { userId: targetUser.id },
+                data: { userId: null },
+            });
+
+            await tx.inviteToken.updateMany({
+                where: { usedByUserId: targetUser.id },
+                data: { usedByUserId: null },
+            });
+
+            await tx.notification.deleteMany({ where: { userId: targetUser.id } });
+            await tx.personalEvent.deleteMany({ where: { userId: targetUser.id } });
+            await tx.teacherProfile.deleteMany({ where: { userId: targetUser.id } });
+            await tx.auditLog.deleteMany({ where: { actorId: targetUser.id } });
+            await tx.errorReport.deleteMany({ where: { userId: targetUser.id } });
+            await tx.songRequest.deleteMany({ where: { requesterId: targetUser.id } });
+            await tx.notice.deleteMany({ where: { writerId: targetUser.id } });
+            await tx.schedule.deleteMany({ where: { writerId: targetUser.id } });
+            await tx.user.delete({ where: { id: targetUser.id } });
+
+            return {
+                targetUser,
+                deletedCounts: {
+                    notices: noticeCount,
+                    schedules: scheduleCount,
+                    songRequests: songRequestCount,
+                    personalEvents: personalEventCount,
+                    notifications: notificationCount,
+                    errorReports: errorReportCount,
+                    auditLogs: auditLogCount,
+                    systemLogsDetached: systemLogCount,
+                },
+            };
+        });
+
+        revalidateUserManagementPaths();
+
+        await logAction("user_deleted", {
+            actorUserId: sessionUser.id,
+            targetUserId: result.targetUser.id,
+            targetLoginId: result.targetUser.userId,
+            targetRole: result.targetUser.role,
+            deletedCounts: result.deletedCounts,
+        });
+
+        return {
+            success: `${result.targetUser.name}(${result.targetUser.userId}) 계정을 삭제했습니다.`,
+        };
+    } catch (error) {
+        await logAction("user_delete_failed", {
+            actorUserId: sessionUser.id,
+            targetUserId: userId,
+            confirmLoginId,
+            reason: error instanceof Error ? error.message : "UNKNOWN",
+        });
+
+        return { error: getDeleteUserErrorMessage(error) };
     }
 }
 

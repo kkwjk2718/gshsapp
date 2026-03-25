@@ -162,8 +162,6 @@ export function HomeWelcomeCard({ publicDDay }: { publicDDay: HomeDdayPayload | 
     );
   }
 
-  const dday = data.personalDDay ?? publicDDay;
-
   return (
     <div
       data-testid="home-welcome-authenticated"
@@ -173,12 +171,24 @@ export function HomeWelcomeCard({ publicDDay }: { publicDDay: HomeDdayPayload | 
         <h2 className="mb-1 text-xl font-bold" style={{ color: "var(--foreground)" }}>
           {`\uc548\ub155\ud558\uc138\uc694 ${data.name ?? ""}\ub2d8`}
         </h2>
-        {dday ? (
+        {data.personalDDay ? (
           <p className="text-xs" style={{ color: "var(--muted)" }}>
-            <span className="font-bold" style={{ color: "var(--accent)" }}>{dday.title}</span>
-            {dday.prefix}{" "}
-            <span className="font-bold" style={{ color: "var(--foreground)" }}>{dday.count}</span>{" "}
-            {dday.text}
+            <span className="font-bold" style={{ color: "var(--accent)" }}>{data.personalDDay.title}</span>
+            {data.personalDDay.prefix}{" "}
+            <span className="font-bold" style={{ color: "var(--foreground)" }}>{data.personalDDay.count}</span>{" "}
+            {data.personalDDay.text}
+          </p>
+        ) : data.todayScheduleSummary ? (
+          <p className="text-xs" style={{ color: "var(--muted)" }}>
+            <span className="font-bold" style={{ color: "var(--accent)" }}>오늘 일정</span>{" "}
+            {data.todayScheduleSummary}
+          </p>
+        ) : publicDDay ? (
+          <p className="text-xs" style={{ color: "var(--muted)" }}>
+            <span className="font-bold" style={{ color: "var(--accent)" }}>{publicDDay.title}</span>
+            {publicDDay.prefix}{" "}
+            <span className="font-bold" style={{ color: "var(--foreground)" }}>{publicDDay.count}</span>{" "}
+            {publicDDay.text}
           </p>
         ) : (
           <p className="text-xs" style={{ color: "var(--muted)" }}>
@@ -217,6 +227,17 @@ export function HomeTimetableCard() {
       >
         <Clock className="h-8 w-8 opacity-20" />
         <span className="text-xs">{"\ub85c\uadf8\uc778 \ud6c4 \uc2dc\uac04\ud45c\ub97c \ud655\uc778\ud558\uc138\uc694"}</span>
+      </div>
+    );
+  }
+
+  if (summary.role === "GRADUATE") {
+    return (
+      <div
+        data-testid="home-timetable-graduate"
+        className="flex flex-1 items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 text-center text-xs text-slate-500 dark:border-white/5 dark:bg-white/5 dark:text-slate-400"
+      >
+        졸업생 계정은 시간표를 조회할 수 없습니다.
       </div>
     );
   }

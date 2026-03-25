@@ -1,5 +1,5 @@
 import { Metadata } from "next";
-import { auth } from "@/auth";
+import { getCurrentUser } from "@/lib/session";
 import { redirect } from "next/navigation";
 
 export const metadata: Metadata = {
@@ -18,13 +18,13 @@ export default async function AdminLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const session = await auth();
+  const currentUser = await getCurrentUser();
 
-  if (!session?.user) {
+  if (!currentUser) {
     redirect('/login');
   }
 
-  if (session.user.role !== 'ADMIN') {
+  if (currentUser.role !== 'ADMIN') {
     redirect('/');
   }
 

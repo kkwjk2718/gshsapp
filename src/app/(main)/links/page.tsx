@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
 import { LinkCard } from "./link-card";
 import { createLink } from "./actions";
+import { canAccessCoreMemberFeatures, canEditLinks } from "@/lib/user-roles";
 
 export const metadata: Metadata = {
   title: "링크모음",
@@ -14,8 +15,9 @@ export const metadata: Metadata = {
 export default async function LinksPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
+  if (!canAccessCoreMemberFeatures(user.role)) redirect("/");
 
-  const canEdit = user.role === "TEACHER" || user.role === "ADMIN";
+  const canEdit = canEditLinks(user.role);
   const links = await prisma.linkItem.findMany({
     orderBy: { createdAt: "desc" },
   });

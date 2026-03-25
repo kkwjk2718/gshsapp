@@ -53,6 +53,20 @@ describe("user-role-change", () => {
     });
   });
 
+  it("keeps student metadata for graduate", () => {
+    expect(
+      resolveUserRoleChange({
+        currentStudentId: "2301",
+        currentGisu: 41,
+        targetRole: "GRADUATE",
+      }),
+    ).toEqual({
+      role: "GRADUATE",
+      studentId: "2301",
+      gisu: 41,
+    });
+  });
+
   it("requires a valid student id when changing to student", () => {
     expect(() =>
       resolveUserRoleChange({

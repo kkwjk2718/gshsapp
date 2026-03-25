@@ -1,9 +1,9 @@
 import type { GradeMapping } from "@/lib/grade-mapping";
 import { getGradeFromStudentId, isValidStudentId } from "@/lib/student-id";
+import { isUserRole, type UserRole, USER_ROLES } from "@/lib/user-roles";
 
-export const USER_ROLES = ["STUDENT", "TEACHER", "BROADCAST", "ADMIN"] as const;
-
-export type UserRole = (typeof USER_ROLES)[number];
+export { USER_ROLES, isUserRole };
+export type { UserRole };
 
 export class UserRoleChangeError extends Error {
   constructor(
@@ -33,10 +33,6 @@ export type ResolvedUserRoleChange = {
   gisu: number | null;
 };
 
-export function isUserRole(value: string): value is UserRole {
-  return USER_ROLES.includes(value as UserRole);
-}
-
 export function resolveUserRoleChange({
   currentStudentId,
   currentGisu,
@@ -59,6 +55,14 @@ export function resolveUserRoleChange({
   if (targetRole === "BROADCAST") {
     return {
       role: "BROADCAST",
+      studentId: currentStudentId,
+      gisu: currentGisu,
+    };
+  }
+
+  if (targetRole === "GRADUATE") {
+    return {
+      role: "GRADUATE",
       studentId: currentStudentId,
       gisu: currentGisu,
     };

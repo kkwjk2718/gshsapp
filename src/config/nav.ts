@@ -10,6 +10,7 @@ import {
   User,
   Utensils,
 } from "lucide-react";
+import { shouldHideRestrictedNav } from "@/lib/user-roles";
 
 export const primaryNavItems = [
   { name: "홈", href: "/", icon: Home },
@@ -33,3 +34,21 @@ export const allNavItems = [
 export const desktopNavItems = allNavItems.filter((item) => item.href !== "/me");
 export const mainNavItems = desktopNavItems;
 export const bottomNavItems = primaryNavItems;
+
+const graduateRestrictedHrefs = new Set(["/songs", "/timetable", "/links", "/sites"]);
+
+export function getVisibleNavItems(role?: string | null) {
+  if (!shouldHideRestrictedNav(role)) {
+    return mainNavItems;
+  }
+
+  return mainNavItems.filter((item) => !graduateRestrictedHrefs.has(item.href));
+}
+
+export function getVisibleMobileNavItems(role?: string | null) {
+  if (!shouldHideRestrictedNav(role)) {
+    return allNavItems;
+  }
+
+  return allNavItems.filter((item) => !graduateRestrictedHrefs.has(item.href));
+}

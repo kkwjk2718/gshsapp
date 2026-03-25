@@ -34,6 +34,7 @@ export type HomePersonalizationPayload = {
   grade: string | null;
   classNum: string | null;
   personalDDay: HomeDdayPayload | null;
+  todayScheduleSummary: string | null;
   todayTimetable: HomeTimetableItemPayload[];
 };
 
@@ -45,5 +46,6 @@ export const anonymousHomePersonalization: HomePersonalizationPayload = {
   grade: null,
   classNum: null,
   personalDDay: null,
+  todayScheduleSummary: null,
   todayTimetable: [],
 };

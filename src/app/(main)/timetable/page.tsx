@@ -6,6 +6,7 @@ import { getUserGrade } from "@/lib/grade-utils";
 import { TimetableControls } from "./timetable-controls";
 import { Clock } from "lucide-react";
 import { Metadata } from "next";
+import { canAccessCoreMemberFeatures } from "@/lib/user-roles";
 
 export const metadata: Metadata = {
   title: "시간표",
@@ -16,6 +17,7 @@ export default async function TimetablePage({ searchParams }: { searchParams: Pr
   const params = await searchParams;
   const user = await getCurrentUser();
   if (!user) redirect("/login");
+  if (!canAccessCoreMemberFeatures(user.role)) redirect("/");
 
   const dateStr = params.date || format(new Date(), "yyyyMMdd");
   

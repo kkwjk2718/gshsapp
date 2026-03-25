@@ -5,6 +5,12 @@ import { prisma } from "@/lib/db";
 import { getKSTDate } from "@/lib/date-utils";
 import { getUserGrade } from "@/lib/grade-utils";
 import { getCurrentUser } from "@/lib/session";
+import {
+  SONG_RULE_DAYS,
+  formatAllowedGradeLabel,
+  parseAllowedGrades,
+} from "@/lib/song-rules";
+import { canAccessCoreMemberFeatures } from "@/lib/user-roles";
 
 import { getNextMorningSongs, getTodayMorningSongs } from "./actions";
 import { SongRequestForm } from "./request-form";
@@ -18,6 +24,7 @@ export const metadata: Metadata = {
 export default async function SongsPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
+  if (!canAccessCoreMemberFeatures(user.role)) redirect("/");
 
   const todaySongs = await getTodayMorningSongs();
   const nextSongs = await getNextMorningSongs();
@@ -27,9 +34,19 @@ export default async function SongsPage() {
   });
 
   let isAllowedGrade = true;
+  const todayDay = getKSTDate().getDay();
+  const songRules = await prisma.songRule.findMany({
+    orderBy: { dayOfWeek: "asc" },
+  });
+  const ruleByDay = new Map(songRules.map((rule) => [rule.dayOfWeek, rule.allowedGrade]));
+  const todayAllowedGrades = ruleByDay.get(todayDay) ?? "ALL";
+  const weeklyRules = SONG_RULE_DAYS.map((day) => ({
+    ...day,
+    label: formatAllowedGradeLabel(ruleByDay.get(day.dayOfWeek) ?? "ALL"),
+    isToday: day.dayOfWeek === todayDay,
+  }));
 
   if (dbUser && dbUser.role !== "ADMIN") {
-    const todayDay = getKSTDate().getDay();
     const rule = await prisma.songRule.findFirst({
       where: { dayOfWeek: todayDay },
     });
@@ -41,10 +58,7 @@ export default async function SongsPage() {
         grade = dbUser.studentId.substring(0, 1);
       }
 
-      const allowedGrades = rule.allowedGrade
-        .split(",")
-        .map((value) => value.trim())
-        .filter(Boolean);
+      const allowedGrades = parseAllowedGrades(rule.allowedGrade);
 
       isAllowedGrade = !!grade && allowedGrades.includes(grade);
     }
@@ -63,7 +77,11 @@ export default async function SongsPage() {
         </div>
       </div>
 
-      <SongRequestForm isAllowedGrade={isAllowedGrade} />
+      <SongRequestForm
+        isAllowedGrade={isAllowedGrade}
+        todayAllowedGradesLabel={formatAllowedGradeLabel(todayAllowedGrades)}
+        weeklyRules={weeklyRules}
+      />
 
       <div className="space-y-8">
         <div className="space-y-4">
