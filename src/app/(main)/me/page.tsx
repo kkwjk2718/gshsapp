@@ -10,6 +10,7 @@ import { PasswordChangeForm } from "./password-change-form";
 import { Metadata } from "next";
 import { LogoutButton } from "@/components/auth/logout-button";
 import { formatKST } from "@/lib/date-utils";
+import { APP_SEMVER_TAG } from "@/lib/app-version";
 
 export const metadata: Metadata = {
   title: "내 정보",
@@ -122,7 +123,7 @@ export default async function MyPage() {
         />
 
         <div className="text-center text-xs text-slate-400 pb-20">
-            GSHS.app v1.2.0
+            GSHS.app {APP_SEMVER_TAG}
         </div>
      </div>
   )

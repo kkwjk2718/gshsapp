@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { BookOpen, Calendar, Clock, Music, User, Utensils } from "lucide-react";
 
+import { APP_SEMVER_TAG } from "@/lib/app-version";
 import { getCurrentUser } from "@/lib/session";
 import { canAccessCoreMemberFeatures } from "@/lib/user-roles";
 
@@ -77,7 +78,7 @@ export default async function MenuPage() {
       <div className="glass rounded-2xl p-4">
         <h2 className="mb-2 font-semibold">서비스 정보</h2>
         <p className="text-xs text-slate-500">
-          GSHS.app v1.0.2
+          GSHS.app {APP_SEMVER_TAG}
           <br />
           경남과학고등학교 정보부 · IEUM
         </p>

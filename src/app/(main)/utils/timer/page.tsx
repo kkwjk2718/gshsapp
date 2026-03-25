@@ -99,12 +99,11 @@ export default function TimerPage() {
   };
 
   const handleReset = () => {
-    const resetMs = totalDurationMs;
     endTimeRef.current = null;
     setIsRunning(false);
     setCompleted(false);
-    setInitialDurationMs(resetMs);
-    setRemainingMs(resetMs);
+    setInitialDurationMs(0);
+    setRemainingMs(0);
   };
 
   const applyPreset = (minutes: number, seconds: number) => {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Armchair,
   Ban,
@@ -30,12 +30,38 @@ export default function SeatArrangementPage() {
   const [assignments, setAssignments] = useState<Map<string, number>>(new Map());
   const [isAnimating, setIsAnimating] = useState<boolean>(false);
 
+  const effectiveVoidSeats = useMemo(() => {
+    const next = new Set<string>();
+
+    voidSeats.forEach((key) => {
+      const [rowText, colText] = key.split("-");
+      const row = Number.parseInt(rowText, 10);
+      const col = Number.parseInt(colText, 10);
+
+      if (row < rows && col < cols) {
+        next.add(key);
+      }
+    });
+
+    return next;
+  }, [voidSeats, rows, cols]);
+
+  useEffect(() => {
+    setVoidSeats((previous) => {
+      if (previous.size === effectiveVoidSeats.size) {
+        return previous;
+      }
+
+      return new Set(effectiveVoidSeats);
+    });
+  }, [effectiveVoidSeats]);
+
   useEffect(() => {
     setAssignments(new Map());
-  }, [rows, cols, voidSeats, startNum, excludedNums]);
+  }, [rows, cols, effectiveVoidSeats, startNum, excludedNums]);
 
   const totalSeats = rows * cols;
-  const validSeatsCount = totalSeats - voidSeats.size;
+  const validSeatsCount = totalSeats - effectiveVoidSeats.size;
   const normalizedGrade = gradeText.trim();
   const normalizedClass = classText.trim();
   const shouldUseClassPrefix = normalizedGrade !== "" && normalizedClass !== "";
@@ -69,7 +95,7 @@ export default function SeatArrangementPage() {
     }
 
     const key = `${row}-${col}`;
-    const nextVoidSeats = new Set(voidSeats);
+    const nextVoidSeats = new Set(effectiveVoidSeats);
     if (nextVoidSeats.has(key)) {
       nextVoidSeats.delete(key);
     } else {
@@ -128,7 +154,7 @@ export default function SeatArrangementPage() {
     const availableSeatKeys: string[] = [];
     for (let row = 0; row < rows; row += 1) {
       for (let col = 0; col < cols; col += 1) {
-        if (!voidSeats.has(`${row}-${col}`)) {
+        if (!effectiveVoidSeats.has(`${row}-${col}`)) {
           availableSeatKeys.push(`${row}-${col}`);
         }
       }
@@ -439,7 +465,7 @@ export default function SeatArrangementPage() {
 
                     {Array.from({ length: cols }).map((_, colIndex) => {
                       const key = `${rowIndex}-${colIndex}`;
-                      const isVoid = voidSeats.has(key);
+                      const isVoid = effectiveVoidSeats.has(key);
                       const studentNum = assignments.get(key);
                       const seatLabel = studentNum ? formatSeatLabel(studentNum) : null;
 
