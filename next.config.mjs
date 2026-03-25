@@ -61,22 +61,39 @@ export default withPWA({
         },
         {
             urlPattern: /\/api\/.*/i,
-            handler: 'NetworkFirst',
+            handler: 'NetworkOnly',
             method: 'GET',
-            options: {
-                cacheName: 'api-cache',
-                expiration: {
-                    maxEntries: 32,
-                    maxAgeSeconds: 60 * 60, // 1 hour
-                },
-                networkTimeoutSeconds: 10,
-            },
+        },
+        {
+            urlPattern: /^https?:\/\/[^/]+\/login(?:\/.*)?$/i,
+            handler: 'NetworkOnly',
+        },
+        {
+            urlPattern: /^https?:\/\/[^/]+\/logout(?:\/.*)?$/i,
+            handler: 'NetworkOnly',
+        },
+        {
+            urlPattern: /^https?:\/\/[^/]+\/signup(?:\/request)?(?:\/.*)?$/i,
+            handler: 'NetworkOnly',
+        },
+        {
+            urlPattern: /^https?:\/\/[^/]+\/(?:me|notifications|report|sites|music)(?:\/.*)?$/i,
+            handler: 'NetworkOnly',
+        },
+        {
+            urlPattern: /^https?:\/\/[^/]+\/admin(?:\/.*)?$/i,
+            handler: 'NetworkOnly',
+        },
+        {
+            urlPattern: /\/api\/.*/i,
+            handler: 'NetworkOnly',
+            method: 'POST',
         },
         {
             urlPattern: /.*/i,
             handler: 'NetworkFirst',
             options: {
-                cacheName: 'pages',
+                cacheName: 'public-pages-v2',
                 expiration: {
                     maxEntries: 64,
                     maxAgeSeconds: 24 * 60 * 60, // 1 day

@@ -6,6 +6,7 @@ import { Analytics } from "@/components/analytics";
 import { Noto_Sans_KR } from "next/font/google";
 import { Toaster } from "sonner";
 import { DevServiceWorkerReset } from "@/components/dev-sw-reset";
+import { ProductionServiceWorkerCacheCleanup } from "@/components/prod-sw-cache-cleanup";
 
 const notoSansKr = Noto_Sans_KR({
   subsets: ["latin"],
@@ -109,6 +110,7 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <DevServiceWorkerReset />
+          <ProductionServiceWorkerCacheCleanup />
           <Analytics />
           {children}
           <Toaster />
