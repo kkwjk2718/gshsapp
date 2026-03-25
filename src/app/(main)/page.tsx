@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { format, differenceInDays } from "date-fns";
+import { differenceInDays } from "date-fns";
 import { BookOpen, Calendar, ChevronRight, Music } from "lucide-react";
 import { getMeals } from "@/lib/neis";
-import { getKSTDate } from "@/lib/date-utils";
+import { getKSTDate, getKSTDateKey } from "@/lib/date-utils";
 import { getHomePublicNotices, getNextAcademicSchedule } from "@/lib/public-content";
 import { NoticeRollingBanner } from "@/components/notice-rolling-banner";
 import { MealViewTracker } from "@/components/meal-view-tracker";
@@ -33,7 +33,7 @@ function formatDday(title: string, targetDate: Date, today: Date): HomeDdayPaylo
 export default async function Home() {
   const koreaToday = getKSTDate();
   const currentHour = koreaToday.getHours();
-  const formattedDate = format(koreaToday, "yyyyMMdd");
+  const formattedDate = getKSTDateKey(koreaToday);
 
   const [meals, notices, academicDDay] = await Promise.all([
     getMeals(formattedDate),

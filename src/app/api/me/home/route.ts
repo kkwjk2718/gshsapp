@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
-import { format, differenceInDays } from "date-fns";
+import { differenceInDays } from "date-fns";
 import { prisma } from "@/lib/db";
 import { getTimetable } from "@/lib/neis";
 import { getUserGrade } from "@/lib/grade-utils";
-import { getKSTDate } from "@/lib/date-utils";
+import { getKSTDate, getKSTDateKey } from "@/lib/date-utils";
 import { getCalendarSchedules } from "@/lib/public-content";
 import {
   anonymousHomePersonalization,
@@ -44,7 +44,7 @@ export async function GET() {
   }
 
   const today = getKSTDate();
-  const dateStr = format(today, "yyyyMMdd");
+  const dateStr = getKSTDateKey(today);
 
   let grade: string | null = null;
   let classNum: string | null = null;

@@ -3,7 +3,7 @@
 import { prisma } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { getCurrentUser } from "@/lib/session";
-import { format } from "date-fns";
+import { formatKST, getKSTStartOfDay } from "@/lib/date-utils";
 
 // 1. 설정 가져오기
 export async function getLogSettings() {
@@ -59,7 +59,7 @@ export async function getLogsForExport() {
 
     const header = "Time,Action,User,StudentId,IP,Path,Details\n";
     const rows = logs.map(log => {
-        const time = format(log.createdAt, "yyyy-MM-dd HH:mm:ss");
+        const time = formatKST(log.createdAt, "yyyy-MM-dd HH:mm:ss");
         const userName = log.user?.name || "Guest";
         const studentId = log.user?.studentId || "-";
         const details = (log.details || "").replace(/"/g, '""').replace(/\n/g, ' '); // 줄바꿈 제거
@@ -74,7 +74,7 @@ export async function getLogsForExport() {
 export async function getLogStats() {
     const totalCount = await prisma.systemLog.count();
     const todayCount = await prisma.systemLog.count({
-        where: { createdAt: { gte: new Date(new Date().setHours(0, 0, 0, 0)) } }
+        where: { createdAt: { gte: getKSTStartOfDay() } }
     });
     return { totalCount, todayCount };
 }

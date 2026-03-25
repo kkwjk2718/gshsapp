@@ -17,7 +17,6 @@ import {
   User as UserIcon,
   X,
 } from "lucide-react";
-import { format } from "date-fns";
 
 import {
   changeUserGisu,
@@ -25,6 +24,7 @@ import {
   deleteUserAccount,
   resetPassword,
 } from "./actions";
+import { formatKST } from "@/lib/date-utils";
 import { canChangeGisu, ROLE_LABELS, type UserRole } from "@/lib/user-roles";
 
 interface User {
@@ -319,7 +319,7 @@ export function UserGroupList({ users, currentAdminId }: UserGroupListProps) {
 
       <div className="flex items-center gap-2">
         <div className="hidden text-right text-xs text-slate-400 md:block">
-          {format(new Date(user.createdAt), "yyyy.MM.dd")}
+          {formatKST(user.createdAt, "yyyy.MM.dd")}
         </div>
 
         <button

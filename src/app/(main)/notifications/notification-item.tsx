@@ -2,9 +2,9 @@
 
 import { useTransition } from "react";
 import { CheckCircle, X, Bell, Info, Calendar, ExternalLink } from "lucide-react";
-import { format } from "date-fns";
 import { markAsRead, deleteNotification } from "@/app/(main)/notifications/actions";
 import Link from "next/link";
+import { formatKST } from "@/lib/date-utils";
 
 interface NotificationItemProps {
     notification: {
@@ -71,7 +71,7 @@ export function NotificationItem({ notification }: NotificationItemProps) {
                     </h3>
                     <div className="flex items-center gap-1 self-end sm:self-auto">
                         <span className="text-xs text-slate-400 whitespace-nowrap">
-                            {format(notification.createdAt, "MM.dd HH:mm")}
+                            {formatKST(notification.createdAt, "MM.dd HH:mm")}
                         </span>
                         <button
                             onClick={handleDelete}

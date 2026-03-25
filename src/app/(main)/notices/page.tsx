@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
-import { format } from "date-fns";
 import Link from "next/link";
 import { Megaphone, ShieldCheck } from "lucide-react";
 import { getVisibleNotices } from "@/lib/public-content";
 import { NoticesCreateLink } from "./notices-create-link";
+import { formatKST } from "@/lib/date-utils";
 
 export const dynamic = "force-dynamic";
 
@@ -66,7 +66,7 @@ export default async function NoticesPage() {
                   </span>
                   {isAdmin && <ShieldCheck className="w-4 h-4" style={{ color: "var(--accent)" }} />}
                   <span className="text-xs" style={{ color: "var(--muted)" }}>
-                    {format(notice.createdAt, "yyyy.MM.dd")}
+                    {formatKST(notice.createdAt, "yyyy.MM.dd")}
                   </span>
                 </div>
                 <h2 className="text-xl font-bold mb-2">{notice.title}</h2>

@@ -1,9 +1,9 @@
 import { prisma } from "@/lib/db";
-import { format } from "date-fns";
 import { ArrowLeft, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { TokenList } from "./token-list";
 import { deleteTokenBatch } from "../actions";
+import { formatKST } from "@/lib/date-utils";
 
 export default async function TokenBatchDetailPage({ params }: { params: Promise<{ batchId: string }> }) {
   const { batchId } = await params;
@@ -28,7 +28,7 @@ export default async function TokenBatchDetailPage({ params }: { params: Promise
               </Link>
               <div>
                   <h1 className="text-2xl font-bold">{batch.title}</h1>
-                  <p className="text-sm text-slate-500">{batch.memo} &middot; {format(batch.createdAt, "yyyy.MM.dd HH:mm")}</p>
+                  <p className="text-sm text-slate-500">{batch.memo} &middot; {formatKST(batch.createdAt, "yyyy.MM.dd HH:mm")}</p>
               </div>
            </div>
            <form action={deleteTokenBatch.bind(null, batchId)}>

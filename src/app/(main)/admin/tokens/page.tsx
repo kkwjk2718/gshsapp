@@ -1,11 +1,11 @@
 import { prisma } from "@/lib/db";
 import { createTokens } from "./actions";
-import { format } from "date-fns";
 import { ChevronRight, FileText, MailPlus, Send, Users } from "lucide-react";
 import Link from "next/link";
 import { ManualSendForm } from "./manual-send-form";
 import { getDistributionQuotaSummary } from "@/lib/token-distribution";
 import { TOKEN_DISTRIBUTION_DAILY_LIMIT } from "@/lib/token-portal-config";
+import { formatKST } from "@/lib/date-utils";
 
 const ROLE_LABELS: Record<string, string> = {
   STUDENT: "학생",
@@ -160,7 +160,7 @@ export default async function TokenManagerPage() {
                     <div className="mb-1 text-lg font-bold">{batch.title}</div>
                     <div className="line-clamp-1 text-sm text-slate-500">{batch.memo || "메모 없음"}</div>
                     <div className="mt-2 flex items-center gap-3 text-xs text-slate-400">
-                      <span>{format(batch.createdAt, "yyyy.MM.dd HH:mm")}</span>
+                      <span>{formatKST(batch.createdAt, "yyyy.MM.dd HH:mm")}</span>
                       <span>&middot;</span>
                       <span>{batch._count.tokens}개 토큰</span>
                     </div>
@@ -201,7 +201,7 @@ export default async function TokenManagerPage() {
             <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
               {recentLogs.map((log) => (
                 <tr key={log.id}>
-                  <td className="px-3 py-3 text-slate-500">{format(log.createdAt, "yyyy.MM.dd HH:mm")}</td>
+                  <td className="px-3 py-3 text-slate-500">{formatKST(log.createdAt, "yyyy.MM.dd HH:mm")}</td>
                   <td className="px-3 py-3">{SOURCE_LABELS[log.source] || log.source}</td>
                   <td className="px-3 py-3">
                     <div className="font-medium">{log.recipientEmail}</div>

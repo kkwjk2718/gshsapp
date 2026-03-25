@@ -1,7 +1,7 @@
 "use client"
 
-import { format } from "date-fns";
 import { ko } from "date-fns/locale";
+import { formatKST } from "@/lib/date-utils";
 
 interface Song {
   id: string;
@@ -41,7 +41,7 @@ export function SongList({ songs, currentUser, emptyMessage = "아직 신청된 
       return (
         <div className="flex flex-col items-end text-xs" style={{ color: "var(--muted)" }}>
           <span className="font-medium">{song.requester.name} {song.requester.studentId && `(${song.requester.studentId})`}</span>
-          <span>{format(new Date(song.createdAt), "M.d HH:mm", { locale: ko })}</span>
+          <span>{formatKST(song.createdAt, "M.d HH:mm", { locale: ko })}</span>
         </div>
       );
     }
@@ -58,7 +58,7 @@ export function SongList({ songs, currentUser, emptyMessage = "아직 신청된 
           <span className="text-[10px] font-bold" style={{ color: "var(--accent)" }}>
             {isOwner ? "내 정보 가리기 적용됨" : "익명 신청"}
           </span>
-          <span style={{ color: "var(--muted)" }}>{format(new Date(song.createdAt), "M.d HH:mm", { locale: ko })}</span>
+          <span style={{ color: "var(--muted)" }}>{formatKST(song.createdAt, "M.d HH:mm", { locale: ko })}</span>
         </div>
       );
     }

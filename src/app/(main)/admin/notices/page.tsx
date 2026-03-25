@@ -1,8 +1,8 @@
 import { prisma } from "@/lib/db";
 import { deleteNotice } from "./actions";
-import { format } from "date-fns";
 import Link from "next/link";
 import { Plus, Trash2, Pencil } from "lucide-react";
+import { formatKST } from "@/lib/date-utils";
 
 export default async function AdminNoticesPage() {
   const notices = await prisma.notice.findMany({
@@ -37,7 +37,7 @@ export default async function AdminNoticesPage() {
                       <td className="p-4 font-medium">{notice.title}</td>
                       <td className="p-4 text-sm text-slate-500">{notice.category}</td>
                       <td className="p-4 text-sm text-slate-500">{notice.writer.name}</td>
-                      <td className="p-4 text-sm text-slate-500">{format(notice.createdAt, "yyyy.MM.dd")}</td>
+                      <td className="p-4 text-sm text-slate-500">{formatKST(notice.createdAt, "yyyy.MM.dd")}</td>
                       <td className="p-4 text-right">
                          <div className="flex items-center justify-end gap-1">
                             <Link href={`/admin/notices/${notice.id}/edit`} className="text-indigo-500 hover:text-indigo-600 transition-colors p-2 hover:bg-indigo-50 rounded-lg">

@@ -1,8 +1,8 @@
 import { prisma } from "@/lib/db";
 import { updateSongStatus } from "./actions";
 import { Check, X, Play } from "lucide-react";
-import { format } from "date-fns";
 import { BanUserButton } from "./ban-user-button";
+import { formatKST } from "@/lib/date-utils";
 
 export default async function AdminSongsPage() {
   const songs = await prisma.songRequest.findMany({
@@ -42,7 +42,7 @@ export default async function AdminSongsPage() {
                     {song.youtubeUrl}
                   </a>
                 </td>
-                <td className="p-4 text-sm text-slate-500">{format(song.createdAt, "MM.dd HH:mm")}</td>
+                <td className="p-4 text-sm text-slate-500">{formatKST(song.createdAt, "MM.dd HH:mm")}</td>
                 <td className="p-4">
                   <span
                     className={`px-2 py-1 rounded-md text-xs font-bold

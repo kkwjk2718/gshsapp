@@ -131,6 +131,7 @@ Route group 기준:
 - 실제 배포 기준은 `sha-<commit>`
 - GitHub Release는 `package.json` semver 기준 `vX.Y.Z`
 - 운영 릴리스가 다른 SHA에 이미 사용된 semver를 재사용하면 배포 실패
+- 배포 컨테이너 시간대는 `TZ=Asia/Seoul`, UI 시간 표시는 KST helper 기준으로 통일
 
 ## 8. 백업과 복원
 

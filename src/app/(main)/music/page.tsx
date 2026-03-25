@@ -1,10 +1,10 @@
 import { Metadata } from "next";
 import { redirect } from "next/navigation";
-import { format } from "date-fns";
 import { Check, Music as MusicIcon, Play, Settings } from "lucide-react";
 
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
+import { formatKST } from "@/lib/date-utils";
 
 import { updateSongStatus } from "./actions";
 import { RejectSongButton } from "./reject-song-button";
@@ -83,7 +83,7 @@ export default async function MusicManagerPage() {
                     </div>
                     <div className="text-right text-xs" style={{ color: "var(--muted)" }}>
                       <div>{song.requester.name}</div>
-                      <div>{format(song.createdAt, "MM.dd HH:mm")}</div>
+                      <div>{formatKST(song.createdAt, "MM.dd HH:mm")}</div>
                     </div>
                   </div>
 
@@ -203,7 +203,7 @@ export default async function MusicManagerPage() {
                     <td className="p-4 text-sm">
                       <div>{song.requester.name}</div>
                       <div className="text-xs" style={{ color: "var(--muted)" }}>
-                        {format(song.createdAt, "MM.dd HH:mm")}
+                        {formatKST(song.createdAt, "MM.dd HH:mm")}
                       </div>
                     </td>
                     <td className="p-4 text-right">

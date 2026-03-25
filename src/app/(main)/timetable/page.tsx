@@ -1,5 +1,5 @@
 import { getTimetable } from "@/lib/neis";
-import { format, parse } from "date-fns";
+import { parse } from "date-fns";
 import { getCurrentUser } from "@/lib/session";
 import { redirect } from "next/navigation";
 import { getUserGrade } from "@/lib/grade-utils";
@@ -7,6 +7,7 @@ import { TimetableControls } from "./timetable-controls";
 import { Clock } from "lucide-react";
 import { Metadata } from "next";
 import { canAccessCoreMemberFeatures } from "@/lib/user-roles";
+import { getKSTDate, getKSTDateKey } from "@/lib/date-utils";
 
 export const metadata: Metadata = {
   title: "시간표",
@@ -19,14 +20,14 @@ export default async function TimetablePage({ searchParams }: { searchParams: Pr
   if (!user) redirect("/login");
   if (!canAccessCoreMemberFeatures(user.role)) redirect("/");
 
-  const dateStr = params.date || format(new Date(), "yyyyMMdd");
+  const dateStr = params.date || getKSTDateKey();
   
-  let currentDate = new Date();
+  let currentDate = getKSTDate();
   try {
     currentDate = parse(dateStr, "yyyyMMdd", new Date());
   } catch (e) {
     console.error(e);
-    currentDate = new Date();
+    currentDate = getKSTDate();
   }
 
   // Default values (User's info)

@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { getSystemLogs } from "./actions";
 import { Loader2, ChevronLeft, ChevronRight, Search, Eye, X } from "lucide-react";
-import { format } from "date-fns";
+import { formatKST } from "@/lib/date-utils";
 import { ROLE_LABELS, type UserRole } from "@/lib/user-roles";
 
 export function LogViewer() {
@@ -160,7 +160,7 @@ export function LogViewer() {
                                 logs.map((log) => (
                                     <tr key={log.id} className="hover:bg-white/5 transition-colors">
                                         <td className="px-6 py-4 text-slate-300 whitespace-nowrap">
-                                            {format(new Date(log.createdAt), "MM.dd HH:mm:ss")}
+                                            {formatKST(log.createdAt, "MM.dd HH:mm:ss")}
                                         </td>
                                         <td className="px-6 py-4">
                                             <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium 
@@ -215,7 +215,7 @@ export function LogViewer() {
                         <div className="grid grid-cols-2 gap-4 text-sm">
                             <div className="space-y-1">
                                 <label className="text-slate-500 text-xs">Time</label>
-                                <p className="text-slate-200 font-mono">{format(new Date(selectedLog.createdAt), "yyyy-MM-dd HH:mm:ss")}</p>
+                                <p className="text-slate-200 font-mono">{formatKST(selectedLog.createdAt, "yyyy-MM-dd HH:mm:ss")}</p>
                             </div>
                             <div className="space-y-1">
                                 <label className="text-slate-500 text-xs">Action</label>

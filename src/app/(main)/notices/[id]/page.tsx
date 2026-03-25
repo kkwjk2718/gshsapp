@@ -1,9 +1,9 @@
 import { prisma } from "@/lib/db";
-import { format } from "date-fns";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Megaphone, ShieldCheck, Calendar, User } from "lucide-react";
 import { Metadata } from "next";
+import { formatKST } from "@/lib/date-utils";
 
 type Props = {
     params: Promise<{ id: string }>;
@@ -103,7 +103,7 @@ export default async function NoticeDetailPage({ params }: Props) {
                         <div className="flex items-center gap-2 text-slate-600 dark:text-slate-400">
                             <Calendar className="w-4 h-4" />
                             <span className="text-sm">
-                                {format(notice.createdAt, "yyyy년 MM월 dd일")}
+                                {formatKST(notice.createdAt, "yyyy년 MM월 dd일")}
                             </span>
                         </div>
                         {!notice.expiresAt && (

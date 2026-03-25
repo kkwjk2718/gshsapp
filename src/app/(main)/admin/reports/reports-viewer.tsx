@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { getErrorReports, updateReportStatus } from "./actions";
-import { format } from "date-fns";
 import { ChevronLeft, ChevronRight, Eye, X, CheckCircle, Clock, AlertCircle } from "lucide-react";
+import { formatKST } from "@/lib/date-utils";
 
 export function ReportsViewer() {
     const [reports, setReports] = useState<any[]>([]);
@@ -128,7 +128,7 @@ export function ReportsViewer() {
                                     return (
                                         <tr key={report.id} className="hover:bg-white/5 transition-colors">
                                             <td className="px-6 py-4 text-slate-300 whitespace-nowrap">
-                                                {format(new Date(report.createdAt), "MM.dd HH:mm")}
+                                                {formatKST(report.createdAt, "MM.dd HH:mm")}
                                             </td>
                                             <td className="px-6 py-4 max-w-xs truncate text-slate-200 font-medium">
                                                 {report.title}
@@ -204,7 +204,7 @@ export function ReportsViewer() {
                                 </div>
                                 <div className="space-y-1">
                                     <label className="text-slate-500 text-xs">신고 시간</label>
-                                    <p className="text-slate-200 font-mono">{format(new Date(selectedReport.createdAt), "yyyy-MM-dd HH:mm:ss")}</p>
+                                    <p className="text-slate-200 font-mono">{formatKST(selectedReport.createdAt, "yyyy-MM-dd HH:mm:ss")}</p>
                                 </div>
                                 <div className="col-span-2 space-y-1">
                                     <label className="text-slate-500 text-xs">내용</label>

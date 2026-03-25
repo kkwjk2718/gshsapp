@@ -62,6 +62,7 @@ NEXT_PUBLIC_NEIS_API_KEY=
 - Google Analytics는 `/admin/settings`에서 관리합니다.
 - Brevo 메일 발송은 서버 `.env`에 별도 API 키가 필요합니다.
 - `APP_VERSION`은 배포 시점에 workflow와 `deploy.sh`가 주입합니다.
+- 배포용 웹 컨테이너는 `TZ=Asia/Seoul`로 고정합니다.
 
 ## 4. SQLite 운영 원칙
 

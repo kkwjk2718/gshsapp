@@ -8,6 +8,7 @@ import { MealAllergyInfo } from "./meal-allergy-info";
 import { MealCalendar } from "./meal-calendar";
 import { MealInfoTooltip } from "./meal-info-tooltip";
 import { MealViewTracker } from "@/components/meal-view-tracker";
+import { getKSTDate, getKSTDateKey } from "@/lib/date-utils";
 
 export const metadata: Metadata = {
   title: "급식",
@@ -21,14 +22,14 @@ interface FoodAllergyDetail {
 
 export default async function MealsPage({ searchParams }: { searchParams: Promise<{ date?: string }> }) {
   const params = await searchParams;
-  const dateStr = params.date || format(new Date(), "yyyyMMdd");
+  const dateStr = params.date || getKSTDateKey();
 
-  let currentDate = new Date();
+  let currentDate = getKSTDate();
   try {
     currentDate = parse(dateStr, "yyyyMMdd", new Date());
   } catch (e) {
     console.error(e);
-    currentDate = new Date();
+    currentDate = getKSTDate();
   }
 
   const prevDate = format(subDays(currentDate, 1), "yyyyMMdd");

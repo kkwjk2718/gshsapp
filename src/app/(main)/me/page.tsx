@@ -9,6 +9,7 @@ import { ProfileCard } from "./profile-card";
 import { PasswordChangeForm } from "./password-change-form";
 import { Metadata } from "next";
 import { LogoutButton } from "@/components/auth/logout-button";
+import { formatKST } from "@/lib/date-utils";
 
 export const metadata: Metadata = {
   title: "내 정보",
@@ -94,7 +95,7 @@ export default async function MyPage() {
                     <div key={song.id} className="flex items-center justify-between p-3 rounded-xl group" style={{ backgroundColor: "var(--surface)" }}>
                         <div className="truncate flex-1 mr-4">
                             <div className="font-medium truncate" style={{ color: "var(--foreground)" }}>{song.videoTitle}</div>
-                            <div className="text-xs" style={{ color: "var(--muted)" }}>{format(song.createdAt, "MM.dd")}</div>
+                            <div className="text-xs" style={{ color: "var(--muted)" }}>{formatKST(song.createdAt, "MM.dd")}</div>
                         </div>
                         <div className="flex items-center gap-2">
                             <span className="px-2 py-1 rounded-md text-[10px] font-bold whitespace-nowrap" style={{ backgroundColor: "var(--surface-2)", color: song.status === 'APPROVED' ? 'var(--accent)' : 'var(--muted)' }}>

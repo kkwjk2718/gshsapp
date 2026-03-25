@@ -1,7 +1,8 @@
-import { addHours, startOfDay, subDays, addDays } from "date-fns";
-import { format, toZonedTime } from "date-fns-tz";
+import { addDays, addHours, startOfDay, subDays } from "date-fns";
+import { formatInTimeZone, fromZonedTime, toZonedTime } from "date-fns-tz";
 
 const SEOUL_TZ = "Asia/Seoul";
+type FormatKSTOptions = Parameters<typeof formatInTimeZone>[3];
 
 /**
  * Returns current KST time
@@ -9,6 +10,23 @@ const SEOUL_TZ = "Asia/Seoul";
 export function getKSTDate() {
     const now = new Date();
     return toZonedTime(now, SEOUL_TZ);
+}
+
+export function formatKST(
+    date: Date | string | number,
+    pattern: string,
+    options?: FormatKSTOptions,
+) {
+    return formatInTimeZone(date, SEOUL_TZ, pattern, options);
+}
+
+export function getKSTDateKey(date: Date | string | number = new Date()) {
+    return formatKST(date, "yyyyMMdd");
+}
+
+export function getKSTStartOfDay(date: Date | string | number = new Date()) {
+    const zoned = toZonedTime(date, SEOUL_TZ);
+    return fromZonedTime(startOfDay(zoned), SEOUL_TZ);
 }
 
 /**

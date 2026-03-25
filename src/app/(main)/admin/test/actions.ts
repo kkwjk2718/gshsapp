@@ -4,7 +4,7 @@ import { prisma } from "@/lib/db";
 import { getMeals, getTimetable } from "@/lib/neis";
 import { logAction } from "@/lib/logger";
 import { getCurrentUser } from "@/lib/session";
-import { format } from "date-fns";
+import { formatKST, getKSTDateKey } from "@/lib/date-utils";
 import { runOperationalReadinessDiagnostics } from "./system-diagnostics";
 
 export type TestResult = {
@@ -24,7 +24,7 @@ export async function runSystemTests(): Promise<TestResult[]> {
   const results: TestResult[] = [];
 
   // Helper to format log
-  const log = (msg: string) => `[${format(new Date(), 'HH:mm:ss.SSS')}] ${msg}`;
+  const log = (msg: string) => `[${formatKST(new Date(), 'HH:mm:ss.SSS')}] ${msg}`;
 
   // 1. Database Connection Test
   let logs: string[] = [];
@@ -44,7 +44,7 @@ export async function runSystemTests(): Promise<TestResult[]> {
   logs = [];
   const startNeis = performance.now();
   try {
-    const today = format(new Date(), "yyyyMMdd");
+    const today = getKSTDateKey();
     logs.push(log(`Fetching meals for date: ${today}...`));
     // Fetch meals for today (or relies on cache if already fetched)
     const meals = await getMeals(today);
@@ -68,7 +68,7 @@ export async function runSystemTests(): Promise<TestResult[]> {
   logs.push(log("Constructing Timetable API params (Grade: 1, Class: 1)..."));
   const startTime = performance.now();
   try {
-    const today = format(new Date(), "yyyyMMdd");
+    const today = getKSTDateKey();
     logs.push(log(`Fetching timetable for date: ${today}...`));
     // Fetch timetable for Grade 1 Class 1 as a sample
     const timetable = await getTimetable(today, "1", "1");
