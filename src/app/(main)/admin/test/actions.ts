@@ -5,6 +5,7 @@ import { getMeals, getTimetable } from "@/lib/neis";
 import { logAction } from "@/lib/logger";
 import { getCurrentUser } from "@/lib/session";
 import { formatKST, getKSTDateKey } from "@/lib/date-utils";
+import { toSongCycleDateKey } from "@/lib/song-cycle";
 import { runOperationalReadinessDiagnostics } from "./system-diagnostics";
 
 export type TestResult = {
@@ -131,6 +132,7 @@ export async function runSystemTests(): Promise<TestResult[]> {
         requesterId: user.id!,
         youtubeUrl: "https://youtu.be/dQw4w9WgXcQ", // Rick Roll for test
         videoTitle: "System Test Song",
+        cycleDateKey: toSongCycleDateKey(new Date()),
         status: "PENDING"
       }
     });

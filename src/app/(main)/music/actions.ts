@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 
 import { prisma } from "@/lib/db";
 import { createNotification } from "@/lib/notifications";
+import { recalculatePendingSongAssignments } from "@/lib/song-queue";
 import { getCurrentUser } from "@/lib/session";
 
 async function checkPermission() {
@@ -14,26 +15,6 @@ async function checkPermission() {
   }
 
   return user;
-}
-
-function buildSongStatusMessage(videoTitle: string, status: string, rejectionReason: string | null) {
-  let title = "기상곡 신청 상태 변경";
-  let content = `신청하신 '${videoTitle}' 곡의 상태가 변경되었습니다.`;
-
-  if (status === "APPROVED") {
-    title = "기상곡 신청 승인됨";
-    content = `신청하신 '${videoTitle}' 곡이 승인되었습니다. 곧 재생될 예정입니다.`;
-  } else if (status === "REJECTED") {
-    title = "기상곡 신청 반려됨";
-    content = rejectionReason
-      ? `신청하신 '${videoTitle}' 곡이 반려되었습니다.\n사유: ${rejectionReason}`
-      : `신청하신 '${videoTitle}' 곡이 반려되었습니다.`;
-  } else if (status === "PLAYED") {
-    title = "기상곡 재생 완료";
-    content = `신청하신 '${videoTitle}' 곡이 재생되었습니다.`;
-  }
-
-  return { title, content };
 }
 
 async function upsertSongRuleRecord(
@@ -66,23 +47,47 @@ async function upsertSongRuleRecord(
 export async function updateSongStatus(id: string, status: string, rejectionReason?: string) {
   await checkPermission();
 
+  if (!["APPROVED", "REJECTED"].includes(status)) {
+    throw new Error("이 화면에서는 승인 또는 반려 처리만 지원합니다.");
+  }
+
   const song = await prisma.songRequest.findUnique({ where: { id } });
   if (!song) {
     return;
   }
 
-  const normalizedReason = rejectionReason?.trim() || null;
+  const normalizedReason = status === "REJECTED" ? rejectionReason?.trim() || null : null;
 
   await prisma.songRequest.update({
     where: { id },
     data: {
       status,
-      rejectionReason: status === "REJECTED" ? normalizedReason : null,
+      rejectionReason: normalizedReason,
+      assignedSlot: status === "REJECTED" ? null : song.assignedSlot,
     },
   });
 
-  const { title, content } = buildSongStatusMessage(song.videoTitle, status, normalizedReason);
-  await createNotification(song.requesterId, "SONG", title, content, "/songs");
+  if (status === "APPROVED") {
+    await createNotification(
+      song.requesterId,
+      "SONG",
+      "기상곡 신청 승인됨",
+      `신청하신 '${song.videoTitle}' 곡이 승인되었습니다.`,
+      "/songs",
+    );
+  } else {
+    await createNotification(
+      song.requesterId,
+      "SONG",
+      "기상곡 신청 반려됨",
+      normalizedReason
+        ? `신청하신 '${song.videoTitle}' 곡이 반려되었습니다.\n사유: ${normalizedReason}`
+        : `신청하신 '${song.videoTitle}' 곡이 반려되었습니다.`,
+      "/songs",
+    );
+  }
+
+  await recalculatePendingSongAssignments(song.cycleDateKey);
 
   revalidatePath("/music");
   revalidatePath("/songs");

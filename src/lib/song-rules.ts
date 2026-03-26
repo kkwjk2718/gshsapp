@@ -1,9 +1,11 @@
 export const SONG_RULE_DAYS = [
+  { dayOfWeek: 0, label: "일" },
   { dayOfWeek: 1, label: "월" },
   { dayOfWeek: 2, label: "화" },
   { dayOfWeek: 3, label: "수" },
   { dayOfWeek: 4, label: "목" },
   { dayOfWeek: 5, label: "금" },
+  { dayOfWeek: 6, label: "토" },
 ] as const;
 
 export function normalizeAllowedGrade(rawValue: string | null | undefined) {

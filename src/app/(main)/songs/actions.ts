@@ -3,9 +3,17 @@
 import { revalidatePath } from "next/cache";
 
 import { prisma } from "@/lib/db";
-import { getSongTimeRanges, getKSTDate, isBreakTime } from "@/lib/date-utils";
-import { getUserGrade } from "@/lib/grade-utils";
+import { getKSTDate } from "@/lib/date-utils";
+import { resolveUserGrade } from "@/lib/grade-utils";
 import { logAction } from "@/lib/logger";
+import { getSongCycleContext } from "@/lib/song-cycle";
+import {
+  ensureTodaySongCycleSettled,
+  getFinalSongsForCycle,
+  getPendingSongsForCycle,
+  recalculatePendingSongAssignments,
+} from "@/lib/song-queue";
+import { encodePreferredSlots } from "@/lib/song-slots";
 import { getCurrentUser } from "@/lib/session";
 
 const YOUTUBE_OEMBED_TIMEOUT_MS = 3_000;
@@ -32,7 +40,7 @@ async function resolveVideoTitle(youtubeUrl: string, rawVideoTitle: string | nul
       }
     }
   } catch {
-    // Fall back to the default title when YouTube metadata is slow or unavailable.
+    // Fall back to the default title when YouTube metadata is unavailable.
   } finally {
     clearTimeout(timeoutId);
   }
@@ -40,105 +48,116 @@ async function resolveVideoTitle(youtubeUrl: string, rawVideoTitle: string | nul
   return "신청곡";
 }
 
-export async function requestSong(formData: FormData) {
-  if (isBreakTime()) {
-    throw new Error("지금은 기상곡 신청 시간이 아닙니다. (신청 가능: 07:00 ~ 익일 05:00)");
+async function assertAllowedGrade(userId: string) {
+  const dbUser = await prisma.user.findUnique({ where: { id: userId } });
+  if (!dbUser) {
+    throw new Error("User not found");
   }
 
-  const youtubeUrl = formData.get("youtubeUrl") as string;
+  if (dbUser.banExpiresAt && dbUser.banExpiresAt > new Date()) {
+    throw new Error("현재 신청이 제한된 계정입니다.");
+  }
+
+  if (dbUser.role === "ADMIN") {
+    return dbUser;
+  }
+
+  const todayDay = getKSTDate().getDay();
+  const rule = await prisma.songRule.findFirst({
+    where: { dayOfWeek: todayDay },
+  });
+
+  if (!rule || rule.allowedGrade === "ALL") {
+    return dbUser;
+  }
+
+  const grade = await resolveUserGrade(dbUser.studentId, dbUser.gisu);
+  const allowedGrades = rule.allowedGrade
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+
+  if (!grade || !allowedGrades.includes(grade)) {
+    throw new Error(`오늘은 ${rule.allowedGrade}학년만 신청할 수 있습니다.`);
+  }
+
+  return dbUser;
+}
+
+function getPriorityScore(role: string) {
+  if (role === "ADMIN") {
+    return 999;
+  }
+
+  if (role === "BROADCAST") {
+    return 50;
+  }
+
+  return 10;
+}
+
+export async function requestSong(formData: FormData) {
+  const cycleContext = getSongCycleContext();
+  if (cycleContext.isBreakTime) {
+    throw new Error(
+      "지금은 기상곡 신청 시간대가 아닙니다. 신청 가능 시간은 07:00부터 다음날 05:00까지입니다.",
+    );
+  }
+
+  const youtubeUrl = `${formData.get("youtubeUrl") ?? ""}`.trim();
+  if (!youtubeUrl) {
+    throw new Error("YouTube URL을 입력해 주세요.");
+  }
+
   const videoTitle = await resolveVideoTitle(
     youtubeUrl,
     formData.get("videoTitle") as string | null,
   );
 
+  const preferredSlotMask: number = encodePreferredSlots(
+    formData.getAll("preferredSlots").map((value) => `${value}`),
+  );
+
   const user = await getCurrentUser();
-  if (!user || !user.id) throw new Error("Unauthorized");
-
-  const dbUser = await prisma.user.findUnique({ where: { id: user.id } });
-  if (!dbUser) throw new Error("User not found");
-
-  if (dbUser.banExpiresAt && dbUser.banExpiresAt > new Date()) {
-    return;
+  if (!user?.id) {
+    throw new Error("Unauthorized");
   }
 
-  if (dbUser.role !== "ADMIN") {
-    const todayDay = getKSTDate().getDay();
-    const rule = await prisma.songRule.findFirst({
-      where: { dayOfWeek: todayDay },
-    });
-
-    if (rule && rule.allowedGrade !== "ALL") {
-      let grade = await getUserGrade(dbUser.gisu);
-
-      if (!grade && dbUser.studentId && dbUser.studentId.length >= 3) {
-        grade = dbUser.studentId.substring(0, 1);
-      }
-
-      const allowedGrades = rule.allowedGrade
-        .split(",")
-        .map((value) => value.trim())
-        .filter(Boolean);
-
-      if (!grade || !allowedGrades.includes(grade)) {
-        throw new Error(`오늘은 ${rule.allowedGrade}학년만 신청할 수 있습니다.`);
-      }
-    }
-  }
-
-  let priorityScore = 10;
-  if (dbUser.role === "ADMIN") priorityScore = 999;
-  else if (dbUser.role === "BROADCAST") priorityScore = 50;
-
-  const isAnonymous = formData.get("isAnonymous") === "on";
+  const dbUser = await assertAllowedGrade(user.id);
 
   await prisma.songRequest.create({
     data: {
       requesterId: user.id,
       youtubeUrl,
       videoTitle,
+      preferredSlotMask,
+      cycleDateKey: cycleContext.requestCycleDateKey,
       status: "PENDING",
-      priorityScore,
-      isAnonymous,
+      priorityScore: getPriorityScore(dbUser.role),
+      isAnonymous: formData.get("isAnonymous") === "on",
     },
   });
 
-  await logAction("SONG_REQUEST", { title: videoTitle, url: youtubeUrl });
+  await recalculatePendingSongAssignments(cycleContext.requestCycleDateKey);
+  await logAction("SONG_REQUEST", {
+    title: videoTitle,
+    url: youtubeUrl,
+    cycleDateKey: cycleContext.requestCycleDateKey,
+    preferredSlotMask,
+  });
 
   revalidatePath("/songs");
+  revalidatePath("/music");
 }
 
 export async function getTodayMorningSongs() {
-  const { todayMorning } = getSongTimeRanges();
-
-  return await prisma.songRequest.findMany({
-    where: {
-      createdAt: {
-        gte: todayMorning.start,
-        lt: todayMorning.end,
-      },
-      status: {
-        in: ["APPROVED", "PLAYED"],
-      },
-    },
-    orderBy: { priorityScore: "desc" },
-    include: { requester: true },
-  });
+  await ensureTodaySongCycleSettled();
+  const { finalCycleDateKey } = getSongCycleContext();
+  return getFinalSongsForCycle(finalCycleDateKey);
 }
 
-export async function getNextMorningSongs() {
-  const { todayMorning, nextMorning } = getSongTimeRanges();
-  const now = getKSTDate();
-  const currentHour = now.getHours();
-  const targetRange = currentHour < 7 ? todayMorning : nextMorning;
-
-  return await prisma.songRequest.findMany({
-    where: {
-      createdAt: {
-        gte: targetRange.start,
-        lt: targetRange.end,
-      },
-    },
-    orderBy: [{ priorityScore: "desc" }, { createdAt: "asc" }],
-    include: { requester: true },
-  });
+export async function getCurrentCycleSongs() {
+  await ensureTodaySongCycleSettled();
+  const { requestCycleDateKey } = getSongCycleContext();
+  return getPendingSongsForCycle(requestCycleDateKey);
 }

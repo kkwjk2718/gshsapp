@@ -4,12 +4,14 @@ import { event, pageview } from "./ga";
 describe("ga helpers", () => {
   beforeEach(() => {
     const gtag = vi.fn();
-    (globalThis as typeof globalThis & {
-      window: { gtag: typeof gtag; __gaMeasurementId?: string };
-    }).window = {
-      gtag,
-      __gaMeasurementId: "G-STORED123",
-    };
+    Object.defineProperty(globalThis, "window", {
+      configurable: true,
+      writable: true,
+      value: {
+        gtag,
+        __gaMeasurementId: "G-STORED123",
+      } as unknown as Window & typeof globalThis,
+    });
   });
 
   it("uses the explicit measurement id for page views", () => {

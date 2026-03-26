@@ -133,17 +133,25 @@ model TeacherProfile {
 }
 
 model SongRequest {
-  id              String   @id @default(uuid())
-  requesterId     String
-  youtubeUrl      String
-  videoTitle      String
-  status          String   @default("PENDING") // PENDING, APPROVED, REJECTED, PLAYED
-  priorityScore   Int      @default(0)
-  isAnonymous     Boolean  @default(false)
-  rejectionReason String?
-  createdAt       DateTime @default(now())
+  id                String   @id @default(uuid())
+  requesterId       String
+  youtubeUrl        String
+  videoTitle        String
+  preferredSlotMask Int      @default(0) // bitmask: 1, 2, 4, 8, 16, 32
+  assignedSlot      Int?     // 1..6
+  cycleDateKey      String   // yyyy-MM-dd
+  status            String   @default("PENDING") // PENDING, APPROVED, REJECTED, FINAL
+  priorityScore     Int      @default(0)
+  isAnonymous       Boolean  @default(false)
+  rejectionReason   String?
+  createdAt         DateTime @default(now())
+  settledAt         DateTime?
 
-  requester       User     @relation(fields: [requesterId], references: [id])
+  requester         User     @relation(fields: [requesterId], references: [id])
+
+  @@index([cycleDateKey, status])
+  @@index([cycleDateKey, assignedSlot])
+  @@index([status, createdAt])
 }
 
 model SongRule {

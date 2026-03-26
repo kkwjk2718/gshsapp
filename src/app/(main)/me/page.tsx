@@ -99,8 +99,8 @@ export default async function MyPage() {
                             <div className="text-xs" style={{ color: "var(--muted)" }}>{formatKST(song.createdAt, "MM.dd")}</div>
                         </div>
                         <div className="flex items-center gap-2">
-                            <span className="px-2 py-1 rounded-md text-[10px] font-bold whitespace-nowrap" style={{ backgroundColor: "var(--surface-2)", color: song.status === 'APPROVED' ? 'var(--accent)' : 'var(--muted)' }}>
-                               {song.status}
+                            <span className="px-2 py-1 rounded-md text-[10px] font-bold whitespace-nowrap" style={{ backgroundColor: "var(--surface-2)", color: song.status === 'FINAL' ? 'var(--accent)' : song.status === 'APPROVED' ? '#16a34a' : song.status === 'REJECTED' ? '#f87171' : 'var(--muted)' }}>
+                               {song.status === 'FINAL' ? '확정' : song.status === 'APPROVED' ? '승인됨' : song.status === 'REJECTED' ? '반려됨' : '신청중'}
                             </span>
                             <form action={deleteSongRequest}>
                                 <input type="hidden" name="id" value={song.id} />

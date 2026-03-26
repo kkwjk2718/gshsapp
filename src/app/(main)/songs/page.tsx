@@ -3,22 +3,23 @@ import { redirect } from "next/navigation";
 
 import { prisma } from "@/lib/db";
 import { getKSTDate } from "@/lib/date-utils";
-import { getUserGrade } from "@/lib/grade-utils";
-import { getCurrentUser } from "@/lib/session";
+import { resolveUserGrade } from "@/lib/grade-utils";
+import { getSongCycleContext } from "@/lib/song-cycle";
 import {
   SONG_RULE_DAYS,
   formatAllowedGradeLabel,
   parseAllowedGrades,
 } from "@/lib/song-rules";
+import { getCurrentUser } from "@/lib/session";
 import { canAccessCoreMemberFeatures } from "@/lib/user-roles";
 
-import { getNextMorningSongs, getTodayMorningSongs } from "./actions";
+import { getCurrentCycleSongs, getTodayMorningSongs } from "./actions";
 import { SongRequestForm } from "./request-form";
 import { SongList } from "./song-list";
 
 export const metadata: Metadata = {
   title: "기상곡 신청",
-  description: "아침 기상곡을 신청하고 다른 학생들이 신청한 곡을 확인하세요.",
+  description: "아침 기상곡을 신청하고 현재 배치 현황을 확인하세요.",
 };
 
 export default async function SongsPage() {
@@ -26,8 +27,9 @@ export default async function SongsPage() {
   if (!user) redirect("/login");
   if (!canAccessCoreMemberFeatures(user.role)) redirect("/");
 
+  const cycleContext = getSongCycleContext();
   const todaySongs = await getTodayMorningSongs();
-  const nextSongs = await getNextMorningSongs();
+  const currentCycleSongs = await getCurrentCycleSongs();
 
   const dbUser = await prisma.user.findUnique({
     where: { id: user.id },
@@ -52,17 +54,16 @@ export default async function SongsPage() {
     });
 
     if (rule && rule.allowedGrade !== "ALL") {
-      let grade = await getUserGrade(dbUser.gisu);
-
-      if (!grade && dbUser.studentId && dbUser.studentId.length >= 3) {
-        grade = dbUser.studentId.substring(0, 1);
-      }
-
+      const grade = await resolveUserGrade(dbUser.studentId, dbUser.gisu);
       const allowedGrades = parseAllowedGrades(rule.allowedGrade);
-
       isAllowedGrade = !!grade && allowedGrades.includes(grade);
     }
   }
+
+  const currentQueueTitle =
+    cycleContext.requestCycleDateKey === cycleContext.todayDateKey
+      ? "오늘 기상곡 신청 현황"
+      : "내일 기상곡 신청 현황";
 
   return (
     <div className="mobile-page mobile-safe-bottom space-y-8">
@@ -72,60 +73,59 @@ export default async function SongsPage() {
             기상곡 신청
           </h1>
           <p style={{ color: "var(--muted)" }}>
-            금일 07:00 ~ 익일 05:00까지 신청 가능합니다.
+            아침 기상곡을 신청하고 다른 학생들이 신청한 곡을 확인하세요.
           </p>
         </div>
       </div>
 
       <SongRequestForm
         isAllowedGrade={isAllowedGrade}
+        isBreakTime={cycleContext.isBreakTime}
         todayAllowedGradesLabel={formatAllowedGradeLabel(todayAllowedGrades)}
         weeklyRules={weeklyRules}
       />
 
       <div className="space-y-8">
-        <div className="space-y-4">
+        <section className="space-y-4">
           <div className="flex items-center gap-2">
             <h2 className="text-xl font-bold" style={{ color: "var(--foreground)" }}>
-              오늘 아침 나온 기상곡
+              오늘 아침에 나온 기상곡
             </h2>
             <span
               className="rounded-full px-2 py-0.5 text-xs font-medium"
               style={{ backgroundColor: "var(--surface-2)", color: "var(--accent)" }}
             >
-              승인됨
-            </span>
-          </div>
-          {todaySongs.length > 0 ? (
-            <SongList songs={todaySongs} currentUser={user} emptyMessage="오늘 나온 기상곡 내역이 없습니다." />
-          ) : (
-            <div
-              className="rounded-2xl border border-dashed p-8 text-center"
-              style={{ backgroundColor: "var(--surface)", borderColor: "var(--border)", color: "var(--muted)" }}
-            >
-              오늘 선정된 기상곡이 없거나 아직 업데이트되지 않았습니다.
-            </div>
-          )}
-        </div>
-
-        <div className="space-y-4">
-          <div className="flex items-center gap-2">
-            <h2 className="text-xl font-bold" style={{ color: "var(--foreground)" }}>
-              내일 기상곡 신청 현황
-            </h2>
-            <span
-              className="rounded-full px-2 py-0.5 text-xs font-medium"
-              style={{ backgroundColor: "var(--surface-2)", color: "var(--accent)" }}
-            >
-              진행중
+              최종 6곡
             </span>
           </div>
           <SongList
-            songs={nextSongs}
+            songs={todaySongs}
             currentUser={user}
-            emptyMessage="아직 신청된 노래가 없습니다. 첫 번째 주인공이 되어보세요! 🎵"
+            emptyMessage="아직 확정된 기상곡이 없습니다."
           />
-        </div>
+        </section>
+
+        <section className="space-y-4">
+          <div className="flex items-center gap-2">
+            <h2 className="text-xl font-bold" style={{ color: "var(--foreground)" }}>
+              {currentQueueTitle}
+            </h2>
+            <span
+              className="rounded-full px-2 py-0.5 text-xs font-medium"
+              style={{ backgroundColor: "var(--surface-2)", color: "var(--accent)" }}
+            >
+              실시간 배치
+            </span>
+          </div>
+          <SongList
+            songs={currentCycleSongs}
+            currentUser={user}
+            emptyMessage="현재 회차에 신청된 곡이 없습니다."
+            showOverflow
+            overflowDesktopOnly
+            overflowTitle="추가 신청곡"
+          />
+        </section>
       </div>
     </div>
   );

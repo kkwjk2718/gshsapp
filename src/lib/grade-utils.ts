@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import { unstable_cache } from "next/cache";
 import { parseGradeMapping } from "@/lib/grade-mapping";
+import { getGradeFromStudentId } from "@/lib/student-id";
 
 // Cached function to get mapping
 export const getGradeMapping = unstable_cache(
@@ -28,4 +29,16 @@ export async function getUserGrade(userGisu: number | null): Promise<string | nu
   }
 
   return null; // Not in 1~3 grade (Graduate or others)
+}
+
+export async function resolveUserGrade(
+  studentId: string | null | undefined,
+  userGisu: number | null | undefined,
+): Promise<string | null> {
+  const gradeFromStudentId = studentId ? getGradeFromStudentId(studentId) : null;
+  if (gradeFromStudentId) {
+    return gradeFromStudentId;
+  }
+
+  return getUserGrade(userGisu ?? null);
 }
