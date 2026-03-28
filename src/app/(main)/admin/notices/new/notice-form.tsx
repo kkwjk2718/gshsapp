@@ -19,7 +19,7 @@ export function NoticeForm({ categories }: { categories: Category[] }) {
   return (
     <div className="p-8 max-w-2xl mx-auto space-y-8">
        <div className="flex items-center gap-4">
-          <Link href="/admin/notices" className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+          <Link href="/notices" className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
              <ArrowLeft className="w-5 h-5" />
           </Link>
           <h1 className="text-2xl font-bold">새 공지 작성</h1>

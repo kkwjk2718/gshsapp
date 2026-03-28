@@ -1,4 +1,5 @@
 import type { NextAuthConfig } from 'next-auth';
+import { canCreateNotice } from "@/lib/notice-permissions";
 
 declare module "next-auth" {
   interface User {
@@ -25,6 +26,8 @@ export const authConfig = {
       const role = auth?.user?.role;
       const isOnDashboard = nextUrl.pathname === '/me' || nextUrl.pathname.startsWith('/me/');
       const isOnAdmin = nextUrl.pathname.startsWith('/admin');
+      const isOnNoticeCreate = nextUrl.pathname === '/admin/notices/new';
+      const isOnNoticeEdit = /^\/admin\/notices\/[^/]+\/edit\/?$/.test(nextUrl.pathname);
       const isOnLogin = nextUrl.pathname.startsWith('/login');
       const isOnMeals = nextUrl.pathname.startsWith('/meals');
       const isOnSites = nextUrl.pathname.startsWith('/sites');
@@ -53,6 +56,16 @@ export const authConfig = {
         if (!isLoggedIn) return false;
         if (role === 'GRADUATE') return redirectHome();
         return true;
+      }
+
+      if (isOnNoticeCreate) {
+        if (!isLoggedIn) return false;
+        return canCreateNotice(auth?.user);
+      }
+
+      if (isOnNoticeEdit) {
+        // Ownership lives in the database, so middleware only checks login here.
+        return isLoggedIn;
       }
       
       if (isOnAdmin) {
