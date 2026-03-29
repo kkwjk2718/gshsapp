@@ -22,8 +22,8 @@ export const DEFAULT_NOTICE_CATEGORIES = [
   { label: "방송", value: "BROADCAST" },
 ] as const;
 
-const HIDDEN_NOTICE_CATEGORY_VALUES = new Set(["OTHER"]);
-const DEFAULT_NOTICE_CATEGORY_ORDER = new Map(
+const HIDDEN_NOTICE_CATEGORY_VALUES = new Set<string>(["OTHER"]);
+const DEFAULT_NOTICE_CATEGORY_ORDER = new Map<string, number>(
   DEFAULT_NOTICE_CATEGORIES.map((category, index) => [category.value, index]),
 );
 
