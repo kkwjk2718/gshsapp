@@ -2,6 +2,7 @@ import { unstable_cache } from "next/cache";
 import { prisma } from "@/lib/db";
 import { getEventsFromICal } from "@/lib/google-calendar";
 import { getSchoolSchedule } from "@/lib/neis";
+import { getNoticeVisibilityWhere } from "@/lib/notice-window";
 
 function logPublicContentError(source: string, error: unknown) {
   console.warn(
@@ -15,12 +16,7 @@ export const getHomePublicNotices = unstable_cache(
     try {
       return await prisma.notice.findMany({
         orderBy: { createdAt: "desc" },
-        where: {
-          OR: [
-            { expiresAt: { gt: new Date() } },
-            { expiresAt: null },
-          ],
-        },
+        where: getNoticeVisibilityWhere(),
         take: 5,
         select: {
           id: true,
@@ -42,12 +38,7 @@ export const getVisibleNotices = unstable_cache(
     try {
       return await prisma.notice.findMany({
         orderBy: { createdAt: "desc" },
-        where: {
-          OR: [
-            { expiresAt: { gt: new Date() } },
-            { expiresAt: null },
-          ],
-        },
+        where: getNoticeVisibilityWhere(),
         include: {
           writer: {
             select: {

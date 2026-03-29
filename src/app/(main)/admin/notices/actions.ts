@@ -5,8 +5,8 @@ import { resolveNoticeCategoryValue } from "@/lib/notice-categories";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/session";
-import { addDays } from "date-fns";
-import { canCreateNotice, canManageNotice } from "@/lib/notice-permissions";
+import { canCreateNotice, canCreateUnlimitedNotice, canManageNotice } from "@/lib/notice-permissions";
+import { buildNoticeWindow } from "@/lib/notice-window";
 
 function getSafeRedirectPath(value: FormDataEntryValue | null) {
   if (typeof value !== "string") {
@@ -24,20 +24,22 @@ export async function createNotice(formData: FormData) {
   const title = formData.get("title") as string;
   const content = formData.get("content") as string;
   const category = await resolveNoticeCategoryValue(formData.get("category"));
-  const durationStr = formData.get("duration") as string;
-  const unlimited = formData.get("unlimited") === "on";
+  const detailedPeriod = formData.get("detailedPeriod") === "on";
   
   const user = await getCurrentUser();
   if (!user || !user.id || !canCreateNotice(user)) {
       throw new Error("Unauthorized");
   }
 
-  let expiresAt: Date | null = null;
+  const unlimited = canCreateUnlimitedNotice(user) && formData.get("unlimited") === "on";
 
-  if (!unlimited) {
-      const duration = parseInt(durationStr) || 7; // Default 7 days if parsing fails
-      expiresAt = addDays(new Date(), duration);
-  }
+  const { startsAt, expiresAt } = buildNoticeWindow({
+    unlimited,
+    detailedPeriod,
+    duration: formData.get("duration"),
+    startDate: formData.get("startDate"),
+    endDate: formData.get("endDate"),
+  });
 
   const notice = await prisma.notice.create({
     data: {
@@ -45,6 +47,7 @@ export async function createNotice(formData: FormData) {
       content,
       category,
       writerId: user.id,
+      startsAt,
       expiresAt
     },
   });

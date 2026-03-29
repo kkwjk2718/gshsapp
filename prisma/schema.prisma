@@ -100,6 +100,7 @@ model Notice {
   category  String   // GENERAL, ACADEMIC, EVENT
   title     String
   content   String
+  startsAt  DateTime?
   expiresAt DateTime?
   createdAt DateTime @default(now())
   

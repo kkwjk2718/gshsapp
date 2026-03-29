@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Megaphone, ShieldCheck } from "lucide-react";
+import { Clock3, Megaphone, ShieldCheck } from "lucide-react";
+import { formatKST } from "@/lib/date-utils";
+import { formatNoticeWindowLabel } from "@/lib/notice-window";
 import { getVisibleNotices } from "@/lib/public-content";
 import { NoticesCreateLink } from "./notices-create-link";
-import { formatKST } from "@/lib/date-utils";
 
 export const dynamic = "force-dynamic";
 
@@ -28,14 +29,15 @@ export default async function NoticesPage() {
   return (
     <div className="mobile-page mobile-safe-bottom space-y-6">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }} />
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
+
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
-          <div className="p-3 rounded-full" style={{ backgroundColor: "var(--surface-2)", color: "var(--accent)" }}>
-            <Megaphone className="w-6 h-6" />
+          <div className="rounded-full p-3" style={{ backgroundColor: "var(--surface-2)", color: "var(--accent)" }}>
+            <Megaphone className="h-6 w-6" />
           </div>
           <div>
             <h1 className="text-2xl font-bold">공지사항</h1>
-            <p style={{ color: "var(--muted)" }}>학교의 주요 소식을 확인하세요.</p>
+            <p style={{ color: "var(--muted)" }}>학교의 주요 소식과 안내를 확인하세요.</p>
           </div>
         </div>
 
@@ -45,57 +47,57 @@ export default async function NoticesPage() {
       <div className="space-y-4">
         {notices.map((notice) => {
           const isAdmin = notice.writer.role === "ADMIN";
-          const truncatedContent = notice.content.length > 150
-            ? `${notice.content.substring(0, 150)}...`
-            : notice.content;
+          const truncatedContent = notice.content.length > 150 ? `${notice.content.substring(0, 150)}...` : notice.content;
           const showMoreLink = notice.content.length > 150;
 
           return (
-            <Link
-              key={notice.id}
-              href={`/notices/${notice.id}`}
-              className="block"
-            >
+            <Link key={notice.id} href={`/notices/${notice.id}`} className="block">
               <div
-                className="glass p-6 rounded-3xl hover:scale-[1.01] transition-all border-l-4 cursor-pointer"
+                className="glass cursor-pointer rounded-3xl border-l-4 p-6 transition-all hover:scale-[1.01]"
                 style={{ borderLeftColor: isAdmin ? "var(--accent)" : "var(--border)", backgroundColor: "var(--surface)" }}
               >
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="px-2 py-1 rounded-md text-xs font-bold" style={{ backgroundColor: "var(--surface-2)", color: isAdmin ? "var(--accent)" : "var(--muted)" }}>
+                <div className="mb-2 flex items-center gap-2">
+                  <span
+                    className="rounded-md px-2 py-1 text-xs font-bold"
+                    style={{ backgroundColor: "var(--surface-2)", color: isAdmin ? "var(--accent)" : "var(--muted)" }}
+                  >
                     {notice.category}
                   </span>
-                  {isAdmin && <ShieldCheck className="w-4 h-4" style={{ color: "var(--accent)" }} />}
+                  {isAdmin && <ShieldCheck className="h-4 w-4" style={{ color: "var(--accent)" }} />}
                   <span className="text-xs" style={{ color: "var(--muted)" }}>
                     {formatKST(notice.createdAt, "yyyy.MM.dd")}
                   </span>
                 </div>
-                <h2 className="text-xl font-bold mb-2">{notice.title}</h2>
-                <p className="leading-relaxed mb-2" style={{ color: "var(--muted)" }}>
+
+                <h2 className="mb-2 text-xl font-bold">{notice.title}</h2>
+
+                <p className="mb-3 leading-relaxed" style={{ color: "var(--muted)" }}>
                   {truncatedContent}
                 </p>
+
                 {showMoreLink && (
                   <span className="text-sm font-medium hover:underline" style={{ color: "var(--accent)" }}>
-                    더 보기 →
+                    더보기 →
                   </span>
                 )}
-                <div className="mt-4 pt-4 border-t flex items-center justify-between text-sm" style={{ borderColor: "var(--border)", color: "var(--muted)" }}>
-                  <span>작성자: {notice.writer.name} {isAdmin ? "(관리자)" : ""}</span>
-                  {!notice.expiresAt && (
-                    <span className="text-xs px-2 py-1 rounded" style={{ backgroundColor: "var(--surface-2)", color: "var(--muted)" }}>
-                      상시 공지
+
+                <div className="mt-4 space-y-3 border-t pt-4 text-sm" style={{ borderColor: "var(--border)", color: "var(--muted)" }}>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span>
+                      작성자: {notice.writer.name} {isAdmin ? "(관리자)" : ""}
                     </span>
-                  )}
+                    <div className="flex items-center gap-2 text-xs">
+                      <Clock3 className="h-4 w-4" />
+                      <span>{formatNoticeWindowLabel(notice)}</span>
+                    </div>
+                  </div>
                 </div>
               </div>
             </Link>
           );
         })}
 
-        {notices.length === 0 && (
-          <div className="py-12 text-center text-slate-500">
-            등록된 공지사항이 없습니다.
-          </div>
-        )}
+        {notices.length === 0 && <div className="py-12 text-center text-slate-500">등록된 공지사항이 없습니다.</div>}
       </div>
     </div>
   );

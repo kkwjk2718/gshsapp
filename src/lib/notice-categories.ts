@@ -22,11 +22,59 @@ export const DEFAULT_NOTICE_CATEGORIES = [
   { label: "방송", value: "BROADCAST" },
 ] as const;
 
+const HIDDEN_NOTICE_CATEGORY_VALUES = new Set(["OTHER"]);
+const DEFAULT_NOTICE_CATEGORY_ORDER = new Map(
+  DEFAULT_NOTICE_CATEGORIES.map((category, index) => [category.value, index]),
+);
+
+function sortNoticeCategories(categories: NoticeCategoryRecord[]) {
+  return [...categories].sort((left, right) => {
+    const leftOrder = DEFAULT_NOTICE_CATEGORY_ORDER.get(left.value);
+    const rightOrder = DEFAULT_NOTICE_CATEGORY_ORDER.get(right.value);
+
+    if (leftOrder !== undefined && rightOrder !== undefined) {
+      return leftOrder - rightOrder;
+    }
+
+    if (leftOrder !== undefined) {
+      return -1;
+    }
+
+    if (rightOrder !== undefined) {
+      return 1;
+    }
+
+    return left.label.localeCompare(right.label, "ko");
+  });
+}
+
 function getFallbackCategoryValue(categories: NoticeCategoryRecord[]) {
   return (
     categories.find((category) => category.value === DEFAULT_NOTICE_CATEGORY_VALUE)?.value ||
     categories[0]?.value ||
     DEFAULT_NOTICE_CATEGORY_VALUE
+  );
+}
+
+async function ensureDefaultNoticeCategories(store: NoticeCategoryStore) {
+  const existingCategories = await store.noticeCategory.findMany({
+    orderBy: { label: "asc" },
+  });
+  const existingValues = new Set(existingCategories.map((category) => category.value));
+  const missingDefaultCategories = DEFAULT_NOTICE_CATEGORIES.filter((category) => !existingValues.has(category.value));
+
+  if (missingDefaultCategories.length === 0) {
+    return;
+  }
+
+  await Promise.all(
+    missingDefaultCategories.map((category) =>
+      store.noticeCategory.upsert({
+        where: { value: category.value },
+        update: { label: category.label },
+        create: { label: category.label, value: category.value },
+      }),
+    ),
   );
 }
 
@@ -45,33 +93,26 @@ export function coerceNoticeCategoryValue(
 }
 
 export async function loadNoticeCategories(store: NoticeCategoryStore = prisma) {
-  const existingCategories = await store.noticeCategory.findMany({
+  await ensureDefaultNoticeCategories(store);
+
+  const categories = await store.noticeCategory.findMany({
     orderBy: { label: "asc" },
   });
 
-  if (existingCategories.length > 0) {
-    return existingCategories;
-  }
-
-  await Promise.all(
-    DEFAULT_NOTICE_CATEGORIES.map((category) =>
-      store.noticeCategory.upsert({
-        where: { value: category.value },
-        update: { label: category.label },
-        create: { label: category.label, value: category.value },
-      }),
-    ),
+  return sortNoticeCategories(
+    categories.filter((category) => !HIDDEN_NOTICE_CATEGORY_VALUES.has(category.value)),
   );
-
-  return store.noticeCategory.findMany({
-    orderBy: { label: "asc" },
-  });
 }
 
 export async function resolveNoticeCategoryValue(
   input: FormDataEntryValue | null | undefined,
   store: NoticeCategoryStore = prisma,
 ) {
-  const categories = await loadNoticeCategories(store);
+  await ensureDefaultNoticeCategories(store);
+
+  const categories = await store.noticeCategory.findMany({
+    orderBy: { label: "asc" },
+  });
+
   return coerceNoticeCategoryValue(categories, input);
 }

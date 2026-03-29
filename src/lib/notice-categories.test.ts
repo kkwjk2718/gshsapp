@@ -4,6 +4,7 @@ import {
   DEFAULT_NOTICE_CATEGORY_VALUE,
   coerceNoticeCategoryValue,
   loadNoticeCategories,
+  resolveNoticeCategoryValue,
   type NoticeCategoryRecord,
 } from "@/lib/notice-categories";
 
@@ -52,13 +53,24 @@ describe("notice-categories", () => {
 
       const categories = await loadNoticeCategories(store);
 
-      expect([...categories.map((category) => category.value)].sort()).toEqual(
-        [...DEFAULT_NOTICE_CATEGORIES].map((category) => category.value).sort(),
+      expect(categories.map((category) => category.value)).toEqual(
+        DEFAULT_NOTICE_CATEGORIES.map((category) => category.value),
       );
-      expect(categories.map((category) => category.label)).toContain("일반");
+      expect(categories.map((category) => category.label)).toEqual(["일반", "학사", "행사", "방송"]);
     });
 
-    it("keeps existing categories when the table already has data", async () => {
+    it("hides the removed OTHER category from the visible list", async () => {
+      const store = createNoticeCategoryStore([
+        { id: "1", label: "기타", value: "OTHER" },
+        { id: "2", label: "학사", value: "ACADEMIC" },
+      ]);
+
+      const categories = await loadNoticeCategories(store);
+
+      expect(categories.map((category) => category.value)).toEqual(["GENERAL", "ACADEMIC", "EVENT", "BROADCAST"]);
+    });
+
+    it("adds any missing default categories without removing custom ones", async () => {
       const store = createNoticeCategoryStore([
         { id: "1", label: "기숙사", value: "DORM" },
         { id: "2", label: "학사", value: "ACADEMIC" },
@@ -66,11 +78,8 @@ describe("notice-categories", () => {
 
       const categories = await loadNoticeCategories(store);
 
-      expect([...categories].sort((left, right) => left.value.localeCompare(right.value))).toEqual(
-        [
-          { id: "2", label: "학사", value: "ACADEMIC" },
-          { id: "1", label: "기숙사", value: "DORM" },
-        ],
+      expect(categories.map((category) => category.value)).toEqual(
+        ["GENERAL", "ACADEMIC", "EVENT", "BROADCAST", "DORM"],
       );
     });
   });
@@ -97,6 +106,17 @@ describe("notice-categories", () => {
       expect(
         coerceNoticeCategoryValue([{ id: "3", label: "기숙사", value: "DORM" }], ""),
       ).toBe("DORM");
+    });
+  });
+
+  describe("resolveNoticeCategoryValue", () => {
+    it("preserves a legacy OTHER value when an older notice is edited", async () => {
+      const store = createNoticeCategoryStore([
+        { id: "1", label: "기타", value: "OTHER" },
+        { id: "2", label: "일반", value: "GENERAL" },
+      ]);
+
+      await expect(resolveNoticeCategoryValue("OTHER", store)).resolves.toBe("OTHER");
     });
   });
 });

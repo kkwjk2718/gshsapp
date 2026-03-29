@@ -243,4 +243,77 @@ body {
   .admin-theme button:disabled {
     opacity: 0.55;
   }
+
+  .admin-theme button.notice-category-button[data-selected="false"]:not(:disabled) {
+    background: var(--surface) !important;
+    color: var(--foreground) !important;
+    border-color: var(--border) !important;
+  }
+
+  .admin-theme button.notice-category-button[data-selected="true"]:not(:disabled) {
+    background: color-mix(in srgb, var(--surface) 86%, white 14%) !important;
+    color: var(--foreground) !important;
+    border: 1px solid color-mix(in srgb, var(--accent) 38%, white 62%) !important;
+    box-shadow:
+      0 0 0 2px color-mix(in srgb, var(--accent) 22%, transparent 78%),
+      0 12px 22px color-mix(in srgb, var(--accent) 12%, transparent 88%);
+    filter: none !important;
+  }
+
+  .admin-theme button.notice-category-button[data-selected="true"]:not(:disabled):hover {
+    background: color-mix(in srgb, var(--surface) 86%, white 14%) !important;
+    color: var(--foreground) !important;
+    filter: none !important;
+  }
+
+  .dark .admin-theme button.notice-category-button[data-selected="true"]:not(:disabled) {
+    background: rgba(94, 106, 210, 0.16) !important;
+    border: 1px solid rgba(129, 140, 248, 0.55) !important;
+    box-shadow:
+      0 0 0 2px rgba(94, 106, 210, 0.22),
+      0 12px 22px rgba(15, 23, 42, 0.28);
+  }
+
+  .admin-theme button.notice-period-day[data-selection-state="idle"]:not(:disabled) {
+    background: var(--surface) !important;
+    color: var(--foreground) !important;
+    border-color: transparent !important;
+  }
+
+  .admin-theme button.notice-period-day[data-selection-state="idle"]:not(:disabled):hover {
+    background: color-mix(in srgb, var(--surface-2) 72%, transparent) !important;
+  }
+
+  .admin-theme button.notice-period-day[data-selection-state="edge"]:not(:disabled) {
+    background: #4338ca !important;
+    color: #ffffff !important;
+    border: 2px solid #312e81 !important;
+    box-shadow: 0 10px 24px rgba(67, 56, 202, 0.35);
+    filter: none !important;
+    font-weight: 700;
+  }
+
+  .admin-theme button.notice-period-day[data-selection-state="edge"]:not(:disabled):hover {
+    background: #4338ca !important;
+    color: #ffffff !important;
+    filter: none !important;
+  }
+
+  .admin-theme button.notice-period-day[data-selection-state="range"]:not(:disabled) {
+    background: #c7d2fe !important;
+    color: #3730a3 !important;
+    border: 1px solid #a5b4fc !important;
+    filter: none !important;
+    font-weight: 600;
+  }
+
+  .dark .admin-theme button.notice-period-day[data-selection-state="range"]:not(:disabled) {
+    background: rgba(99, 102, 241, 0.32) !important;
+    color: #e0e7ff !important;
+    border: 1px solid rgba(165, 180, 252, 0.45) !important;
+  }
+
+  .admin-theme button.notice-period-day[data-outside-month="true"] {
+    opacity: 0.35;
+  }
 }

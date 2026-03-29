@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db";
 import { loadNoticeCategories } from "@/lib/notice-categories";
-import { canManageNotice } from "@/lib/notice-permissions";
+import { canCreateUnlimitedNotice, canManageNotice } from "@/lib/notice-permissions";
 import { getCurrentUser } from "@/lib/session";
 import { notFound } from "next/navigation";
 import { EditNoticeForm } from "./edit-form";
@@ -21,5 +21,5 @@ export default async function EditNoticePage({ params }: Props) {
     if (!notice) notFound();
     if (!canManageNotice(user, notice.writerId)) notFound();
 
-    return <EditNoticeForm notice={notice} categories={categories} />;
+    return <EditNoticeForm notice={notice} categories={categories} canCreateUnlimited={canCreateUnlimitedNotice(user)} />;
 }

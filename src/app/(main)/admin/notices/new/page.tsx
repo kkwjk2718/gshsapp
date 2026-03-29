@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db";
 import { loadNoticeCategories } from "@/lib/notice-categories";
-import { canCreateNotice } from "@/lib/notice-permissions";
+import { canCreateNotice, canCreateUnlimitedNotice } from "@/lib/notice-permissions";
 import { getCurrentUser } from "@/lib/session";
 import { notFound } from "next/navigation";
 import { NoticeForm } from "./notice-form";
@@ -14,5 +14,5 @@ export default async function NewNoticePage() {
 
   const categories = await loadNoticeCategories(prisma);
 
-  return <NoticeForm categories={categories} />;
+  return <NoticeForm categories={categories} canCreateUnlimited={canCreateUnlimitedNotice(user)} />;
 }

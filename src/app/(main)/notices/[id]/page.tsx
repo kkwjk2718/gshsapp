@@ -1,10 +1,11 @@
 import Link from "next/link";
-import { ArrowLeft, Calendar, Megaphone, ShieldCheck, User } from "lucide-react";
+import { ArrowLeft, Calendar, Clock3, Megaphone, ShieldCheck, User } from "lucide-react";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { formatKST } from "@/lib/date-utils";
 import { canManageNotice } from "@/lib/notice-permissions";
+import { formatNoticeWindowLabel, isNoticeVisibleAt } from "@/lib/notice-window";
 import { getCurrentUser } from "@/lib/session";
 import { NoticeDeleteForm } from "@/components/notice-delete-form";
 
@@ -64,28 +65,32 @@ export default async function NoticeDetailPage({ params }: Props) {
   const isAdmin = notice.writer.role === "ADMIN";
   const canManage = canManageNotice(currentUser, notice.writerId);
 
+  if (!isNoticeVisibleAt(notice) && !canManage) {
+    notFound();
+  }
+
   return (
     <div className="p-4 md:p-8">
-      <div className="max-w-4xl mx-auto">
+      <div className="mx-auto max-w-4xl">
         <Link
           href="/notices"
-          className="inline-flex items-center gap-2 text-slate-600 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors mb-6"
+          className="mb-6 inline-flex items-center gap-2 text-slate-600 transition-colors hover:text-indigo-600 dark:text-slate-400 dark:hover:text-indigo-400"
         >
-          <ArrowLeft className="w-4 h-4" />
+          <ArrowLeft className="h-4 w-4" />
           <span className="font-medium">목록으로</span>
         </Link>
 
         <div
-          className={`glass p-8 rounded-3xl border-l-4 ${
+          className={`glass rounded-3xl border-l-4 p-8 ${
             isAdmin ? "border-indigo-500 bg-indigo-50/50 dark:bg-indigo-900/10" : "border-transparent"
           }`}
         >
-          <div className="flex items-center gap-2 mb-4">
-            <div className="p-2 bg-indigo-100 dark:bg-indigo-900/30 rounded-lg text-indigo-600">
-              <Megaphone className="w-5 h-5" />
+          <div className="mb-4 flex items-center gap-2">
+            <div className="rounded-lg bg-indigo-100 p-2 text-indigo-600 dark:bg-indigo-900/30">
+              <Megaphone className="h-5 w-5" />
             </div>
             <span
-              className={`px-3 py-1 rounded-lg text-sm font-bold ${
+              className={`rounded-lg px-3 py-1 text-sm font-bold ${
                 isAdmin
                   ? "bg-indigo-100 text-indigo-600 dark:bg-indigo-900 dark:text-indigo-300"
                   : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400"
@@ -94,37 +99,34 @@ export default async function NoticeDetailPage({ params }: Props) {
               {notice.category}
             </span>
             {isAdmin && (
-              <div className="flex items-center gap-1 px-2 py-1 bg-indigo-100 dark:bg-indigo-900/50 rounded-lg">
-                <ShieldCheck className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+              <div className="flex items-center gap-1 rounded-lg bg-indigo-100 px-2 py-1 dark:bg-indigo-900/50">
+                <ShieldCheck className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
                 <span className="text-xs font-medium text-indigo-600 dark:text-indigo-400">관리자</span>
               </div>
             )}
           </div>
 
-          <h1 className="text-3xl md:text-4xl font-bold mb-6 text-slate-900 dark:text-slate-100">
-            {notice.title}
-          </h1>
+          <h1 className="mb-6 text-3xl font-bold text-slate-900 dark:text-slate-100 md:text-4xl">{notice.title}</h1>
 
-          <div className="flex flex-wrap items-center gap-4 mb-6 pb-6 border-b border-slate-200 dark:border-slate-800">
+          <div className="mb-6 flex flex-wrap items-center gap-4 border-b border-slate-200 pb-6 dark:border-slate-800">
             <div className="flex items-center gap-2 text-slate-600 dark:text-slate-400">
-              <User className="w-4 h-4" />
+              <User className="h-4 w-4" />
               <span className="text-sm">
                 {notice.writer.name} {isAdmin ? "(관리자)" : ""}
               </span>
             </div>
             <div className="flex items-center gap-2 text-slate-600 dark:text-slate-400">
-              <Calendar className="w-4 h-4" />
+              <Calendar className="h-4 w-4" />
               <span className="text-sm">{formatKST(notice.createdAt, "yyyy년 MM월 dd일")}</span>
             </div>
-            {!notice.expiresAt && (
-              <span className="text-xs bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 px-3 py-1 rounded-full font-medium">
-                상시 공지
-              </span>
-            )}
+            <div className="flex items-center gap-2 text-slate-600 dark:text-slate-400">
+              <Clock3 className="h-4 w-4" />
+              <span className="text-sm">{formatNoticeWindowLabel(notice)}</span>
+            </div>
           </div>
 
-          <div className="prose prose-slate dark:prose-invert max-w-none">
-            <p className="text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed text-base">
+          <div className="prose prose-slate max-w-none dark:prose-invert">
+            <p className="whitespace-pre-wrap text-base leading-relaxed text-slate-700 dark:text-slate-300">
               {notice.content}
             </p>
           </div>

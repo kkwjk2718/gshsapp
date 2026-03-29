@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canCreateNotice, canManageNotice } from "@/lib/notice-permissions";
+import { canCreateNotice, canCreateUnlimitedNotice, canManageNotice } from "@/lib/notice-permissions";
 
 describe("notice-permissions", () => {
   it("allows admins and teachers to create notices", () => {
@@ -10,6 +10,13 @@ describe("notice-permissions", () => {
   it("blocks non-author roles from creating notices", () => {
     expect(canCreateNotice({ id: "student-1", role: "STUDENT" })).toBe(false);
     expect(canCreateNotice(null)).toBe(false);
+  });
+
+  it("allows only admins to create unlimited notices", () => {
+    expect(canCreateUnlimitedNotice({ id: "admin-1", role: "ADMIN" })).toBe(true);
+    expect(canCreateUnlimitedNotice({ id: "teacher-1", role: "TEACHER" })).toBe(false);
+    expect(canCreateUnlimitedNotice({ id: "student-1", role: "STUDENT" })).toBe(false);
+    expect(canCreateUnlimitedNotice(null)).toBe(false);
   });
 
   it("lets admins manage any notice", () => {

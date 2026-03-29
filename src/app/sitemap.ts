@@ -1,4 +1,5 @@
 import { MetadataRoute } from "next";
+import { getNoticeVisibilityWhere } from "@/lib/notice-window";
 
 async function getNoticeRoutes(baseUrl: string): Promise<MetadataRoute.Sitemap> {
   if (!process.env.DATABASE_URL) {
@@ -8,9 +9,7 @@ async function getNoticeRoutes(baseUrl: string): Promise<MetadataRoute.Sitemap> 
   try {
     const { prisma } = await import("@/lib/db");
     const notices = await prisma.notice.findMany({
-      where: {
-        OR: [{ expiresAt: { gt: new Date() } }, { expiresAt: null }],
-      },
+      where: getNoticeVisibilityWhere(),
       select: { id: true, createdAt: true },
       take: 1000,
       orderBy: { createdAt: "desc" },
