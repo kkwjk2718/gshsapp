@@ -8,20 +8,20 @@ export async function authenticate(
   formData: FormData,
 ) {
   try {
-    // NextAuth v5's signIn throws a redirect error on success.
-    // We can explicitly specify redirectTo via formData or options if needed,
-    // but usually it defaults to standard behavior.
-    // To be safe, we can append redirectTo to formData if the library supports it,
-    // or just trust the throw.
-    // However, passing redirectTo in the second argument object style is also supported.
     await signIn('credentials', { ...Object.fromEntries(formData), redirectTo: '/' });
   } catch (error) {
     if (error instanceof AuthError) {
       if (error.type === 'CredentialsSignin') {
-        return '아이디 또는 비밀번호가 올바르지 않습니다.';
+        if ("code" in error && error.code === "login_locked") {
+          return '로그인 시도가 너무 많습니다. 10분 후 다시 시도해주세요.';
+        }
+
+        return '?꾩씠???먮뒗 鍮꾨?踰덊샇媛 ?щ컮瑜댁? ?딆뒿?덈떎.';
       }
-      return '로그인 중 오류가 발생했습니다.';
+
+      return '濡쒓렇??以??ㅻ쪟媛 諛쒖깮?덉뒿?덈떎.';
     }
+
     throw error;
   }
 }

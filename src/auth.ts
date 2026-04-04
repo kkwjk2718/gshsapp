@@ -1,13 +1,19 @@
 import NextAuth from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
+import { CredentialsSignin } from '@auth/core/errors';
 import { authConfig } from './auth.config';
 import { z } from 'zod';
 import { prisma } from '@/lib/db';
 import { logAction } from '@/lib/logger';
+import { isLoginTemporarilyLocked } from '@/lib/login-rate-limit';
 import bcrypt from 'bcryptjs';
 
 async function verifyPassword(password: string, hash: string) {
   return await bcrypt.compare(password, hash);
+}
+
+class LoginTemporarilyLockedError extends CredentialsSignin {
+  code = 'login_locked';
 }
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
@@ -28,11 +34,18 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           .safeParse(credentials);
 
         if (parsedCredentials.success) {
-          const { userId, password } = parsedCredentials.data;
+          const { password } = parsedCredentials.data;
+          const userId = parsedCredentials.data.userId.trim();
+
+          if (await isLoginTemporarilyLocked(userId)) {
+            await logAction("LOGIN_BLOCKED", { loginId: userId, reason: "rate-limit" });
+            throw new LoginTemporarilyLockedError();
+          }
+
           const user = await prisma.user.findUnique({ where: { userId } });
 
           if (!user) {
-            await logAction("LOGIN_FAILED", { userId, reason: "User not found" });
+            await logAction("LOGIN_FAILED", { loginId: userId, reason: "User not found" });
             return null;
           }
 
@@ -48,7 +61,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
               gisu: user.gisu,
             };
           } else {
-            await logAction("LOGIN_FAILED", { userId, reason: "Invalid password" });
+            await logAction("LOGIN_FAILED", { loginId: userId, reason: "Invalid password" });
           }
         }
 
