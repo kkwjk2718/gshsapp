@@ -1,5 +1,3 @@
-import axios from 'axios';
-
 const baseUrl = 'http://localhost:3001';
 const routes = [
     '/admin',
@@ -15,19 +13,18 @@ async function checkRoutes() {
 
     for (const route of routes) {
         try {
-            const response = await axios.get(`${baseUrl}${route}`, {
-                validateStatus: function (status) {
-                    return status < 500; // Resolve if status is less than 500 (so redirects 3xx are OK, and 4xx strictly speaking means "working server" just maybe unauth)
-                },
-                maxRedirects: 0 // Don't follow redirects automatically so we can see them
+            const response = await fetch(`${baseUrl}${route}`, {
+                method: 'GET',
+                redirect: 'manual',
             });
+
+            if (response.status >= 500) {
+                throw new Error(`HTTP ${response.status}`);
+            }
 
             console.log(`[PASS] ${route} - Status: ${response.status}`);
         } catch (error) {
             console.error(`[FAIL] ${route} - Error: ${error.message}`);
-            if (error.response) {
-                console.error(`       Status: ${error.response.status}`);
-            }
             failed = true;
         }
     }
