@@ -1,33 +1,33 @@
 "use server"
 
-import { prisma } from "@/lib/db";
+import bcrypt from "bcryptjs";
 import { revalidatePath, unstable_cache } from "next/cache";
+import { prisma } from "@/lib/db";
+import { logAction } from "@/lib/logger";
+import { assertSafeExternalHttpsUrl } from "@/lib/network-safety";
 import { getCurrentUser } from "@/lib/session";
 import { SYSTEM_SETTING_KEYS, isValidGoogleAnalyticsId } from "@/lib/system-settings";
-import bcrypt from "bcryptjs";
-import { logAction } from "@/lib/logger";
 
 export async function updateGradeMapping(formData: FormData) {
   const user = await getCurrentUser();
-  if (!user || user.role !== 'ADMIN') throw new Error("Unauthorized");
+  if (!user || user.role !== "ADMIN") throw new Error("Unauthorized");
 
-  const g1 = parseInt(formData.get("grade1") as string);
-  const g2 = parseInt(formData.get("grade2") as string);
-  const g3 = parseInt(formData.get("grade3") as string);
+  const g1 = Number.parseInt(formData.get("grade1") as string, 10);
+  const g2 = Number.parseInt(formData.get("grade2") as string, 10);
+  const g3 = Number.parseInt(formData.get("grade3") as string, 10);
 
   const mapping = {
-      "1": g1,
-      "2": g2,
-      "3": g3
+    "1": g1,
+    "2": g2,
+    "3": g3,
   };
 
   await prisma.systemSetting.upsert({
-      where: { key: "GRADE_MAPPING" },
-      update: { value: JSON.stringify(mapping) },
-      create: { key: "GRADE_MAPPING", value: JSON.stringify(mapping), description: "학년별 기수 매핑" }
+    where: { key: "GRADE_MAPPING" },
+    update: { value: JSON.stringify(mapping) },
+    create: { key: "GRADE_MAPPING", value: JSON.stringify(mapping), description: "?숇뀈蹂?湲곗닔 留ㅽ븨" },
   });
 
-  // revalidateTag("grade-mapping");
   revalidatePath("/", "layout");
   revalidatePath("/admin/settings");
 }
@@ -40,70 +40,78 @@ export type ActionResult = {
 };
 
 export async function updateICalUrl(prevState: any, formData: FormData): Promise<ActionResult> {
-    const user = await getCurrentUser();
-    if (!user || user.role !== 'ADMIN') throw new Error("Unauthorized");
+  const user = await getCurrentUser();
+  if (!user || user.role !== "ADMIN") throw new Error("Unauthorized");
 
-    const url = formData.get("icalUrl") as string;
-    
-    // Basic URL validation
-    if (url && !url.startsWith("https://")) {
-        return { error: "유효하지 않은 URL입니다. https://로 시작해야 합니다." }
+  const url = ((formData.get("icalUrl") as string | null) || "").trim();
+
+  if (url) {
+    try {
+      await assertSafeExternalHttpsUrl(url);
+    } catch (error) {
+      return {
+        error:
+          error instanceof Error
+            ? `안전하지 않은 iCal URL입니다. ${error.message}`
+            : "안전하지 않은 iCal URL입니다.",
+      };
     }
+  }
 
-    await prisma.systemSetting.upsert({
-        where: { key: "ICAL_URL" },
-        update: { value: url },
-        create: { key: "ICAL_URL", value: url, description: "Google Calendar iCal URL for sync" }
-    });
-    
-    revalidatePath("/admin/settings");
-    // revalidateTag("schedules"); 
-    revalidatePath("/", "layout");
-    return { success: "iCal URL이 업데이트되었습니다." };
+  await prisma.systemSetting.upsert({
+    where: { key: "ICAL_URL" },
+    update: { value: url },
+    create: { key: "ICAL_URL", value: url, description: "Google Calendar iCal URL for sync" },
+  });
+
+  revalidatePath("/admin/settings");
+  revalidatePath("/", "layout");
+
+  return { success: "iCal URL이 업데이트되었습니다." };
 }
 
 export async function updateGoogleAnalyticsId(prevState: any, formData: FormData): Promise<ActionResult> {
-    const user = await getCurrentUser();
-    if (!user || user.role !== 'ADMIN') throw new Error("Unauthorized");
+  const user = await getCurrentUser();
+  if (!user || user.role !== "ADMIN") throw new Error("Unauthorized");
 
-    const googleAnalyticsId = (formData.get("googleAnalyticsId") as string | null)?.trim() || "";
+  const googleAnalyticsId = (formData.get("googleAnalyticsId") as string | null)?.trim() || "";
 
-    if (googleAnalyticsId && !isValidGoogleAnalyticsId(googleAnalyticsId)) {
-        return { error: "Google Analytics measurement IDs must look like G-XXXXXXXXXX." };
-    }
+  if (googleAnalyticsId && !isValidGoogleAnalyticsId(googleAnalyticsId)) {
+    return { error: "Google Analytics measurement IDs must look like G-XXXXXXXXXX." };
+  }
 
-    await prisma.systemSetting.upsert({
-        where: { key: SYSTEM_SETTING_KEYS.googleAnalyticsId },
-        update: { value: googleAnalyticsId },
-        create: {
-            key: SYSTEM_SETTING_KEYS.googleAnalyticsId,
-            value: googleAnalyticsId,
-            description: "Google Analytics measurement ID"
-        }
-    });
+  await prisma.systemSetting.upsert({
+    where: { key: SYSTEM_SETTING_KEYS.googleAnalyticsId },
+    update: { value: googleAnalyticsId },
+    create: {
+      key: SYSTEM_SETTING_KEYS.googleAnalyticsId,
+      value: googleAnalyticsId,
+      description: "Google Analytics measurement ID",
+    },
+  });
 
-    revalidatePath("/admin/settings");
+  revalidatePath("/admin/settings");
 
-    if (googleAnalyticsId) {
-        return {
-            success: "Google Analytics measurement ID saved.",
-            value: googleAnalyticsId,
-        };
-    }
-
+  if (googleAnalyticsId) {
     return {
-        success: "Google Analytics tracking disabled.",
-        value: null,
+      success: "Google Analytics measurement ID saved.",
+      value: googleAnalyticsId,
     };
+  }
+
+  return {
+    success: "Google Analytics tracking disabled.",
+    value: null,
+  };
 }
 
 export const getICalUrl = unstable_cache(
-    async () => {
-        const setting = await prisma.systemSetting.findUnique({ where: { key: "ICAL_URL" } });
-        return setting?.value || null;
-    },
-    ["ical-url"],
-    { tags: ["schedules"] }
+  async () => {
+    const setting = await prisma.systemSetting.findUnique({ where: { key: "ICAL_URL" } });
+    return setting?.value || null;
+  },
+  ["ical-url"],
+  { tags: ["schedules"] },
 );
 
 export async function updateTokenPortalConfig(
@@ -119,7 +127,7 @@ export async function updateTokenPortalConfig(
   const guidance = (formData.get("guidance") as string | null)?.trim() || "";
 
   if (guidance.length > 2000) {
-    return { error: "추가 안내 문구는 2000자 이하로 입력해주세요." };
+    return { error: "異붽? ?덈궡 臾멸뎄??2000???댄븯濡??낅젰?댁＜?몄슂." };
   }
 
   await prisma.$transaction([
@@ -129,7 +137,7 @@ export async function updateTokenPortalConfig(
       create: {
         key: SYSTEM_SETTING_KEYS.tokenPortalEnabled,
         value: enabled ? "true" : "false",
-        description: "학생 토큰 배부 포털 활성화 여부",
+        description: "?숈깮 ?좏겙 諛곕? ?ы꽭 ?쒖꽦???щ?",
       },
     }),
     prisma.systemSetting.upsert({
@@ -138,7 +146,7 @@ export async function updateTokenPortalConfig(
       create: {
         key: SYSTEM_SETTING_KEYS.tokenPortalEmailGuidance,
         value: guidance,
-        description: "토큰 안내 메일 하단 추가 안내 문구",
+        description: "?좏겙 ?덈궡 硫붿씪 ?섎떒 異붽? ?덈궡 臾멸뎄",
       },
     }),
   ]);
@@ -152,7 +160,7 @@ export async function updateTokenPortalConfig(
   revalidatePath("/signup/request");
 
   return {
-    success: enabled ? "토큰 배부 포털을 활성화했습니다." : "토큰 배부 포털을 비활성화했습니다.",
+    success: enabled ? "?좏겙 諛곕? ?ы꽭???쒖꽦?뷀뻽?듬땲??" : "?좏겙 諛곕? ?ы꽭??鍮꾪솢?깊솕?덉뒿?덈떎.",
   };
 }
 
@@ -169,11 +177,11 @@ export async function updateTokenPortalPassword(
   const confirmPassword = (formData.get("confirmPassword") as string | null)?.trim() || "";
 
   if (password.length < 6) {
-    return { error: "포털 비밀번호는 6자 이상으로 설정해주세요." };
+    return { error: "?ы꽭 鍮꾨?踰덊샇??6???댁긽?쇰줈 ?ㅼ젙?댁＜?몄슂." };
   }
 
   if (password !== confirmPassword) {
-    return { error: "비밀번호와 비밀번호 확인이 일치하지 않습니다." };
+    return { error: "鍮꾨?踰덊샇? 鍮꾨?踰덊샇 ?뺤씤???쇱튂?섏? ?딆뒿?덈떎." };
   }
 
   const sessionVersionSetting = await prisma.systemSetting.findUnique({
@@ -190,7 +198,7 @@ export async function updateTokenPortalPassword(
       create: {
         key: SYSTEM_SETTING_KEYS.tokenPortalPasswordHash,
         value: passwordHash,
-        description: "토큰 배부 포털 접근 비밀번호 해시",
+        description: "?좏겙 諛곕? ?ы꽭 ?묎렐 鍮꾨?踰덊샇 ?댁떆",
       },
     }),
     prisma.systemSetting.upsert({
@@ -199,7 +207,7 @@ export async function updateTokenPortalPassword(
       create: {
         key: SYSTEM_SETTING_KEYS.tokenPortalSessionVersion,
         value: String(nextVersion),
-        description: "토큰 배부 포털 세션 버전",
+        description: "?좏겙 諛곕? ?ы꽭 ?몄뀡 踰꾩쟾",
       },
     }),
   ]);
@@ -212,6 +220,6 @@ export async function updateTokenPortalPassword(
   revalidatePath("/signup/request");
 
   return {
-    success: "포털 접근 비밀번호를 변경했습니다. 기존 세션은 모두 만료됩니다.",
+    success: "?ы꽭 ?묎렐 鍮꾨?踰덊샇瑜?蹂寃쏀뻽?듬땲?? 湲곗〈 ?몄뀡? 紐⑤몢 留뚮즺?⑸땲??",
   };
 }
