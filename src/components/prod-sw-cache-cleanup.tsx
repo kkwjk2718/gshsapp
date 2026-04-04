@@ -3,7 +3,8 @@
 import { useEffect } from "react";
 
 const LEGACY_CACHE_KEYS = ["api-cache", "pages"];
-const RESET_MARKER_KEY = "gshs-prod-sw-cache-reset-20260325";
+const LEGACY_CACHE_PREFIXES = ["workbox", "google-fonts", "static-image-assets", "next-image", "static-assets", "public-pages"];
+const RESET_MARKER_KEY = "gshs-prod-sw-cache-reset-20260405-security";
 
 export function ProductionServiceWorkerCacheCleanup() {
   useEffect(() => {
@@ -19,8 +20,10 @@ export function ProductionServiceWorkerCacheCleanup() {
     }
 
     if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.getRegistration().then((registration) => {
-        registration?.update().catch(() => {});
+      navigator.serviceWorker.getRegistrations().then((registrations) => {
+        registrations.forEach((registration) => {
+          registration.unregister().catch(() => {});
+        });
       });
     }
 
@@ -33,7 +36,10 @@ export function ProductionServiceWorkerCacheCleanup() {
       .then((keys) =>
         Promise.all(
           keys
-            .filter((key) => LEGACY_CACHE_KEYS.includes(key))
+            .filter((key) =>
+              LEGACY_CACHE_KEYS.includes(key) ||
+              LEGACY_CACHE_PREFIXES.some((prefix) => key.startsWith(prefix)),
+            )
             .map((key) => caches.delete(key).catch(() => false)),
         ),
       )

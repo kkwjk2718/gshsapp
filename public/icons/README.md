@@ -1,6 +1,6 @@
-﻿# PWA 아이콘 안내
+# 웹 앱 아이콘 안내
 
-이 프로젝트의 PWA는 여러 크기의 아이콘을 필요로 합니다. 현재는 학교 마크 원본 PNG를 기준으로 아이콘을 생성합니다.
+이 프로젝트는 브라우저 탭 아이콘, 웹 앱 매니페스트, Apple 아이콘에 여러 크기의 아이콘을 사용합니다. 현재는 학교 마크 원본 PNG를 기준으로 아이콘을 생성합니다.
 
 ## 필요한 아이콘 크기
 
@@ -30,7 +30,7 @@ npm install sharp
 node generate-icons.js
 ```
 
-이 스크립트는 `public/icons/icon-source.png`를 기준으로 PWA PNG 아이콘과 `src/app/icon.png`, `src/app/apple-icon.png`를 생성합니다.
+이 스크립트는 `public/icons/icon-source.png`를 기준으로 웹 앱 PNG 아이콘과 `src/app/icon.png`, `src/app/apple-icon.png`를 생성합니다.
 
 ### 방법 3: 수동 교체
 

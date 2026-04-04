@@ -1,105 +1,49 @@
-import withPWA from "next-pwa";
+const isProduction = process.env.NODE_ENV === "production";
+
+const contentSecurityPolicy = [
+    "default-src 'self'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "frame-ancestors 'none'",
+    "object-src 'none'",
+    "script-src 'self' 'unsafe-inline' https://www.googletagmanager.com https://www.google-analytics.com",
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: blob: https:",
+    "font-src 'self' data: https://fonts.gstatic.com",
+    "connect-src 'self' https://www.google-analytics.com https://region1.google-analytics.com https://www.googletagmanager.com",
+    "frame-src 'none'",
+    "worker-src 'self' blob:",
+    "manifest-src 'self'",
+    ...(isProduction ? ["upgrade-insecure-requests"] : []),
+].join("; ");
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
     reactCompiler: true,
     output: "standalone",
+    poweredByHeader: false,
     // Explicitly configure turbopack as empty to silence the warning
     turbopack: {},
+    async headers() {
+        return [
+            {
+                source: "/:path*",
+                headers: [
+                    { key: "Content-Security-Policy", value: contentSecurityPolicy },
+                    { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+                    { key: "X-Content-Type-Options", value: "nosniff" },
+                    { key: "X-Frame-Options", value: "DENY" },
+                    { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
+                    { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
+                    { key: "Cross-Origin-Resource-Policy", value: "same-site" },
+                    { key: "Origin-Agent-Cluster", value: "?1" },
+                    ...(isProduction
+                        ? [{ key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains; preload" }]
+                        : []),
+                ],
+            },
+        ];
+    },
 };
 
-export default withPWA({
-    dest: 'public',
-    register: true,
-    skipWaiting: true,
-    disable: process.env.NODE_ENV === 'development',
-    buildExcludes: [/middleware-manifest\.json$/],
-    runtimeCaching: [
-        {
-            urlPattern: /^https:\/\/fonts\.(?:gstatic|googleapis)\.com\/.*/i,
-            handler: 'CacheFirst',
-            options: {
-                cacheName: 'google-fonts',
-                expiration: {
-                    maxEntries: 10,
-                    maxAgeSeconds: 365 * 24 * 60 * 60, // 1 year
-                },
-            },
-        },
-        {
-            urlPattern: /\.(?:jpg|jpeg|gif|png|svg|ico|webp)$/i,
-            handler: 'StaleWhileRevalidate',
-            options: {
-                cacheName: 'static-image-assets',
-                expiration: {
-                    maxEntries: 64,
-                    maxAgeSeconds: 24 * 60 * 60, // 1 day
-                },
-            },
-        },
-        {
-            urlPattern: /\/_next\/image\?url=.+$/i,
-            handler: 'StaleWhileRevalidate',
-            options: {
-                cacheName: 'next-image',
-                expiration: {
-                    maxEntries: 64,
-                    maxAgeSeconds: 24 * 60 * 60, // 1 day
-                },
-            },
-        },
-        {
-            urlPattern: /\.(?:js|css)$/i,
-            handler: 'StaleWhileRevalidate',
-            options: {
-                cacheName: 'static-assets',
-                expiration: {
-                    maxEntries: 100,
-                    maxAgeSeconds: 24 * 60 * 60, // 1 day
-                },
-            },
-        },
-        {
-            urlPattern: /\/api\/.*/i,
-            handler: 'NetworkOnly',
-            method: 'GET',
-        },
-        {
-            urlPattern: /^https?:\/\/[^/]+\/login(?:\/.*)?$/i,
-            handler: 'NetworkOnly',
-        },
-        {
-            urlPattern: /^https?:\/\/[^/]+\/logout(?:\/.*)?$/i,
-            handler: 'NetworkOnly',
-        },
-        {
-            urlPattern: /^https?:\/\/[^/]+\/signup(?:\/request)?(?:\/.*)?$/i,
-            handler: 'NetworkOnly',
-        },
-        {
-            urlPattern: /^https?:\/\/[^/]+\/(?:me|notifications|report|sites|music)(?:\/.*)?$/i,
-            handler: 'NetworkOnly',
-        },
-        {
-            urlPattern: /^https?:\/\/[^/]+\/admin(?:\/.*)?$/i,
-            handler: 'NetworkOnly',
-        },
-        {
-            urlPattern: /\/api\/.*/i,
-            handler: 'NetworkOnly',
-            method: 'POST',
-        },
-        {
-            urlPattern: /.*/i,
-            handler: 'NetworkFirst',
-            options: {
-                cacheName: 'public-pages-v2',
-                expiration: {
-                    maxEntries: 64,
-                    maxAgeSeconds: 24 * 60 * 60, // 1 day
-                },
-                networkTimeoutSeconds: 10,
-            },
-        },
-    ],
-})(nextConfig);
+export default nextConfig;
