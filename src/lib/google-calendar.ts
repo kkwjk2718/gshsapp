@@ -1,4 +1,5 @@
 import ical from "node-ical";
+import { assertSafeExternalHttpsUrl } from "@/lib/network-safety";
 
 export interface ICalEvent {
     id: string;
@@ -10,12 +11,32 @@ export interface ICalEvent {
 }
 
 export async function getEventsFromICal(url: string): Promise<ICalEvent[]> {
-    if (!url || !url.startsWith("http")) {
+    if (!url) {
         return [];
     }
 
     try {
-        const events = await ical.async.fromURL(url);
+        const safeUrl = await assertSafeExternalHttpsUrl(url);
+        const response = await fetch(safeUrl, {
+            method: "GET",
+            redirect: "error",
+            signal: AbortSignal.timeout(10_000),
+            headers: {
+                accept: "text/calendar, text/plain;q=0.9, */*;q=0.1",
+            },
+        });
+
+        if (!response.ok) {
+            throw new Error(`iCal fetch failed with status ${response.status}`);
+        }
+
+        const contentLength = Number.parseInt(response.headers.get("content-length") || "", 10);
+        if (Number.isFinite(contentLength) && contentLength > 1_500_000) {
+            throw new Error("iCal feed is too large.");
+        }
+
+        const rawCalendar = await response.text();
+        const events = ical.sync.parseICS(rawCalendar);
         const parsedEvents: ICalEvent[] = [];
 
         for (const key in events) {
