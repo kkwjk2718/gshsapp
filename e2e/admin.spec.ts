@@ -13,7 +13,13 @@ test("admin settings and diagnostics stay healthy after deploy @smoke", async ({
   test.setTimeout(90_000);
   await page.setViewportSize({ width: 1366, height: 768 });
 
-  await loginAsAdmin(page);
+  const loginResult = await loginAsAdmin(page);
+
+  if (loginResult === "suspended") {
+    await expect(page.getByText("회원 기능 일시 비활성화 안내")).toBeVisible();
+    await assertNoApplicationError(page);
+    return;
+  }
 
   await page.goto("/");
   await expect(page.getByTestId("desktop-home-meta")).toBeVisible();

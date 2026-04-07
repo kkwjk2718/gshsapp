@@ -28,12 +28,22 @@ test("public routes render without server errors @smoke", async ({ page }) => {
   await page.setViewportSize({ width: 1366, height: 768 });
 
   await page.goto("/");
+  const isMemberServiceSuspended = await page
+    .getByText("회원 기능 일시 비활성화 안내")
+    .isVisible()
+    .catch(() => false);
+
   await expect(page.locator("body")).toContainText("GSHS.app");
   await expect(page.getByTestId("desktop-home-meta")).toBeVisible();
   await expect(page.getByTestId("desktop-home-weather")).toBeVisible();
   await expect(page.getByTestId("desktop-header-theme-toggle")).toBeVisible();
-  await expect(page.getByTestId("desktop-header-notifications")).toBeVisible();
-  await expect(page.getByTestId("desktop-utility-login-link")).toBeVisible();
+  if (isMemberServiceSuspended) {
+    await expect(page.getByTestId("desktop-utility-login-disabled")).toBeVisible();
+    await expect(page.getByTestId("desktop-header-notifications")).toHaveCount(0);
+  } else {
+    await expect(page.getByTestId("desktop-header-notifications")).toBeVisible();
+    await expect(page.getByTestId("desktop-utility-login-link")).toBeVisible();
+  }
   await expect(page.locator("main h1").filter({ hasText: "GSHS.app" })).toHaveCount(0);
   const hdMetrics = await getHomeLayoutMetrics(page);
   expect(hdMetrics).not.toBeNull();
@@ -49,7 +59,11 @@ test("public routes render without server errors @smoke", async ({ page }) => {
   await expect(page.locator("main")).toBeVisible();
   await expect(page.getByTestId("desktop-home-meta")).toHaveCount(0);
   await expect(page.getByTestId("desktop-home-weather")).toHaveCount(0);
-  await expect(page.getByTestId("desktop-header-notifications")).toBeVisible();
+  if (isMemberServiceSuspended) {
+    await expect(page.getByTestId("desktop-header-notifications")).toHaveCount(0);
+  } else {
+    await expect(page.getByTestId("desktop-header-notifications")).toBeVisible();
+  }
   if ((await page.locator('a[href^="/notices/"]').count()) > 0) {
     await expect(page.locator('a[href^="/notices/"]').first()).toBeVisible();
   }
@@ -73,8 +87,13 @@ test("public routes render without server errors @smoke", async ({ page }) => {
   await assertNoApplicationError(page);
 
   await page.goto("/login");
-  await expect(page.locator("#userId")).toBeVisible();
-  await expect(page.locator("#password")).toBeVisible();
+  if (isMemberServiceSuspended) {
+    await expect(page.getByText("회원 기능 일시 비활성화 안내")).toBeVisible();
+    await expect(page.getByText("공지사항 보기")).toBeVisible();
+  } else {
+    await expect(page.locator("#userId")).toBeVisible();
+    await expect(page.locator("#password")).toBeVisible();
+  }
   await assertNoApplicationError(page);
 
   await page.goto("/help");

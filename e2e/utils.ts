@@ -74,6 +74,10 @@ export async function loginAsAdmin(page: Page) {
   const password = getRequiredEnv("E2E_ADMIN_PASSWORD");
 
   await page.goto("/login");
+  if (await page.getByText("회원 기능 일시 비활성화 안내").isVisible()) {
+    await expect(page.getByText("회원 기능 일시 비활성화 안내")).toBeVisible();
+    return "suspended" as const;
+  }
   await expect(page.locator("#userId")).toBeVisible();
   await page.locator("#userId").fill(userId);
   await page.locator("#password").fill(password);
@@ -89,6 +93,7 @@ export async function loginAsAdmin(page: Page) {
   }
 
   await assertNoApplicationError(page);
+  return "logged-in" as const;
 }
 
 export async function expectVisible(locator: Locator) {
