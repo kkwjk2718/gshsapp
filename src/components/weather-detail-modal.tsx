@@ -13,33 +13,26 @@ import {
 } from "lucide-react";
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import type { WeatherData } from "@/lib/weather";
+import type { WeatherCondition, WeatherData } from "@/lib/weather";
 
-function getWeatherIcon(code: number, size = "w-5 h-5") {
-  if (code <= 1) return <Sun className={`${size} text-orange-500`} />;
-  if (code <= 3) return <Cloud className={`${size} text-slate-500`} />;
-  if (code <= 48) return <Cloud className={`${size} text-slate-500 dark:text-slate-400`} />;
-  if (code <= 67) return <CloudRain className={`${size} text-blue-500`} />;
-  if (code <= 77) return <CloudSnow className={`${size} text-sky-400 dark:text-sky-200`} />;
-  if (code <= 82) return <CloudRain className={`${size} text-blue-600`} />;
-  if (code <= 86) return <CloudSnow className={`${size} text-sky-500 dark:text-sky-300`} />;
-  if (code <= 99) return <CloudLightning className={`${size} text-amber-400`} />;
-  return <Sun className={`${size} text-orange-500`} />;
-}
-
-function getWeatherDescription(code: number): string {
-  if (code === 0) return "맑음";
-  if (code === 1) return "대체로 맑음";
-  if (code === 2) return "부분적으로 흐림";
-  if (code === 3) return "흐림";
-  if (code <= 48) return "안개";
-  if (code <= 55) return "이슬비";
-  if (code <= 67) return "비";
-  if (code <= 77) return "눈";
-  if (code <= 82) return "소나기";
-  if (code <= 86) return "눈보라";
-  if (code <= 99) return "뇌우";
-  return "맑음";
+function getWeatherIcon(condition: WeatherCondition, size = "h-5 w-5") {
+  switch (condition) {
+    case "clear":
+      return <Sun className={`${size} text-orange-500`} />;
+    case "partly-cloudy":
+    case "cloudy":
+    case "fog":
+      return <Cloud className={`${size} text-slate-500 dark:text-slate-400`} />;
+    case "drizzle":
+    case "rain":
+      return <CloudRain className={`${size} text-blue-500`} />;
+    case "snow":
+      return <CloudSnow className={`${size} text-sky-500 dark:text-sky-300`} />;
+    case "thunder":
+      return <CloudLightning className={`${size} text-amber-400`} />;
+    default:
+      return <Sun className={`${size} text-orange-500`} />;
+  }
 }
 
 interface WeatherDetailModalProps {
@@ -52,6 +45,7 @@ export function WeatherDetailModal({ weather }: WeatherDetailModalProps) {
   return (
     <>
       <button
+        type="button"
         onClick={() => setOpen(true)}
         className="flex min-h-10 items-center gap-2 rounded-full border px-3 py-2 transition-all hover:brightness-95 active:brightness-90"
         style={{
@@ -60,8 +54,8 @@ export function WeatherDetailModal({ weather }: WeatherDetailModalProps) {
           color: "var(--foreground)",
         }}
       >
-        {getWeatherIcon(weather.code)}
-        <div className="text-sm font-semibold">{weather.temp}°</div>
+        {getWeatherIcon(weather.condition)}
+        <div className="text-sm font-semibold">{weather.temp}℃</div>
       </button>
 
       <Dialog open={open} onOpenChange={setOpen}>
@@ -74,9 +68,12 @@ export function WeatherDetailModal({ weather }: WeatherDetailModalProps) {
 
           <div className="flex flex-col items-center gap-4 py-2">
             <div className="flex flex-col items-center gap-1">
-              {getWeatherIcon(weather.code, "w-12 h-12")}
-              <span className="text-4xl font-bold text-[var(--foreground)]">{weather.temp}°</span>
-              <span className="text-sm text-[var(--muted)]">{getWeatherDescription(weather.code)}</span>
+              {getWeatherIcon(weather.condition, "h-12 w-12")}
+              <span className="text-4xl font-bold text-[var(--foreground)]">{weather.temp}℃</span>
+              <span className="text-sm text-[var(--muted)]">{weather.description}</span>
+              {weather.stale ? (
+                <span className="text-[11px] text-[var(--muted)]">최근 저장된 날씨 정보를 표시하고 있습니다.</span>
+              ) : null}
             </div>
 
             <div className="h-px w-full bg-[var(--border)]" />
@@ -86,7 +83,7 @@ export function WeatherDetailModal({ weather }: WeatherDetailModalProps) {
                 <TrendingDown className="h-4 w-4 shrink-0 text-blue-400" />
                 <div>
                   <div className="text-xs text-[var(--muted)]">최저</div>
-                  <div className="text-sm font-semibold text-[var(--foreground)]">{weather.minTemp}°</div>
+                  <div className="text-sm font-semibold text-[var(--foreground)]">{weather.minTemp}℃</div>
                 </div>
               </div>
 
@@ -94,7 +91,7 @@ export function WeatherDetailModal({ weather }: WeatherDetailModalProps) {
                 <TrendingUp className="h-4 w-4 shrink-0 text-orange-400" />
                 <div>
                   <div className="text-xs text-[var(--muted)]">최고</div>
-                  <div className="text-sm font-semibold text-[var(--foreground)]">{weather.maxTemp}°</div>
+                  <div className="text-sm font-semibold text-[var(--foreground)]">{weather.maxTemp}℃</div>
                 </div>
               </div>
 
