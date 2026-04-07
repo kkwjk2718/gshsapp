@@ -68,6 +68,8 @@ gshsapp-web.tar
 /prisma/data/
 /.docker-test.env
 /.docker-test-data/
+/weather-cache.json
+/prisma/weather-cache.json
 /playwright-report/
 /test-results/
 /playwright-artifacts/
