@@ -2,11 +2,16 @@
 
 import { signIn } from '@/auth';
 import { AuthError } from 'next-auth';
+import { MEMBER_SERVICE_SUSPENDED } from '@/lib/member-service-suspension';
 
 export async function authenticate(
   prevState: string | undefined,
   formData: FormData,
 ) {
+  if (MEMBER_SERVICE_SUSPENDED) {
+    return '현재 로그인과 회원 기능이 일시 중지되어 있습니다. 공지사항을 확인해주세요.';
+  }
+
   try {
     await signIn('credentials', { ...Object.fromEntries(formData), redirectTo: '/' });
   } catch (error) {

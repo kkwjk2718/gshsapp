@@ -5,8 +5,13 @@ import { redirect } from "next/navigation";
 import { differenceInDays } from "date-fns";
 import bcrypt from "bcryptjs";
 import { isValidStudentId } from "@/lib/student-id";
+import { MEMBER_SERVICE_SUSPENDED } from "@/lib/member-service-suspension";
 
 export async function signup(formData: FormData) {
+    if (MEMBER_SERVICE_SUSPENDED) {
+        return { error: "현재 회원가입 기능이 일시적으로 비활성화되어 있습니다." };
+    }
+
     const tokenStr = formData.get("token") as string;
     const userId = formData.get("userId") as string;
     const password = formData.get("password") as string;

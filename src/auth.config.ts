@@ -1,4 +1,5 @@
 import type { NextAuthConfig } from 'next-auth';
+import { MEMBER_SERVICE_SUSPENDED } from "@/lib/member-service-suspension";
 
 declare module "next-auth" {
   interface User {
@@ -26,13 +27,42 @@ export const authConfig = {
       const isOnDashboard = nextUrl.pathname === '/me' || nextUrl.pathname.startsWith('/me/');
       const isOnAdmin = nextUrl.pathname.startsWith('/admin');
       const isOnLogin = nextUrl.pathname.startsWith('/login');
+      const isOnLogout = nextUrl.pathname.startsWith('/logout');
+      const isOnSignup = nextUrl.pathname.startsWith('/signup');
       const isOnMeals = nextUrl.pathname.startsWith('/meals');
       const isOnSites = nextUrl.pathname.startsWith('/sites');
       const isOnSongs = nextUrl.pathname.startsWith('/songs');
       const isOnTimetable = nextUrl.pathname.startsWith('/timetable');
       const isOnLinks = nextUrl.pathname.startsWith('/links');
+      const isOnNotifications = nextUrl.pathname.startsWith('/notifications');
+      const isOnMusic = nextUrl.pathname.startsWith('/music');
+      const isOnTeachers = nextUrl.pathname.startsWith('/teachers');
 
       const redirectHome = () => Response.redirect(new URL('/', nextUrl));
+
+      if (MEMBER_SERVICE_SUSPENDED) {
+        if (isLoggedIn && !isOnLogout) {
+          return Response.redirect(new URL('/logout?next=/', nextUrl));
+        }
+
+        if (
+          isOnDashboard ||
+          isOnAdmin ||
+          isOnSites ||
+          isOnSongs ||
+          isOnTimetable ||
+          isOnLinks ||
+          isOnNotifications ||
+          isOnMusic ||
+          isOnTeachers
+        ) {
+          return redirectHome();
+        }
+
+        if (isOnLogin || isOnSignup) {
+          return true;
+        }
+      }
       
       if (isOnMeals) {
           return true;

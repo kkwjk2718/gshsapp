@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { prisma } from '@/lib/db';
 import { logAction } from '@/lib/logger';
 import { isLoginTemporarilyLocked } from '@/lib/login-rate-limit';
+import { MEMBER_SERVICE_SUSPENDED } from '@/lib/member-service-suspension';
 import bcrypt from 'bcryptjs';
 
 async function verifyPassword(password: string, hash: string) {
@@ -29,6 +30,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   providers: [
     Credentials({
       async authorize(credentials) {
+        if (MEMBER_SERVICE_SUSPENDED) {
+          await logAction("LOGIN_BLOCKED_MEMBER_SERVICE_SUSPENDED");
+          return null;
+        }
+
         const parsedCredentials = z
           .object({ userId: z.string(), password: z.string().min(4) })
           .safeParse(credentials);

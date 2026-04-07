@@ -7,6 +7,7 @@ import { Bell, ChevronDown, LogIn, Menu, Radio, ShieldCheck, User } from "lucide
 import { ModeToggle } from "@/components/mode-toggle";
 import { LogoutButton } from "@/components/auth/logout-button";
 import { useUserSummary } from "@/components/user-summary-provider";
+import { MEMBER_SERVICE_SUSPENDED } from "@/lib/member-service-suspension";
 import { cn } from "@/lib/utils";
 import { NotificationBadge } from "./notification-badge";
 import { RealtimeClock } from "@/components/dashboard-widgets";
@@ -271,25 +272,40 @@ export function DesktopUtilityHeader({
               }}
             />
 
-            <Link
-              href="/notifications"
-              data-testid="desktop-header-notifications"
-              className="relative inline-flex h-11 w-11 items-center justify-center rounded-full border transition-colors"
-              style={{
-                backgroundColor: "color-mix(in srgb, var(--surface-2) 68%, var(--surface) 32%)",
-                borderColor: "color-mix(in srgb, var(--border) 78%, var(--accent) 22%)",
-                color: "var(--foreground)",
-              }}
-            >
-              <Bell className="h-[18px] w-[18px]" />
-              <NotificationBadge className="right-2 top-2 border-[color:var(--surface)]" />
-            </Link>
+            {!MEMBER_SERVICE_SUSPENDED ? (
+              <Link
+                href="/notifications"
+                data-testid="desktop-header-notifications"
+                className="relative inline-flex h-11 w-11 items-center justify-center rounded-full border transition-colors"
+                style={{
+                  backgroundColor: "color-mix(in srgb, var(--surface-2) 68%, var(--surface) 32%)",
+                  borderColor: "color-mix(in srgb, var(--border) 78%, var(--accent) 22%)",
+                  color: "var(--foreground)",
+                }}
+              >
+                <Bell className="h-[18px] w-[18px]" />
+                <NotificationBadge className="right-2 top-2 border-[color:var(--surface)]" />
+              </Link>
+            ) : null}
 
             {!isLoaded ? (
               <div
                 className="h-11 w-36 animate-pulse rounded-full"
                 style={{ backgroundColor: "var(--surface-2)" }}
               />
+            ) : MEMBER_SERVICE_SUSPENDED ? (
+              <span
+                data-testid="desktop-utility-login-disabled"
+                className="inline-flex min-h-11 items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold"
+                style={{
+                  backgroundColor: "color-mix(in srgb, var(--surface) 72%, var(--surface-2) 28%)",
+                  borderColor: "color-mix(in srgb, var(--border) 68%, #f59e0b 32%)",
+                  color: "var(--foreground)",
+                }}
+              >
+                <LogIn className="h-4 w-4" />
+                <span>로그인 일시중지</span>
+              </span>
             ) : summary.authenticated ? (
               <UserMenuDropdown showMusicLink={showMusicLink} showAdminLink={showAdminLink} />
             ) : showLoginLink ? (

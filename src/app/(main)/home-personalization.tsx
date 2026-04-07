@@ -11,6 +11,7 @@ import {
 import Link from "next/link";
 import { Calendar, Clock, LogIn } from "lucide-react";
 import { useUserSummary } from "@/components/user-summary-provider";
+import { MEMBER_SERVICE_SUSPENDED } from "@/lib/member-service-suspension";
 import {
   anonymousHomePersonalization,
   type HomeDdayPayload,
@@ -154,10 +155,25 @@ export function HomeWelcomeCard({ publicDDay }: { publicDDay: HomeDdayPayload | 
             {publicDDay.text}
           </p>
         ) : null}
-        <Link href="/login" className="btn-primary px-6 py-2 text-sm">
-          <LogIn className="h-4 w-4" />
-          {"\ub85c\uadf8\uc778\ud558\ub7ec \uac00\uae30"}
-        </Link>
+        {MEMBER_SERVICE_SUSPENDED ? (
+          <Link
+            href="/notices"
+            className="inline-flex items-center gap-2 rounded-full border px-6 py-2 text-sm font-semibold transition-colors"
+            style={{
+              borderColor: "var(--border)",
+              backgroundColor: "var(--surface)",
+              color: "var(--foreground)",
+            }}
+          >
+            <LogIn className="h-4 w-4" />
+            회원 기능 일시중지
+          </Link>
+        ) : (
+          <Link href="/login" className="btn-primary px-6 py-2 text-sm">
+            <LogIn className="h-4 w-4" />
+            {"\ub85c\uadf8\uc778\ud558\ub7ec \uac00\uae30"}
+          </Link>
+        )}
       </div>
     );
   }
