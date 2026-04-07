@@ -5,6 +5,8 @@ import { hasValidPortalSession } from "@/lib/token-portal-session";
 import { getPublicPortalState } from "@/lib/token-portal";
 import { PortalAccessForm } from "./portal-access-form";
 import { TokenRequestForm } from "./token-request-form";
+import { MemberFeaturesDisabledPanel } from "@/components/member-features-disabled-panel";
+import { MEMBER_SERVICE_SUSPENDED } from "@/lib/member-service-suspension";
 
 export const dynamic = "force-dynamic";
 
@@ -21,6 +23,16 @@ export const metadata: Metadata = {
 };
 
 export default async function SignupRequestPage() {
+  if (MEMBER_SERVICE_SUSPENDED) {
+    return (
+      <div className="min-h-[100dvh] bg-[var(--background)] px-4 py-10">
+        <div className="mx-auto w-full max-w-2xl">
+          <MemberFeaturesDisabledPanel />
+        </div>
+      </div>
+    );
+  }
+
   const { settings, cooldownSeconds, quota } = await getPublicPortalState();
   const hasSession = await hasValidPortalSession(settings.sessionVersion);
 

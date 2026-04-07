@@ -4,9 +4,23 @@ import Link from "next/link";
 import { useActionState } from "react";
 import { ArrowRight, Loader2, Lock, User } from "lucide-react";
 import { authenticate } from "@/lib/actions";
+import { MemberFeaturesDisabledPanel } from "@/components/member-features-disabled-panel";
+import { MEMBER_SERVICE_SUSPENDED } from "@/lib/member-service-suspension";
 
 export default function LoginPage() {
   const [errorMessage, dispatch, isPending] = useActionState(authenticate, undefined);
+
+  if (MEMBER_SERVICE_SUSPENDED) {
+    return (
+      <div className="relative flex min-h-[100dvh] items-center justify-center overflow-hidden bg-slate-50 p-4 transition-colors dark:bg-slate-950">
+        <div className="pointer-events-none absolute left-[-10%] top-[-10%] h-[40vw] max-h-[500px] w-[40vw] max-w-[500px] rounded-full bg-indigo-500/20 opacity-60 blur-[80px] dark:bg-indigo-600/20 dark:opacity-50" />
+        <div className="pointer-events-none absolute bottom-[-10%] right-[-10%] h-[40vw] max-h-[500px] w-[40vw] max-w-[500px] rounded-full bg-sky-500/20 opacity-60 blur-[80px] dark:bg-sky-600/20 dark:opacity-50" />
+        <div className="relative z-10 w-full max-w-2xl">
+          <MemberFeaturesDisabledPanel />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="relative flex min-h-[100dvh] items-center justify-center overflow-hidden bg-slate-50 p-4 transition-colors dark:bg-slate-950">

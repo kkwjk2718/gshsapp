@@ -1,7 +1,12 @@
 import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
+import { MEMBER_SERVICE_SUSPENDED } from "@/lib/member-service-suspension";
 
 export async function getCurrentUser() {
+  if (MEMBER_SERVICE_SUSPENDED) {
+    return null;
+  }
+
   const session = await auth();
   if (!session?.user?.id) {
     return null;

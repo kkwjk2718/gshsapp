@@ -7,6 +7,7 @@ import { Noto_Sans_KR } from "next/font/google";
 import { Toaster } from "sonner";
 import { DevServiceWorkerReset } from "@/components/dev-sw-reset";
 import { ProductionServiceWorkerCacheCleanup } from "@/components/prod-sw-cache-cleanup";
+import { MemberServiceSuspensionModal } from "@/components/member-service-suspension-modal";
 
 const notoSansKr = Noto_Sans_KR({
   subsets: ["latin"],
@@ -112,6 +113,7 @@ export default function RootLayout({
           <DevServiceWorkerReset />
           <ProductionServiceWorkerCacheCleanup />
           <Analytics />
+          <MemberServiceSuspensionModal />
           {children}
           <Toaster />
         </ThemeProvider>

@@ -3,6 +3,8 @@ import { SignupForm } from "./signup-form";
 import Link from "next/link";
 import { Ticket } from "lucide-react";
 import { TokenInput } from "./token-input";
+import { MemberFeaturesDisabledPanel } from "@/components/member-features-disabled-panel";
+import { MEMBER_SERVICE_SUSPENDED } from "@/lib/member-service-suspension";
 
 export const metadata: Metadata = {
   title: "회원가입",
@@ -14,6 +16,16 @@ export const metadata: Metadata = {
 export default async function SignupPage({ searchParams }: { searchParams: Promise<{ token?: string }> }) {
   const { token: searchToken } = await searchParams;
   const token = searchToken || "";
+
+  if (MEMBER_SERVICE_SUSPENDED) {
+    return (
+      <div className="min-h-[100dvh] flex items-center justify-center p-4" style={{ backgroundColor: "var(--background)" }}>
+        <div className="w-full max-w-2xl">
+          <MemberFeaturesDisabledPanel />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-[100dvh] flex items-center justify-center p-4" style={{ backgroundColor: "var(--background)" }}>

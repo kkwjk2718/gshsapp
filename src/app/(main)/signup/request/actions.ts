@@ -5,6 +5,7 @@ import { logAction } from "@/lib/logger";
 import { hasValidPortalSession, setPortalSessionCookie } from "@/lib/token-portal-session";
 import { sendPortalStudentInvite } from "@/lib/token-portal";
 import { getTokenPortalSettings } from "@/lib/system-settings";
+import { MEMBER_SERVICE_SUSPENDED } from "@/lib/member-service-suspension";
 
 export type PortalActionResult = {
   success?: string;
@@ -19,6 +20,10 @@ export async function unlockTokenPortal(
   prevState: PortalActionResult,
   formData: FormData,
 ): Promise<PortalActionResult> {
+  if (MEMBER_SERVICE_SUSPENDED) {
+    return { error: "현재 회원 기능이 일시적으로 비활성화되어 있습니다." };
+  }
+
   const settings = await getTokenPortalSettings();
   if (!settings.enabled) {
     return { error: "현재 토큰 배부 포털이 비활성화되어 있습니다." };
@@ -53,6 +58,10 @@ export async function requestSignupToken(
   prevState: PortalActionResult,
   formData: FormData,
 ): Promise<PortalActionResult> {
+  if (MEMBER_SERVICE_SUSPENDED) {
+    return { error: "현재 회원 기능이 일시적으로 비활성화되어 있습니다." };
+  }
+
   const settings = await getTokenPortalSettings();
   if (!settings.enabled) {
     return { error: "현재 토큰 배부 포털이 비활성화되어 있습니다." };
