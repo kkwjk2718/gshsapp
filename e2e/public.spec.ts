@@ -28,12 +28,11 @@ test("public routes render without server errors @smoke", async ({ page }) => {
   await page.setViewportSize({ width: 1366, height: 768 });
 
   await page.goto("/");
-  const isMemberServiceSuspended = await page
-    .getByText("회원 기능 일시 비활성화 안내")
-    .isVisible()
-    .catch(() => false);
+  const isMemberServiceSuspended =
+    (await page.getByTestId("desktop-utility-login-disabled").count()) > 0;
 
   await expect(page.locator("body")).toContainText("GSHS.app");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(page.getByTestId("desktop-home-meta")).toBeVisible();
   await expect(page.getByTestId("desktop-home-weather")).toBeVisible();
   await expect(page.getByTestId("desktop-header-theme-toggle")).toBeVisible();
