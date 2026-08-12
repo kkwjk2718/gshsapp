@@ -1,60 +1,144 @@
+import { request as httpsRequest } from "node:https";
 import ical from "node-ical";
-import { assertSafeExternalHttpsUrl } from "@/lib/network-safety";
+import { createPinnedLookup, resolveAllowedICalTarget, type ResolvedAddress } from "@/lib/network-safety";
+import { readBoundedNodeStreamText } from "@/lib/outbound-response";
+
+const ICAL_TIMEOUT_MS = 10_000;
+const ICAL_MAX_RESPONSE_BYTES = 1_500_000;
+const ICAL_MAX_EVENTS = 500;
+const ICAL_MAX_TITLE_LENGTH = 200;
+const ICAL_MAX_DESCRIPTION_LENGTH = 2_000;
+const ICAL_MAX_EVENT_SPAN_MS = 366 * 86_400_000;
 
 export interface ICalEvent {
-    id: string;
-    title: string;
-    description: string | null;
-    startDate: Date;
-    endDate: Date;
-    isExternal: true; // Flag to identify these events
+  id: string;
+  title: string;
+  description: string | null;
+  startDate: Date;
+  endDate: Date;
+  category: "EXTERNAL";
+}
+
+function firstHeader(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+function isAllowedCalendarContentType(value: string | undefined) {
+  if (!value) return false;
+  const mediaType = value.split(";", 1)[0].trim().toLowerCase();
+  return mediaType === "text/calendar" || mediaType === "text/plain" || mediaType === "application/octet-stream";
+}
+
+async function fetchPinnedICal(url: URL, address: ResolvedAddress) {
+  return await new Promise<string>((resolve, reject) => {
+    const signal = AbortSignal.timeout(ICAL_TIMEOUT_MS);
+    const request = httpsRequest(
+      {
+        protocol: "https:",
+        hostname: url.hostname,
+        port: 443,
+        path: `${url.pathname}${url.search}`,
+        method: "GET",
+        servername: url.hostname,
+        family: address.family,
+        signal,
+        headers: {
+          Accept: "text/calendar, text/plain;q=0.9, application/octet-stream;q=0.5",
+          "User-Agent": "gshsapp-calendar/1.0",
+        },
+        lookup: createPinnedLookup(address),
+      },
+      async (response) => {
+        try {
+          const status = response.statusCode || 0;
+          if (status < 200 || status >= 300) {
+            response.resume();
+            throw new Error(`iCal fetch failed with status ${status}`);
+          }
+          if (!isAllowedCalendarContentType(firstHeader(response.headers["content-type"]))) {
+            response.resume();
+            throw new Error("iCal response has an invalid content type.");
+          }
+
+          const text = await readBoundedNodeStreamText(response, {
+            maxBytes: ICAL_MAX_RESPONSE_BYTES,
+            contentLength: firstHeader(response.headers["content-length"]),
+          });
+          resolve(text);
+        } catch (error) {
+          response.destroy();
+          reject(error);
+        }
+      },
+    );
+
+    request.once("error", reject);
+    request.end();
+  });
+}
+
+function boundedText(value: unknown, maxLength: number) {
+  if (typeof value !== "string") return null;
+  const normalized = value.trim();
+  return normalized ? normalized.slice(0, maxLength) : null;
+}
+
+export function parseICalEvents(rawCalendar: string, now = new Date()): ICalEvent[] {
+  if (Buffer.byteLength(rawCalendar, "utf8") > ICAL_MAX_RESPONSE_BYTES) return [];
+
+  const currentYear = now.getUTCFullYear();
+  const earliest = Date.UTC(currentYear - 1, 0, 1);
+  const latest = Date.UTC(currentYear + 1, 11, 31, 23, 59, 59, 999);
+  const parsed = ical.sync.parseICS(rawCalendar);
+  const result: ICalEvent[] = [];
+
+  for (const [key, component] of Object.entries(parsed)) {
+    if (result.length >= ICAL_MAX_EVENTS) break;
+    if (component.type !== "VEVENT") continue;
+
+    const title = boundedText(component.summary, ICAL_MAX_TITLE_LENGTH);
+    const startDate = new Date(component.start as Date);
+    const endDate = new Date(component.end as Date);
+    const startMs = startDate.getTime();
+    const endMs = endDate.getTime();
+
+    if (
+      !title ||
+      !Number.isFinite(startMs) ||
+      !Number.isFinite(endMs) ||
+      startMs < earliest ||
+      endMs > latest ||
+      endMs < startMs ||
+      endMs - startMs > ICAL_MAX_EVENT_SPAN_MS
+    ) {
+      continue;
+    }
+
+    const id = boundedText(component.uid, 256) || boundedText(key, 256);
+    if (!id) continue;
+
+    result.push({
+      id,
+      title,
+      description: boundedText(component.description, ICAL_MAX_DESCRIPTION_LENGTH),
+      startDate,
+      endDate,
+      category: "EXTERNAL",
+    });
+  }
+
+  return result;
 }
 
 export async function getEventsFromICal(url: string): Promise<ICalEvent[]> {
-    if (!url) {
-        return [];
-    }
+  if (!url) return [];
 
-    try {
-        const safeUrl = await assertSafeExternalHttpsUrl(url);
-        const response = await fetch(safeUrl, {
-            method: "GET",
-            redirect: "error",
-            signal: AbortSignal.timeout(10_000),
-            headers: {
-                accept: "text/calendar, text/plain;q=0.9, */*;q=0.1",
-            },
-        });
-
-        if (!response.ok) {
-            throw new Error(`iCal fetch failed with status ${response.status}`);
-        }
-
-        const contentLength = Number.parseInt(response.headers.get("content-length") || "", 10);
-        if (Number.isFinite(contentLength) && contentLength > 1_500_000) {
-            throw new Error("iCal feed is too large.");
-        }
-
-        const rawCalendar = await response.text();
-        const events = ical.sync.parseICS(rawCalendar);
-        const parsedEvents: ICalEvent[] = [];
-
-        for (const key in events) {
-            const event = events[key];
-            if (event.type === 'VEVENT' && event.summary && event.start && event.end) {
-                parsedEvents.push({
-                    id: event.uid || key,
-                    title: event.summary,
-                    description: event.description || null,
-                    startDate: new Date(event.start),
-                    endDate: new Date(event.end),
-                    isExternal: true,
-                });
-            }
-        }
-        return parsedEvents;
-    } catch (error) {
-        console.error("Failed to fetch or parse iCal feed:", error);
-        return [];
-    }
+  try {
+    const target = await resolveAllowedICalTarget(url);
+    const rawCalendar = await fetchPinnedICal(target.url, target.address);
+    return parseICalEvents(rawCalendar);
+  } catch (error) {
+    console.error("Failed to fetch or parse iCal feed:", error);
+    return [];
+  }
 }

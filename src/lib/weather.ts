@@ -1,6 +1,7 @@
 import { unstable_cache } from "next/cache";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { readBoundedJsonResponse } from "@/lib/outbound-response";
 
 export type WeatherCondition =
   | "clear"
@@ -26,36 +27,14 @@ export interface WeatherData {
 
 type CachedWeatherData = WeatherData;
 
-type OpenMeteoResponse = {
-  current_weather?: {
-    temperature?: number;
-    weathercode?: number;
-  };
-  daily?: {
-    temperature_2m_max?: number[];
-    temperature_2m_min?: number[];
-    precipitation_probability_max?: number[];
-  };
-};
-
-type WttrResponse = {
-  current_condition?: Array<{
-    temp_C?: string;
-    weatherCode?: string;
-  }>;
-  weather?: Array<{
-    maxtempC?: string;
-    mintempC?: string;
-    daily_chance_of_rain?: string;
-  }>;
-};
-
 const OPEN_METEO_URL =
   "https://api.open-meteo.com/v1/forecast?latitude=35.1805&longitude=128.1087&current_weather=true" +
   "&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max" +
   "&timezone=Asia%2FSeoul";
 const WTTR_URL = "https://wttr.in/Jinju?format=j1";
 const WEATHER_CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+const WEATHER_MAX_RESPONSE_BYTES = 256_000;
+const WEATHER_MAX_ARRAY_LENGTH = 10;
 
 function getWeatherDescription(condition: WeatherCondition): string {
   switch (condition) {
@@ -109,9 +88,97 @@ function normalizeWttrCode(code: number): WeatherCondition {
   return "cloudy";
 }
 
-function toFiniteNumber(value: number | string | undefined | null): number | null {
-  const parsed = typeof value === "number" ? value : Number(value);
-  return Number.isFinite(parsed) ? parsed : null;
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function boundedArray(value: unknown): unknown[] | null {
+  return Array.isArray(value) && value.length <= WEATHER_MAX_ARRAY_LENGTH ? value : null;
+}
+
+function boundedNumber(value: unknown, min: number, max: number): number | null {
+  const parsed = typeof value === "number" ? value : typeof value === "string" ? Number(value) : Number.NaN;
+  return Number.isFinite(parsed) && parsed >= min && parsed <= max ? parsed : null;
+}
+
+function optionalArrayNumber(array: unknown[] | null, index: number, min: number, max: number) {
+  if (!array || array[index] === undefined) return null;
+  return boundedNumber(array[index], min, max);
+}
+
+export function parseWttrPayload(payload: unknown, now = new Date()): WeatherData | null {
+  if (!isRecord(payload)) return null;
+  const currentConditions = boundedArray(payload.current_condition);
+  const weatherDays = boundedArray(payload.weather);
+  if (!currentConditions || !weatherDays || !isRecord(currentConditions[0])) return null;
+
+  const current = currentConditions[0];
+  const today = isRecord(weatherDays[0]) ? weatherDays[0] : null;
+  const tomorrow = isRecord(weatherDays[1]) ? weatherDays[1] : null;
+  const temp = boundedNumber(current.temp_C, -80, 60);
+  const code = boundedNumber(current.weatherCode, 0, 999);
+  if (temp === null || code === null || !Number.isInteger(code)) return null;
+
+  const minTemp = today?.mintempC === undefined ? temp : boundedNumber(today.mintempC, -80, 60);
+  const maxTemp = today?.maxtempC === undefined ? temp : boundedNumber(today.maxtempC, -80, 60);
+  const tomorrowRainProb = tomorrow?.daily_chance_of_rain === undefined
+    ? null
+    : boundedNumber(tomorrow.daily_chance_of_rain, 0, 100);
+  if (minTemp === null || maxTemp === null || minTemp > maxTemp) return null;
+  if (tomorrow?.daily_chance_of_rain !== undefined && tomorrowRainProb === null) return null;
+
+  const condition = normalizeWttrCode(code);
+  return {
+    temp,
+    minTemp,
+    maxTemp,
+    tomorrowRainProb,
+    condition,
+    description: getWeatherDescription(condition),
+    source: "wttr.in",
+    fetchedAt: now.toISOString(),
+  };
+}
+
+export function parseOpenMeteoPayload(payload: unknown, now = new Date()): WeatherData | null {
+  if (!isRecord(payload) || !isRecord(payload.current_weather)) return null;
+  const current = payload.current_weather;
+  const daily = payload.daily === undefined ? null : isRecord(payload.daily) ? payload.daily : null;
+  if (payload.daily !== undefined && !daily) return null;
+
+  const maxTemps = daily ? boundedArray(daily.temperature_2m_max) : [];
+  const minTemps = daily ? boundedArray(daily.temperature_2m_min) : [];
+  const rainProbabilities = daily ? boundedArray(daily.precipitation_probability_max) : [];
+  if (daily && (!maxTemps || !minTemps || !rainProbabilities)) return null;
+
+  if (
+    maxTemps?.some((value) => boundedNumber(value, -80, 60) === null) ||
+    minTemps?.some((value) => boundedNumber(value, -80, 60) === null) ||
+    rainProbabilities?.some((value) => boundedNumber(value, 0, 100) === null)
+  ) {
+    return null;
+  }
+
+  const temp = boundedNumber(current.temperature, -80, 60);
+  const code = boundedNumber(current.weathercode, 0, 999);
+  if (temp === null || code === null || !Number.isInteger(code)) return null;
+
+  const minTemp = optionalArrayNumber(minTemps, 0, -80, 60) ?? temp;
+  const maxTemp = optionalArrayNumber(maxTemps, 0, -80, 60) ?? temp;
+  const tomorrowRainProb = optionalArrayNumber(rainProbabilities, 1, 0, 100);
+  if (minTemp > maxTemp) return null;
+
+  const condition = normalizeOpenMeteoCode(code);
+  return {
+    temp,
+    minTemp,
+    maxTemp,
+    tomorrowRainProb,
+    condition,
+    description: getWeatherDescription(condition),
+    source: "open-meteo",
+    fetchedAt: now.toISOString(),
+  };
 }
 
 function resolveWeatherCachePath() {
@@ -167,7 +234,10 @@ async function writeWeatherCache(weather: WeatherData) {
   await writeFile(cachePath, JSON.stringify(weather, null, 2), "utf8");
 }
 
-async function fetchJson<T>(url: string): Promise<T> {
+export async function fetchWeatherProviderPayload(
+  url: string,
+  allowedContentTypes?: readonly string[],
+): Promise<unknown> {
   const response = await fetch(url, {
     cache: "no-store",
     headers: {
@@ -181,59 +251,20 @@ async function fetchJson<T>(url: string): Promise<T> {
     throw new Error(`Weather fetch failed: ${response.status}`);
   }
 
-  return (await response.json()) as T;
+  return await readBoundedJsonResponse(response, {
+    maxBytes: WEATHER_MAX_RESPONSE_BYTES,
+    allowedContentTypes,
+  });
 }
 
 async function fetchFromWttr(): Promise<WeatherData | null> {
-  const data = await fetchJson<WttrResponse>(WTTR_URL);
-  const current = data.current_condition?.[0];
-  const today = data.weather?.[0];
-  const tomorrow = data.weather?.[1];
-
-  const temp = toFiniteNumber(current?.temp_C);
-  const code = toFiniteNumber(current?.weatherCode);
-  const minTemp = toFiniteNumber(today?.mintempC);
-  const maxTemp = toFiniteNumber(today?.maxtempC);
-  const tomorrowRainProb = toFiniteNumber(tomorrow?.daily_chance_of_rain);
-
-  if (temp === null || code === null) {
-    return null;
-  }
-
-  const condition = normalizeWttrCode(code);
-  return {
-    temp,
-    minTemp: minTemp ?? temp,
-    maxTemp: maxTemp ?? temp,
-    tomorrowRainProb,
-    condition,
-    description: getWeatherDescription(condition),
-    source: "wttr.in",
-    fetchedAt: new Date().toISOString(),
-  };
+  return parseWttrPayload(
+    await fetchWeatherProviderPayload(WTTR_URL, ["application/json", "text/plain"]),
+  );
 }
 
 async function fetchFromOpenMeteo(): Promise<WeatherData | null> {
-  const data = await fetchJson<OpenMeteoResponse>(OPEN_METEO_URL);
-  const current = data.current_weather;
-  const code = current?.weathercode;
-  const temp = current?.temperature;
-
-  if (typeof code !== "number" || typeof temp !== "number") {
-    return null;
-  }
-
-  const condition = normalizeOpenMeteoCode(code);
-  return {
-    temp,
-    minTemp: data.daily?.temperature_2m_min?.[0] ?? temp,
-    maxTemp: data.daily?.temperature_2m_max?.[0] ?? temp,
-    tomorrowRainProb: data.daily?.precipitation_probability_max?.[1] ?? null,
-    condition,
-    description: getWeatherDescription(condition),
-    source: "open-meteo",
-    fetchedAt: new Date().toISOString(),
-  };
+  return parseOpenMeteoPayload(await fetchWeatherProviderPayload(OPEN_METEO_URL));
 }
 
 async function fetchFreshWeather(): Promise<WeatherData | null> {

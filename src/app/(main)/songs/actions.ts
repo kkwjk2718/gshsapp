@@ -12,6 +12,7 @@ import { BoundedRateLimiter } from "@/lib/security/rate-limit";
 import { canonicalizeYouTubeUrl } from "@/lib/security/youtube-url";
 import { getCurrentUser } from "@/lib/session";
 import { canAccessCoreMemberFeatures } from "@/lib/user-roles";
+import { readBoundedJsonResponse } from "@/lib/outbound-response";
 import {
   SONG_DAILY_CAP,
   SONG_PENDING_CAP,
@@ -20,6 +21,7 @@ import {
 } from "@/lib/security/submission-controls";
 
 const YOUTUBE_OEMBED_TIMEOUT_MS = 3_000;
+const YOUTUBE_OEMBED_MAX_RESPONSE_BYTES = 32 * 1024;
 const TITLE_RESOLUTION_WINDOW_MS = 60_000;
 const TITLE_RESOLUTION_LIMIT = 5;
 const MAX_TITLE_RESOLUTION_KEYS = 1_024;
@@ -62,25 +64,31 @@ async function resolveVideoTitle(
 
   consumeTitleResolutionQuota(principalId, await getClientIp());
 
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), YOUTUBE_OEMBED_TIMEOUT_MS);
-
   try {
     const response = await fetch(
       `https://www.youtube.com/oembed?url=${encodeURIComponent(youtubeUrl)}&format=json`,
-      { signal: controller.signal },
+      {
+        headers: { Accept: "application/json" },
+        signal: AbortSignal.timeout(YOUTUBE_OEMBED_TIMEOUT_MS),
+      },
     );
 
     if (response.ok) {
-      const data = (await response.json()) as { title?: string };
-      if (typeof data.title === "string" && data.title.trim()) {
-        return validateSongTitle(data.title);
+      const data = await readBoundedJsonResponse<unknown>(response, {
+        maxBytes: YOUTUBE_OEMBED_MAX_RESPONSE_BYTES,
+      });
+      const title = typeof data === "object" && data !== null && !Array.isArray(data)
+        ? (data as { title?: unknown }).title
+        : undefined;
+      if (
+        typeof title === "string" &&
+        title.trim()
+      ) {
+        return validateSongTitle(title);
       }
     }
   } catch {
     // Fall back to the default title when YouTube metadata is slow or unavailable.
-  } finally {
-    clearTimeout(timeoutId);
   }
 
   return "신청곡";

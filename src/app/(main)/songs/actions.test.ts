@@ -162,6 +162,61 @@ describe("requestSong", () => {
     expect(mocks.createSongRequest).not.toHaveBeenCalled();
   });
 
+  it("ignores oEmbed JSON served with a non-JSON content type", async () => {
+    const user = makeUser("oembed-content-type-user");
+    mocks.getCurrentUser.mockResolvedValue(user);
+    mocks.findUser.mockResolvedValue(user);
+    mocks.getHeader.mockImplementation((name: string) =>
+      name === "x-forwarded-for" ? "203.0.113.211" : null,
+    );
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        new Response(JSON.stringify({ title: "Untrusted title" }), {
+          status: 200,
+          headers: { "content-type": "text/plain" },
+        }),
+      ),
+    );
+
+    await requestSong(makeForm("https://youtu.be/dQw4w9WgXcQ", ""));
+
+    expect(mocks.createSongRequest).toHaveBeenCalledWith({
+      data: expect.objectContaining({ videoTitle: "신청곡" }),
+    });
+  });
+
+  it("stops reading an oEmbed response after 32 KiB without trusting Content-Length", async () => {
+    const user = makeUser("oembed-size-user");
+    mocks.getCurrentUser.mockResolvedValue(user);
+    mocks.findUser.mockResolvedValue(user);
+    mocks.getHeader.mockImplementation((name: string) =>
+      name === "x-forwarded-for" ? "203.0.113.212" : null,
+    );
+    const oversizedTitle = "T".repeat(33 * 1024);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        new Response(
+          new ReadableStream({
+            start(controller) {
+              controller.enqueue(new TextEncoder().encode(`{"title":"${oversizedTitle.slice(0, 17_000)}`));
+              controller.enqueue(new TextEncoder().encode(`${oversizedTitle.slice(17_000)}"}`));
+              controller.close();
+            },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
+      ),
+    );
+
+    await requestSong(makeForm("https://youtu.be/dQw4w9WgXcQ", ""));
+
+    expect(mocks.createSongRequest).toHaveBeenCalledWith({
+      data: expect.objectContaining({ videoTitle: "신청곡" }),
+    });
+  });
+
   it("bounds outbound title resolution attempts for one principal across IP changes", async () => {
     const user = makeUser("principal-limited");
     mocks.getCurrentUser.mockResolvedValue(user);

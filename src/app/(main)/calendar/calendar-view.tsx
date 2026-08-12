@@ -23,20 +23,16 @@ import {
 } from "lucide-react";
 
 import { CalendarInfoTooltip } from "./calendar-info-tooltip";
+import type { PublicCalendarSchedule } from "@/lib/calendar-dto";
 
-interface ScheduleItem {
-  id: string;
-  title: string;
-  description?: string | null;
-  startDate: Date;
-  endDate: Date;
-  category?: string;
-  isExternal?: boolean;
-  isNEIS?: boolean;
+type ScheduleItem = PublicCalendarSchedule;
+
+function isExternalSchedule(schedule: ScheduleItem) {
+  return schedule.category === "EXTERNAL";
 }
 
 function getEventPalette(schedule: ScheduleItem) {
-  if (schedule.isExternal) {
+  if (isExternalSchedule(schedule)) {
     return {
       cellBg: "var(--surface)",
       cardBg: "var(--surface)",
@@ -63,8 +59,8 @@ function getDaySchedules(schedules: ScheduleItem[], day: Date) {
       return isSameDay(startDate, day) || (startDate <= day && endDate >= day);
     })
     .sort((left, right) => {
-      const leftPriority = left.isExternal ? 1 : 0;
-      const rightPriority = right.isExternal ? 1 : 0;
+      const leftPriority = isExternalSchedule(left) ? 1 : 0;
+      const rightPriority = isExternalSchedule(right) ? 1 : 0;
       return leftPriority - rightPriority;
     });
 }
@@ -222,15 +218,15 @@ export function CalendarView({
                 }}
               >
                 <div className="flex items-center gap-2 text-sm font-bold" style={{ color: "var(--foreground)" }}>
-                  {schedule.isExternal ? (
+                  {isExternalSchedule(schedule) ? (
                     <ExternalLink className="h-3 w-3" style={{ color: "var(--muted)" }} />
                   ) : null}
                   {schedule.title}
                 </div>
                 <div className="mt-1 text-xs" style={{ color: "var(--muted)" }}>
-                  {schedule.isNEIS
+                  {schedule.category === "NEIS"
                     ? "NEIS 학사일정"
-                    : schedule.isExternal
+                    : isExternalSchedule(schedule)
                       ? "외부 일정 (Google)"
                       : schedule.category}
                 </div>

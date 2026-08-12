@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   hasBlockedHostname,
+  createPinnedLookup,
   isPrivateOrReservedIpAddress,
+  parseAllowedICalHttpsUrl,
   parseExternalHttpsUrl,
+  resolvePinnedPublicAddress,
 } from "@/lib/network-safety";
 
 describe("network safety helpers", () => {
@@ -20,6 +23,9 @@ describe("network safety helpers", () => {
     expect(isPrivateOrReservedIpAddress("fc00::1")).toBe(true);
     expect(isPrivateOrReservedIpAddress("fd12::1234")).toBe(true);
     expect(isPrivateOrReservedIpAddress("fe80::1")).toBe(true);
+    expect(isPrivateOrReservedIpAddress("::ffff:7f00:1")).toBe(true);
+    expect(isPrivateOrReservedIpAddress("::ffff:c0a8:101")).toBe(true);
+    expect(isPrivateOrReservedIpAddress("64:ff9b::c0a8:101")).toBe(true);
     expect(isPrivateOrReservedIpAddress("2001:4860:4860::8888")).toBe(false);
   });
 
@@ -36,5 +42,55 @@ describe("network safety helpers", () => {
     expect(() => parseExternalHttpsUrl("http://calendar.google.com/test.ics")).toThrow();
     expect(() => parseExternalHttpsUrl("https://localhost/test.ics")).toThrow();
     expect(() => parseExternalHttpsUrl("https://192.168.0.10/test.ics")).toThrow();
+    expect(() => parseExternalHttpsUrl("https://[::1]/test.ics")).toThrow();
+  });
+
+  it("accepts only exact configured iCal provider hosts without credentials or ports", () => {
+    expect(parseAllowedICalHttpsUrl("https://calendar.google.com/calendar/ical/example/basic.ics").hostname).toBe(
+      "calendar.google.com",
+    );
+    expect(() => parseAllowedICalHttpsUrl("https://calendar.google.com.evil.test/feed.ics")).toThrow();
+    expect(() => parseAllowedICalHttpsUrl("https://user:pass@calendar.google.com/feed.ics")).toThrow();
+    expect(() => parseAllowedICalHttpsUrl("https://calendar.google.com:444/feed.ics")).toThrow();
+    expect(() => parseAllowedICalHttpsUrl("https://calendar.example.com/feed.ics")).toThrow();
+    expect(() => parseAllowedICalHttpsUrl("https://8.8.8.8/feed.ics", new Set(["8.8.8.8"]))).toThrow();
+    expect(
+      parseAllowedICalHttpsUrl("https://calendar.example.com/feed.ics", new Set(["calendar.example.com"])).hostname,
+    ).toBe("calendar.example.com");
+  });
+
+  it("pins only a public DNS result and rejects mixed private answers", async () => {
+    await expect(
+      resolvePinnedPublicAddress("calendar.google.com", async () => [
+        { address: "142.250.66.78", family: 4 },
+        { address: "192.168.0.1", family: 4 },
+      ]),
+    ).rejects.toThrow("private or reserved");
+
+    await expect(
+      resolvePinnedPublicAddress("calendar.google.com", async () => [{ address: "142.250.66.78", family: 4 }]),
+    ).resolves.toEqual({ address: "142.250.66.78", family: 4 });
+  });
+
+  it("returns only the prevalidated address for both Node lookup callback modes", async () => {
+    const lookup = createPinnedLookup({ address: "142.250.66.78", family: 4 });
+
+    await expect(
+      new Promise((resolve, reject) => {
+        lookup("calendar.google.com", { all: false }, (error, address, family) => {
+          if (error) reject(error);
+          else resolve({ address, family });
+        });
+      }),
+    ).resolves.toEqual({ address: "142.250.66.78", family: 4 });
+
+    await expect(
+      new Promise((resolve, reject) => {
+        lookup("calendar.google.com", { all: true }, (error, addresses) => {
+          if (error) reject(error);
+          else resolve(addresses);
+        });
+      }),
+    ).resolves.toEqual([{ address: "142.250.66.78", family: 4 }]);
   });
 });
