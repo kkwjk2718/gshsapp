@@ -75,3 +75,7 @@ gshsapp-web.tar
 /playwright-artifacts/
 /remote-secrets-backup-*/
 /deploy/.deploy.env
+
+# Codex/Superpowers isolated implementation workspaces
+/.worktrees/
+/.superpowers/
