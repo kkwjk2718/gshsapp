@@ -7,6 +7,8 @@ import { prisma } from "@/lib/db";
 import { getKSTDate, isBreakTime } from "@/lib/date-utils";
 import { getUserGrade } from "@/lib/grade-utils";
 import { logAction } from "@/lib/logger";
+import { FixedWindowRateLimiter } from "@/lib/security/fixed-window-rate-limit";
+import { resolveTrustedClientIp } from "@/lib/security/trusted-client-ip";
 import { canonicalizeYouTubeUrl } from "@/lib/security/youtube-url";
 import { getCurrentUser } from "@/lib/session";
 import { canAccessCoreMemberFeatures } from "@/lib/user-roles";
@@ -16,74 +18,21 @@ const TITLE_RESOLUTION_WINDOW_MS = 60_000;
 const TITLE_RESOLUTION_LIMIT = 5;
 const MAX_TITLE_RESOLUTION_KEYS = 1_024;
 
-type ResolutionRateEntry = {
-  count: number;
-  resetAt: number;
-};
+const titleResolutionLimiter = new FixedWindowRateLimiter({
+  limit: TITLE_RESOLUTION_LIMIT,
+  windowMs: TITLE_RESOLUTION_WINDOW_MS,
+  maxKeys: MAX_TITLE_RESOLUTION_KEYS,
+});
 
-const titleResolutionAttempts = new Map<string, ResolutionRateEntry>();
-
-function removeExpiredResolutionAttempts(now: number) {
-  for (const [key, entry] of titleResolutionAttempts) {
-    if (entry.resetAt <= now) {
-      titleResolutionAttempts.delete(key);
-    }
-  }
-}
-
-function addResolutionAttempt(key: string, now: number) {
-  const existingEntry = titleResolutionAttempts.get(key);
-  if (existingEntry && existingEntry.resetAt > now) {
-    titleResolutionAttempts.set(key, {
-      count: existingEntry.count + 1,
-      resetAt: existingEntry.resetAt,
-    });
-    return;
-  }
-
-  while (titleResolutionAttempts.size >= MAX_TITLE_RESOLUTION_KEYS) {
-    const oldestKey = titleResolutionAttempts.keys().next().value;
-    if (typeof oldestKey !== "string") break;
-    titleResolutionAttempts.delete(oldestKey);
-  }
-
-  titleResolutionAttempts.set(key, {
-    count: 1,
-    resetAt: now + TITLE_RESOLUTION_WINDOW_MS,
-  });
-}
-
-function consumeTitleResolutionQuota(principalId: string, ip: string | null) {
-  const now = Date.now();
-  removeExpiredResolutionAttempts(now);
-
-  const keys = [`principal:${principalId}`];
-  if (ip) keys.push(`ip:${ip}`);
-
-  if (
-    keys.some((key) => {
-      const entry = titleResolutionAttempts.get(key);
-      return entry && entry.resetAt > now && entry.count >= TITLE_RESOLUTION_LIMIT;
-    })
-  ) {
+function consumeTitleResolutionQuota(principalId: string, ip: string) {
+  if (!titleResolutionLimiter.consume([`principal:${principalId}`, `ip:${ip}`])) {
     throw new Error("Too many YouTube title resolution attempts. Please try again later.");
-  }
-
-  for (const key of keys) {
-    addResolutionAttempt(key, now);
   }
 }
 
 async function getClientIp() {
   const requestHeaders = await headers();
-  const forwardedFor = requestHeaders.get("x-forwarded-for")?.split(",")[0]?.trim();
-  const candidate = requestHeaders.get("x-real-ip")?.trim() || forwardedFor;
-
-  if (!candidate || candidate.length > 64) {
-    return null;
-  }
-
-  return candidate;
+  return resolveTrustedClientIp(requestHeaders, process.env.TRUSTED_CLIENT_IP_HEADER);
 }
 
 async function resolveVideoTitle(
@@ -144,19 +93,6 @@ export async function requestSong(formData: FormData) {
     throw new Error("지금은 기상곡 신청 시간이 아닙니다. (신청 가능: 07:00 ~ 익일 05:00)");
   }
 
-  const rawYoutubeUrl = formData.get("youtubeUrl");
-  if (typeof rawYoutubeUrl !== "string") {
-    throw new Error("Invalid YouTube URL.");
-  }
-
-  const youtubeUrl = canonicalizeYouTubeUrl(rawYoutubeUrl);
-  const rawVideoTitle = formData.get("videoTitle");
-  const videoTitle = await resolveVideoTitle(
-    youtubeUrl,
-    typeof rawVideoTitle === "string" ? rawVideoTitle : null,
-    dbUser.id,
-  );
-
   if (dbUser.banExpiresAt && dbUser.banExpiresAt > new Date()) {
     return;
   }
@@ -184,6 +120,19 @@ export async function requestSong(formData: FormData) {
       }
     }
   }
+
+  const rawYoutubeUrl = formData.get("youtubeUrl");
+  if (typeof rawYoutubeUrl !== "string") {
+    throw new Error("Invalid YouTube URL.");
+  }
+
+  const youtubeUrl = canonicalizeYouTubeUrl(rawYoutubeUrl);
+  const rawVideoTitle = formData.get("videoTitle");
+  const videoTitle = await resolveVideoTitle(
+    youtubeUrl,
+    typeof rawVideoTitle === "string" ? rawVideoTitle : null,
+    dbUser.id,
+  );
 
   let priorityScore = 10;
   if (dbUser.role === "ADMIN") priorityScore = 999;

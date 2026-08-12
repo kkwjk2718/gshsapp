@@ -82,6 +82,16 @@ const visibleRow = {
   },
 };
 
+const songRequestSelect = {
+  id: true,
+  videoTitle: true,
+  youtubeUrl: true,
+  status: true,
+  createdAt: true,
+  isAnonymous: true,
+  requester: { select: { name: true, studentId: true } },
+};
+
 function collectElements(node: ReactNode, type: unknown, result: React.ReactElement[] = []) {
   if (Array.isArray(node)) {
     for (const child of node) collectElements(child, type, result);
@@ -121,30 +131,44 @@ describe("SongsPage Flight payload", () => {
     const songLists = collectElements(tree, mocks.SongList);
 
     expect(mocks.findSongRequests).toHaveBeenCalledTimes(2);
-    expect(mocks.findSongRequests.mock.calls[0][0]).toEqual(
-      expect.objectContaining({
-        where: expect.objectContaining({ status: { in: ["APPROVED", "PLAYED"] } }),
-        select: {
-          id: true,
-          videoTitle: true,
-          youtubeUrl: true,
-          status: true,
-          createdAt: true,
-          isAnonymous: true,
-          requester: { select: { name: true, studentId: true } },
+    expect(mocks.findSongRequests.mock.calls[0][0]).toEqual({
+      where: {
+        createdAt: {
+          gte: new Date("2026-08-12T22:00:00.000Z"),
+          lt: new Date("2026-08-12T23:00:00.000Z"),
         },
-      }),
-    );
-    expect(mocks.findSongRequests.mock.calls[1][0]).toEqual(
-      expect.objectContaining({
-        where: expect.objectContaining({
-          status: { in: ["PENDING", "APPROVED", "PLAYED"] },
-        }),
-      }),
-    );
+        status: { in: ["APPROVED", "PLAYED"] },
+      },
+      orderBy: { priorityScore: "desc" },
+      select: songRequestSelect,
+    });
+    expect(mocks.findSongRequests.mock.calls[1][0]).toEqual({
+      where: {
+        createdAt: {
+          gte: new Date("2026-08-13T22:00:00.000Z"),
+          lt: new Date("2026-08-13T23:00:00.000Z"),
+        },
+        status: { in: ["PENDING", "APPROVED", "PLAYED"] },
+      },
+      orderBy: [{ priorityScore: "desc" }, { createdAt: "asc" }],
+      select: songRequestSelect,
+    });
 
     expect(songLists).toHaveLength(2);
     expect(songLists[0].props).not.toHaveProperty("currentUser");
+    expect(songLists[0].props.songs).toEqual([
+      {
+        id: "visible-song",
+        videoTitle: "Visible song",
+        youtubeUrl: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+        status: "APPROVED",
+        createdAt: "2026-08-13T01:02:03.000Z",
+        requester: {
+          name: "Visible Student",
+          studentId: "3201",
+        },
+      },
+    ]);
     expect(songLists[1].props.songs).toEqual([
       {
         id: "anonymous-song",
@@ -155,7 +179,20 @@ describe("SongsPage Flight payload", () => {
         requester: null,
       },
     ]);
-    expect(JSON.stringify(songLists[1].props)).not.toContain("secret-requester-id");
-    expect(JSON.stringify(songLists[1].props)).not.toContain("never-serialize");
+
+    const serializedClientProps = JSON.stringify(songLists.map((element) => element.props));
+    for (const forbiddenValue of [
+      "secret-requester-id",
+      "visible-requester-id",
+      "never-serialize",
+      "hidden@example.com",
+      "visible@example.com",
+      "passwordHash",
+      "requesterId",
+      "isAnonymous",
+      '"role"',
+    ]) {
+      expect(serializedClientProps).not.toContain(forbiddenValue);
+    }
   });
 });
