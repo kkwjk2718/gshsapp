@@ -1,9 +1,18 @@
 import { User, Mail, MapPin } from "lucide-react";
 import { getTeacherDirectory } from "@/lib/public-content";
+import { requireCurrentUser } from "@/lib/current-user";
+import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
+export const metadata: Metadata = { robots: { index: false, follow: false } };
 
 export default async function TeachersPage() {
+  try {
+    await requireCurrentUser();
+  } catch {
+    redirect("/login");
+  }
   const teachers = await getTeacherDirectory();
 
   return (

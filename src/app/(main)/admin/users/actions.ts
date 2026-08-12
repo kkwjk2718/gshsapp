@@ -1,6 +1,7 @@
 "use server"
 
 import { prisma } from "@/lib/db";
+import type { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import bcrypt from "bcryptjs";
 import { getCurrentUser } from "@/lib/session";
@@ -9,6 +10,8 @@ import { getGradeMapping } from "@/lib/grade-utils";
 import { logAction } from "@/lib/logger";
 import { resolveUserRoleChange, UserRoleChangeError, isUserRole } from "@/lib/user-role-change";
 import { canChangeGisu } from "@/lib/user-roles";
+import { randomBytes } from "node:crypto";
+import { buildPasswordCredentialUpdate, buildRoleCredentialUpdate, updateImportedUserSafely } from "@/lib/security/user-auth-mutations";
 
 export async function importUsersBackup(_: any, formData: FormData) {
     const sessionUser = await getCurrentUser();
@@ -29,7 +32,7 @@ export async function importUsersBackup(_: any, formData: FormData) {
     try {
         const raw = await f.text();
         const parsed = JSON.parse(raw);
-        if (parsed?.type !== 'gshs-users-backup' || !Array.isArray(parsed?.users)) {
+        if (parsed?.type !== 'gshs-users-backup' || ![1, 2].includes(parsed?.version) || !Array.isArray(parsed?.users)) {
             return { error: '올바른 사용자 백업 파일이 아닙니다.' };
         }
 
@@ -37,7 +40,7 @@ export async function importUsersBackup(_: any, formData: FormData) {
         const deduped = new Map<string, any>();
         let invalidCount = 0;
         for (const u of parsed.users) {
-            if (!u?.userId || !u?.passwordHash || !u?.name || !u?.role) {
+            if (!u?.userId || !u?.name || !u?.role || (parsed.version === 1 && !u?.passwordHash)) {
                 invalidCount += 1;
                 continue;
             }
@@ -49,6 +52,8 @@ export async function importUsersBackup(_: any, formData: FormData) {
             where: { userId: { in: users.map((u) => String(u.userId)) } },
             select: {
                 userId: true,
+                id: true,
+                sessionVersion: true,
                 passwordHash: true,
                 name: true,
                 email: true,
@@ -67,7 +72,7 @@ export async function importUsersBackup(_: any, formData: FormData) {
 
         for (const u of users) {
             const payload = {
-                passwordHash: u.passwordHash,
+                ...(typeof u.passwordHash === "string" ? { passwordHash: u.passwordHash } : {}),
                 name: u.name,
                 email: u.email ?? null,
                 role: u.role,
@@ -79,13 +84,19 @@ export async function importUsersBackup(_: any, formData: FormData) {
 
             const ex = existingMap.get(u.userId);
             if (!ex) {
-                await prisma.user.create({ data: { userId: u.userId, ...payload } });
+                if (typeof u.passwordHash !== "string") {
+                    invalidCount += 1;
+                    continue;
+                }
+                await prisma.user.create({
+                    data: { userId: u.userId, ...payload, passwordHash: u.passwordHash },
+                });
                 inserted += 1;
                 continue;
             }
 
             const isSame =
-                ex.passwordHash === payload.passwordHash &&
+                (typeof payload.passwordHash !== "string" || ex.passwordHash === payload.passwordHash) &&
                 ex.name === payload.name &&
                 (ex.email ?? null) === payload.email &&
                 ex.role === payload.role &&
@@ -100,7 +111,16 @@ export async function importUsersBackup(_: any, formData: FormData) {
             }
 
             // 2) 교집합(기존 userId 존재)은 새 데이터로 덮어씀
-            await prisma.user.update({ where: { userId: u.userId }, data: payload });
+            await updateImportedUserSafely(ex, payload, {
+                findCurrent: (id) => prisma.user.findUnique({
+                    where: { id },
+                    select: { id: true, passwordHash: true, role: true, sessionVersion: true },
+                }),
+                updateIfCurrent: ({ id, sessionVersion, data }) => prisma.user.updateMany({
+                    where: { id, sessionVersion },
+                    data: data as Prisma.UserUpdateManyMutationInput,
+                }),
+            });
             updated += 1;
         }
 
@@ -125,12 +145,12 @@ export async function resetPassword(formData: FormData) {
     if (!userId) return { error: "User ID is required." };
 
     try {
-        const newPassword = Math.random().toString(36).slice(-8);
+        const newPassword = randomBytes(18).toString("base64url");
         const passwordHash = await bcrypt.hash(newPassword, 10);
 
         await prisma.user.update({
             where: { id: userId },
-            data: { passwordHash },
+            data: buildPasswordCredentialUpdate(passwordHash),
         });
 
         revalidatePath("/admin/users");
@@ -268,11 +288,11 @@ export async function changeUserRole(formData: FormData): Promise<ChangeUserRole
 
             const updatedUser = await tx.user.update({
                 where: { id: userId },
-                data: {
+                data: buildRoleCredentialUpdate({
                     role: nextRole.role,
                     studentId: nextRole.studentId,
                     gisu: nextRole.gisu,
-                },
+                }),
                 select: {
                     id: true,
                     userId: true,

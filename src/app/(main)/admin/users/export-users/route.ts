@@ -1,17 +1,21 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
+import { requireAdmin } from "@/lib/current-user";
 
 export async function GET() {
-  const session = await auth();
-  if (!session?.user || session.user.role !== "ADMIN") {
-    return new NextResponse("Unauthorized", { status: 401 });
+  try {
+    await requireAdmin();
+  } catch (error) {
+    const status = (error as { status?: number }).status === 401 ? 401 : 403;
+    return new NextResponse(status === 401 ? "Unauthorized" : "Forbidden", {
+      status,
+      headers: { "Cache-Control": "private, no-store" },
+    });
   }
 
   const users = await prisma.user.findMany({
     select: {
       userId: true,
-      passwordHash: true,
       name: true,
       email: true,
       role: true,
@@ -26,7 +30,7 @@ export async function GET() {
 
   const payload = {
     type: "gshs-users-backup",
-    version: 1,
+    version: 2,
     exportedAt: new Date().toISOString(),
     count: users.length,
     users,
@@ -40,6 +44,7 @@ export async function GET() {
     headers: {
       "Content-Type": "application/json; charset=utf-8",
       "Content-Disposition": `attachment; filename=\"${filename}\"`,
+      "Cache-Control": "private, no-store",
     },
   });
 }

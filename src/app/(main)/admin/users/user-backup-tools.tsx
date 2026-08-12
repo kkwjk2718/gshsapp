@@ -14,7 +14,7 @@ export function UserBackupTools() {
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
         <div>
           <p className="font-semibold">사용자 데이터 백업</p>
-          <p className="text-xs text-slate-500">사용자 데이터만 별도 JSON으로 다운로드/복원합니다.</p>
+          <p className="text-xs text-slate-500">계정 표시 정보만 JSON으로 내보냅니다. 비밀번호와 세션 정보는 포함되지 않습니다.</p>
         </div>
         <a href="/admin/users/export-users" className="px-3 py-2 rounded-lg border" style={{ borderColor: "var(--border)" }}>
           사용자 내보내기
@@ -22,6 +22,7 @@ export function UserBackupTools() {
       </div>
 
       <form action={formAction} className="flex flex-col gap-2">
+        <p className="text-xs text-amber-600 dark:text-amber-400">JSON 가져오기는 기존 계정의 표시 정보용입니다. 자격 증명 복구는 전체 DB 백업을 사용하세요.</p>
         <div className="flex items-center gap-2 flex-wrap">
           <input id="users-backup-file" type="file" name="file" accept=".json" required className="hidden" onChange={(e) => setFileName(e.target.files?.[0]?.name || "")} />
           <label htmlFor="users-backup-file" className="inline-flex px-3 py-2 rounded-lg border cursor-pointer" style={{ borderColor: "var(--border)" }}>

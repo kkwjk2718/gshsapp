@@ -1,19 +1,23 @@
 import path from "node:path";
 import fs from "node:fs/promises";
 import { NextResponse } from "next/server";
-import { auth } from "@/auth";
 import { getBackupDir } from "@/lib/backup";
+import { requireAdmin } from "@/lib/current-user";
+
+const PRIVATE_NO_STORE = { "Cache-Control": "private, no-store" };
 
 export async function GET(_: Request, { params }: { params: Promise<{ file: string }> }) {
-  const session = await auth();
-  if (!session?.user || session.user.role !== "ADMIN") {
-    return new NextResponse("Unauthorized", { status: 401 });
+  try {
+    await requireAdmin();
+  } catch (error) {
+    const status = (error as { status?: number }).status === 401 ? 401 : 403;
+    return new NextResponse(status === 401 ? "Unauthorized" : "Forbidden", { status, headers: PRIVATE_NO_STORE });
   }
 
   const { file } = await params;
   const safe = path.basename(file);
   if (!(safe.endsWith('.db') || safe.endsWith('.bak') || safe.endsWith('.tar.gz') || safe.endsWith('.json'))) {
-    return new NextResponse('Unsupported file type', { status: 400 });
+    return new NextResponse('Unsupported file type', { status: 400, headers: PRIVATE_NO_STORE });
   }
   const full = path.join(getBackupDir(), safe);
 
@@ -24,9 +28,10 @@ export async function GET(_: Request, { params }: { params: Promise<{ file: stri
       headers: {
         "Content-Type": "application/octet-stream",
         "Content-Disposition": `attachment; filename=\"${safe}\"`,
+        ...PRIVATE_NO_STORE,
       },
     });
   } catch {
-    return new NextResponse("Not found", { status: 404 });
+    return new NextResponse("Not found", { status: 404, headers: PRIVATE_NO_STORE });
   }
 }

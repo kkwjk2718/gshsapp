@@ -65,6 +65,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
               role: user.role,
               studentId: user.studentId,
               gisu: user.gisu,
+              sessionVersion: user.sessionVersion,
             };
           } else {
             await logAction("LOGIN_FAILED", { loginId: userId, reason: "Invalid password" });

@@ -1,21 +1,6 @@
 import type { NextAuthConfig } from 'next-auth';
 import { MEMBER_SERVICE_SUSPENDED } from "@/lib/member-service-suspension";
 
-declare module "next-auth" {
-  interface User {
-    role?: string;
-    studentId?: string | null;
-    gisu?: number | null;
-  }
-  interface Session {
-    user: User & {
-      role?: string;
-      studentId?: string | null;
-      gisu?: number | null;
-    };
-  }
-}
-
 export const authConfig = {
   pages: {
     signIn: '/login',
@@ -91,7 +76,6 @@ export const authConfig = {
       }
 
       if (isOnLogin) {
-        if (isLoggedIn) return Response.redirect(new URL('/', nextUrl));
         return true;
       }
       
@@ -103,6 +87,9 @@ export const authConfig = {
          session.user.role = token.role as string;
          session.user.studentId = token.studentId as string;
          session.user.gisu = token.gisu as number;
+         if (typeof token.sessionVersion === "number") {
+           session.user.sessionVersion = token.sessionVersion;
+         }
        }
        return session;
     },
@@ -112,6 +99,7 @@ export const authConfig = {
         token.role = user.role;
         token.studentId = user.studentId;
         token.gisu = user.gisu;
+        token.sessionVersion = user.sessionVersion;
       }
       return token;
     }

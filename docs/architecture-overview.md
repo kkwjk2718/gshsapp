@@ -65,7 +65,8 @@ Route group 기준:
 - `src/lib/token-distribution.ts`: 토큰 발급/재사용/메일 발송
 - `src/lib/brevo.ts`: Brevo 메일 연동
 - `src/lib/backup.ts`: 백업 경로와 파일 처리
-- `src/auth.config.ts`: 인증/인가와 route guard
+- `src/auth.config.ts`: Edge 호환 route UX guard와 JWT/session claim 전달(DB 접근 금지)
+- `src/lib/current-user.ts`: Node 런타임의 DB 기반 현재 사용자·관리자 인가
 
 ## 5. 외부 연동
 
@@ -103,6 +104,11 @@ Route group 기준:
 - `/songs`, `/timetable`, `/links`, `/sites`는 로그인 필요
 - `GRADUATE`는 로그인은 가능하지만 학생 전용 핵심 정보에는 접근하지 않음
 - 일부 공개 화면은 로그인 시 개인화 정보를 추가 표시
+- middleware의 JWT 역할 검사는 UX용이며 최종 권한 판단이 아님
+- 보호된 Node route/action은 JWT subject와 정수 `sessionVersion`을 DB 값과 정확히 비교하고 DB의 현재 역할을 사용
+- 기존 JWT에 version claim이 없거나 값이 잘못되면 fail closed되어 재로그인이 필요
+- 비밀번호 변경/초기화, 역할 변경, 인증 필드 import는 같은 DB write에서 `sessionVersion`을 원자적으로 증가
+- `/teachers`는 현재 회원 세션을 요구하며 이름, 이메일, 과목, 위치, 소개 문구만 조회
 
 ## 7. 배포 아키텍처
 
@@ -141,6 +147,7 @@ Route group 기준:
 - 테스트 서버 정기 백업 workflow 존재
 - 복원 리허설은 라이브 DB를 덮어쓰지 않는 임시 컨테이너 방식
 - 운영 직전에는 최신 백업과 restore drill 상태를 확인
+- 이전 DB를 복원하면 세션 버전도 과거로 돌아갈 수 있으므로 복원 후 `AUTH_SECRET`을 회전해 전역 로그아웃
 
 주요 파일:
 

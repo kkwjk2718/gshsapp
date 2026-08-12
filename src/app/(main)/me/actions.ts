@@ -4,6 +4,8 @@ import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
 import { revalidatePath } from "next/cache";
 import bcrypt from "bcryptjs";
+import { signOut } from "@/auth";
+import { buildPasswordCredentialUpdate } from "@/lib/security/user-auth-mutations";
 
 export async function createDDay(formData: FormData) {
   const title = formData.get("title") as string;
@@ -107,9 +109,10 @@ export async function changePassword(formData: FormData) {
 
     await prisma.user.update({
         where: { id: user.id },
-        data: { passwordHash: newPasswordHash }
+        data: buildPasswordCredentialUpdate(newPasswordHash)
     });
 
+    await signOut({ redirectTo: "/login" });
     return { success: "비밀번호가 성공적으로 변경되었습니다." };
 }
 

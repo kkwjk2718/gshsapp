@@ -105,7 +105,14 @@ export const getTeacherDirectory = unstable_cache(
     try {
       return await prisma.user.findMany({
         where: { role: "TEACHER" },
-        include: { teacherProfile: true },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          teacherProfile: {
+            select: { subject: true, location: true, message: true },
+          },
+        },
       });
     } catch (error) {
       logPublicContentError("teacher directory", error);
