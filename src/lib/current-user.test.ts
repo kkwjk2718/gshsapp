@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const authMock = vi.fn();
 const findUniqueMock = vi.fn();
 
+vi.mock("server-only", () => ({}));
 vi.mock("@/auth", () => ({ auth: authMock }));
 vi.mock("@/lib/db", () => ({
   prisma: { user: { findUnique: findUniqueMock } },

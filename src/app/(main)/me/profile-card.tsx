@@ -8,7 +8,6 @@ interface UserProfile {
   name: string;
   email: string | null;
   studentId: string | null;
-  role: string;
   gisu: number | null;
 }
 
@@ -95,9 +94,6 @@ export function ProfileCard({ user }: { user: UserProfile }) {
               <span>{user.studentId}</span>
           </div>
           <div className="flex items-center gap-2 mt-3">
-             <span className="px-2 py-1 rounded-md bg-slate-100 dark:bg-slate-800 text-xs font-bold text-slate-600 dark:text-slate-300">
-                {user.role}
-             </span>
              <span className="text-xs text-slate-400 truncate">{user.email}</span>
           </div>
        </div>

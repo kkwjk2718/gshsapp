@@ -1,7 +1,6 @@
 "use server"
 
 import { prisma } from "@/lib/db";
-import type { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import bcrypt from "bcryptjs";
 import { getCurrentUser } from "@/lib/session";
@@ -114,11 +113,22 @@ export async function importUsersBackup(_: any, formData: FormData) {
             await updateImportedUserSafely(ex, payload, {
                 findCurrent: (id) => prisma.user.findUnique({
                     where: { id },
-                    select: { id: true, passwordHash: true, role: true, sessionVersion: true },
+                    select: {
+                        id: true,
+                        passwordHash: true,
+                        name: true,
+                        email: true,
+                        role: true,
+                        studentId: true,
+                        gisu: true,
+                        banExpiresAt: true,
+                        isOnboarded: true,
+                        sessionVersion: true,
+                    },
                 }),
-                updateIfCurrent: ({ id, sessionVersion, data }) => prisma.user.updateMany({
-                    where: { id, sessionVersion },
-                    data: data as Prisma.UserUpdateManyMutationInput,
+                updateIfCurrent: ({ where, data }) => prisma.user.updateMany({
+                    where,
+                    data,
                 }),
             });
             updated += 1;

@@ -3,18 +3,30 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const requireAdminMock = vi.fn();
 const findManyMock = vi.fn();
 
-vi.mock("@/lib/current-user", () => ({ requireAdmin: requireAdminMock }));
+class TestAuthorizationError extends Error {}
+vi.mock("@/lib/current-user", () => ({ requireAdmin: requireAdminMock, AuthorizationError: TestAuthorizationError }));
 vi.mock("@/lib/db", () => ({ prisma: { user: { findMany: findManyMock } } }));
 
 describe("user export route", () => {
   beforeEach(() => vi.resetAllMocks());
 
   it("self-authorizes against the current database admin", async () => {
-    requireAdminMock.mockRejectedValue(new Error("Forbidden"));
+    requireAdminMock.mockRejectedValue(new TestAuthorizationError("Forbidden"));
     const { GET } = await import("./route");
     const response = await GET();
     expect(response.status).toBe(403);
     expect(findManyMock).not.toHaveBeenCalled();
+  });
+
+  it("returns a generic no-store 500 for unexpected database failures", async () => {
+    requireAdminMock.mockResolvedValue({ id: "admin", role: "ADMIN" });
+    findManyMock.mockRejectedValue(new Error("sensitive database detail"));
+    const { GET } = await import("./route");
+    const response = await GET();
+
+    expect(response.status).toBe(500);
+    expect(response.headers.get("Cache-Control")).toBe("private, no-store");
+    expect(await response.text()).toBe("Internal Server Error");
   });
 
   it("exports no credential/session fields and prevents caching", async () => {

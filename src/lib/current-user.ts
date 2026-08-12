@@ -1,3 +1,5 @@
+import "server-only";
+
 import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
 import { MEMBER_SERVICE_SUSPENDED } from "@/lib/member-service-suspension";
