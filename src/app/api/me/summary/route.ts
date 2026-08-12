@@ -26,6 +26,7 @@ export async function GET() {
       where: {
         userId: user.id,
         isRead: false,
+        OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
       },
     });
   } catch {

@@ -9,27 +9,18 @@ import { buildPasswordCredentialUpdate } from "@/lib/security/user-auth-mutation
 import { validatePassword } from "@/lib/security/password-policy";
 import { validateSelfProfileInput } from "@/lib/security/profile-input";
 import { writeAuditLog } from "@/lib/audit";
+import {
+  createPersonalEventWithinLimit,
+  normalizePersonalEventInput,
+} from "@/lib/personal-event";
+import { isCanonicalUuid } from "@/lib/security/public-input";
 
 export async function createDDay(formData: FormData) {
-  const title = formData.get("title") as string;
-  const dateStr = formData.get("date") as string;
-  
   const user = await getCurrentUser();
   if (!user || !user.id) throw new Error("Unauthorized");
-
-  const count = await prisma.personalEvent.count({ where: { userId: user.id } });
-  if (count >= 3) {
-      throw new Error("D-Day는 최대 3개까지 등록 가능합니다.");
-  }
-
-  await prisma.personalEvent.create({
-    data: {
-      userId: user.id,
-      title,
-      targetDate: new Date(dateStr),
-      isPrimary: count === 0
-    },
-  });
+  const input = normalizePersonalEventInput(formData.get("title"), formData.get("date"));
+  const result = await createPersonalEventWithinLimit(prisma, user.id, input);
+  if (!result.created) throw new Error("D-Day는 최대 3개까지 등록 가능합니다.");
 
   revalidatePath("/me");
 }
@@ -38,6 +29,7 @@ export async function deleteDDay(formData: FormData) {
   const id = formData.get("id") as string;
   const user = await getCurrentUser();
   if (!user || !user.id) throw new Error("Unauthorized");
+  if (!isCanonicalUuid(id)) throw new Error("Invalid personal event");
 
   await prisma.personalEvent.deleteMany({ where: { id, userId: user.id } });
   revalidatePath("/me");
@@ -47,11 +39,13 @@ export async function setPrimaryDDay(formData: FormData) {
     const id = formData.get("id") as string;
     const user = await getCurrentUser();
     if (!user || !user.id) throw new Error("Unauthorized");
+    if (!isCanonicalUuid(id)) throw new Error("Invalid personal event");
 
-    await prisma.$transaction([
-        prisma.personalEvent.updateMany({ where: { userId: user.id }, data: { isPrimary: false } }),
-        prisma.personalEvent.update({ where: { id, userId: user.id }, data: { isPrimary: true } })
-    ]);
+    await prisma.$transaction(async (tx) => {
+        await tx.personalEvent.updateMany({ where: { userId: user.id }, data: { isPrimary: false } });
+        const result = await tx.personalEvent.updateMany({ where: { id, userId: user.id }, data: { isPrimary: true } });
+        if (result.count !== 1) throw new Error("Personal event not found");
+    });
 
     revalidatePath("/me");
     revalidatePath("/");
@@ -124,11 +118,13 @@ export async function deleteSongRequest(formData: FormData) {
     const id = formData.get("id") as string;
     const user = await getCurrentUser();
     if (!user || !user.id) throw new Error("Unauthorized");
+    if (!isCanonicalUuid(id)) throw new Error("Invalid song request");
 
     await prisma.songRequest.deleteMany({
         where: { 
             id: id,
-            requesterId: user.id
+            requesterId: user.id,
+            status: "PENDING",
         }
     });
 

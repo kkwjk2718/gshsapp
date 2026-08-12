@@ -77,8 +77,8 @@ export default async function MyPage() {
 
             {pageData.personalEvents.length < 3 && (
                 <form action={createDDay} className="grid grid-cols-1 sm:grid-cols-[1fr_auto_auto] gap-2 mt-4 pt-4 border-t" style={{ borderColor: "var(--border)" }}>
-                    <input name="title" type="text" placeholder="일정 제목" required className="flex-1 px-3 py-2 rounded-xl border text-sm focus:outline-none" style={{ backgroundColor: "var(--surface)", borderColor: "var(--border)", color: "var(--foreground)" }} />
-                    <input name="date" type="date" required className="px-3 py-2 rounded-xl border text-sm focus:outline-none" style={{ backgroundColor: "var(--surface)", borderColor: "var(--border)", color: "var(--foreground)" }} />
+                    <input name="title" type="text" maxLength={100} placeholder="일정 제목" required className="flex-1 px-3 py-2 rounded-xl border text-sm focus:outline-none" style={{ backgroundColor: "var(--surface)", borderColor: "var(--border)", color: "var(--foreground)" }} />
+                    <input name="date" type="date" min="2000-01-01" max="2100-12-31" required className="px-3 py-2 rounded-xl border text-sm focus:outline-none" style={{ backgroundColor: "var(--surface)", borderColor: "var(--border)", color: "var(--foreground)" }} />
                     <button className="p-2 tap-target rounded-xl transition-colors flex items-center justify-center" style={{ backgroundColor: "var(--accent)", color: "var(--brand-sub)" }}><Plus className="w-5 h-5" /></button>
                 </form>
             )}

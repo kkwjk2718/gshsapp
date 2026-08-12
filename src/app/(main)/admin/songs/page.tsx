@@ -7,7 +7,16 @@ import { formatKST } from "@/lib/date-utils";
 export default async function AdminSongsPage() {
   const songs = await prisma.songRequest.findMany({
     orderBy: { createdAt: "desc" },
-    include: { requester: true },
+    take: 500,
+    select: {
+      id: true,
+      requesterId: true,
+      youtubeUrl: true,
+      videoTitle: true,
+      status: true,
+      createdAt: true,
+      requester: { select: { id: true, name: true, studentId: true } },
+    },
   });
 
   return (

@@ -29,11 +29,21 @@ export default async function MusicManagerPage() {
 
   const songs = await prisma.songRequest.findMany({
     orderBy: [{ priorityScore: "desc" }, { createdAt: "asc" }],
-    include: { requester: true },
-    where: { status: { not: "PLAYED" } },
+    take: 500,
+    select: {
+      id: true,
+      youtubeUrl: true,
+      videoTitle: true,
+      status: true,
+      priorityScore: true,
+      rejectionReason: true,
+      createdAt: true,
+      requester: { select: { id: true, name: true } },
+    },
+    where: { status: { in: ["PENDING", "APPROVED", "REJECTED"] } },
   });
 
-  const rules = await prisma.songRule.findMany();
+  const rules = await prisma.songRule.findMany({ take: 7 });
   const ruleRows = DAYS.map((day, idx) => ({
     day,
     dayOfWeek: idx,

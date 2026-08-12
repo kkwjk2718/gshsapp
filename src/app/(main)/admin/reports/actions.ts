@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
 import { revalidatePath } from "next/cache";
+import { writeAuditLog } from "@/lib/audit";
 
 export async function getErrorReports(
     page: number = 1,
@@ -68,13 +69,22 @@ export async function updateReportStatus(
         throw new Error("Invalid report update");
     }
 
-    await prisma.errorReport.update({
-        where: { id },
-        data: {
-            status,
-            adminNotes: notes,
-            resolvedAt: status === "RESOLVED" ? new Date() : null,
-        }
+    await prisma.$transaction(async (tx) => {
+        const allowedCurrentStatuses = status === "PENDING" ? ["REVIEWING"] : ["PENDING", "REVIEWING"];
+        const result = await tx.errorReport.updateMany({
+            where: { id, status: { in: allowedCurrentStatuses } },
+            data: {
+                status,
+                adminNotes: notes,
+                resolvedAt: status === "RESOLVED" ? new Date() : null,
+            },
+        });
+        if (result.count !== 1) throw new Error("Report status changed concurrently");
+        await writeAuditLog(tx, {
+            actorId: user.id,
+            action: "REPORT_STATUS_CHANGED",
+            target: { type: "ERROR_REPORT", id },
+        });
     });
 
     revalidatePath("/admin/reports");
