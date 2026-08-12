@@ -20,19 +20,28 @@ export async function sendAdminNotification(formData: FormData) {
     const link = formData.get("link") as string;
     const expiresAfter = formData.get("expiresAfter") as string; // days
 
-    if (!title || !content) {
+    const titleBytes = new TextEncoder().encode(title || "").byteLength;
+    const contentBytes = new TextEncoder().encode(content || "").byteLength;
+    const linkBytes = new TextEncoder().encode(link || "").byteLength;
+    if (!title || !content || !["ALL", "USER"].includes(targetType) || [...title].length > 120 || titleBytes > 240 ||
+        [...content].length > 2_000 || contentBytes > 4_000 || [...(link || "")].length > 512 || linkBytes > 1_024) {
         return { error: "제목과 내용을 입력해주세요." };
     }
 
     let expiresAt: Date | undefined;
-    if (expiresAfter && parseInt(expiresAfter) > 0) {
+    const expiryDays = expiresAfter ? Number(expiresAfter) : 0;
+    if (expiresAfter && (!Number.isInteger(expiryDays) || expiryDays < 1 || expiryDays > 365)) {
+        return { error: "Invalid notification expiration." };
+    }
+    if (expiryDays > 0) {
         expiresAt = new Date();
-        expiresAt.setDate(expiresAt.getDate() + parseInt(expiresAfter));
+        expiresAt.setDate(expiresAt.getDate() + expiryDays);
     }
 
     try {
         if (targetType === "ALL") {
-            const allUsers = await prisma.user.findMany({ select: { id: true } });
+            const allUsers = await prisma.user.findMany({ select: { id: true }, take: 5_001 });
+            if (allUsers.length > 5_000) return { error: "Notification audience exceeds the 5,000-user safety limit." };
 
             // Batch create is more efficient using prisma.notification.createMany
             // But createNotification helper is singular. 

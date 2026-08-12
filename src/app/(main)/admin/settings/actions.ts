@@ -1,12 +1,13 @@
 "use server"
 
 import bcrypt from "bcryptjs";
-import { revalidatePath, unstable_cache } from "next/cache";
+import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { logAction } from "@/lib/logger";
 import { assertSafeExternalHttpsUrl } from "@/lib/network-safety";
 import { getCurrentUser } from "@/lib/session";
 import { SYSTEM_SETTING_KEYS, isValidGoogleAnalyticsId } from "@/lib/system-settings";
+import { writeAuditLog } from "@/lib/audit";
 
 export async function updateGradeMapping(formData: FormData) {
   const user = await getCurrentUser();
@@ -105,21 +106,12 @@ export async function updateGoogleAnalyticsId(prevState: any, formData: FormData
   };
 }
 
-export const getICalUrl = unstable_cache(
-  async () => {
-    const setting = await prisma.systemSetting.findUnique({ where: { key: "ICAL_URL" } });
-    return setting?.value || null;
-  },
-  ["ical-url"],
-  { tags: ["schedules"] },
-);
-
 export async function updateTokenPortalConfig(
   prevState: ActionResult,
   formData: FormData,
 ): Promise<ActionResult> {
   const user = await getCurrentUser();
-  if (!user || user.role !== "ADMIN") {
+  if (!user?.id || user.role !== "ADMIN") {
     throw new Error("Unauthorized");
   }
 
@@ -130,8 +122,8 @@ export async function updateTokenPortalConfig(
     return { error: "異붽? ?덈궡 臾멸뎄??2000???댄븯濡??낅젰?댁＜?몄슂." };
   }
 
-  await prisma.$transaction([
-    prisma.systemSetting.upsert({
+  await prisma.$transaction(async (tx) => {
+    await tx.systemSetting.upsert({
       where: { key: SYSTEM_SETTING_KEYS.tokenPortalEnabled },
       update: { value: enabled ? "true" : "false" },
       create: {
@@ -139,8 +131,8 @@ export async function updateTokenPortalConfig(
         value: enabled ? "true" : "false",
         description: "?숈깮 ?좏겙 諛곕? ?ы꽭 ?쒖꽦???щ?",
       },
-    }),
-    prisma.systemSetting.upsert({
+    });
+    await tx.systemSetting.upsert({
       where: { key: SYSTEM_SETTING_KEYS.tokenPortalEmailGuidance },
       update: { value: guidance },
       create: {
@@ -148,8 +140,13 @@ export async function updateTokenPortalConfig(
         value: guidance,
         description: "?좏겙 ?덈궡 硫붿씪 ?섎떒 異붽? ?덈궡 臾멸뎄",
       },
-    }),
-  ]);
+    });
+    await writeAuditLog(tx, {
+      actorId: user.id,
+      action: "TOKEN_PORTAL_CONFIG_CHANGED",
+      target: { type: "SYSTEM_SETTING", id: SYSTEM_SETTING_KEYS.tokenPortalEnabled },
+    });
+  });
 
   await logAction("token_portal_settings_updated", {
     enabled,
@@ -169,7 +166,7 @@ export async function updateTokenPortalPassword(
   formData: FormData,
 ): Promise<ActionResult> {
   const user = await getCurrentUser();
-  if (!user || user.role !== "ADMIN") {
+  if (!user?.id || user.role !== "ADMIN") {
     throw new Error("Unauthorized");
   }
 
@@ -191,8 +188,8 @@ export async function updateTokenPortalPassword(
   const nextVersion = Number.isFinite(currentVersion) && currentVersion > 0 ? currentVersion + 1 : 1;
   const passwordHash = await bcrypt.hash(password, 10);
 
-  await prisma.$transaction([
-    prisma.systemSetting.upsert({
+  await prisma.$transaction(async (tx) => {
+    await tx.systemSetting.upsert({
       where: { key: SYSTEM_SETTING_KEYS.tokenPortalPasswordHash },
       update: { value: passwordHash },
       create: {
@@ -200,8 +197,8 @@ export async function updateTokenPortalPassword(
         value: passwordHash,
         description: "?좏겙 諛곕? ?ы꽭 ?묎렐 鍮꾨?踰덊샇 ?댁떆",
       },
-    }),
-    prisma.systemSetting.upsert({
+    });
+    await tx.systemSetting.upsert({
       where: { key: SYSTEM_SETTING_KEYS.tokenPortalSessionVersion },
       update: { value: String(nextVersion) },
       create: {
@@ -209,8 +206,13 @@ export async function updateTokenPortalPassword(
         value: String(nextVersion),
         description: "?좏겙 諛곕? ?ы꽭 ?몄뀡 踰꾩쟾",
       },
-    }),
-  ]);
+    });
+    await writeAuditLog(tx, {
+      actorId: user.id,
+      action: "TOKEN_PORTAL_PASSWORD_ROTATED",
+      target: { type: "SYSTEM_SETTING", id: SYSTEM_SETTING_KEYS.tokenPortalPasswordHash },
+    });
+  });
 
   await logAction("token_portal_password_rotated", {
     sessionVersion: nextVersion,

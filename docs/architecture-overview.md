@@ -57,7 +57,7 @@ Route group 기준:
 - `/api/public-settings`: 공개 런타임 설정
 - `/api/me/summary`: 공개 셸 사용자 상태 요약
 - `/api/me/home`: 홈 개인화 데이터
-- `/api/log/page-view`, `/api/log/meal-view`: 비차단 로깅
+- `/api/log/page-view`, `/api/log/meal-view`: 비차단 로깅. 정확한 `NEXT_PUBLIC_APP_URL` origin, same-origin Fetch Metadata, JSON content type, 1,024바이트 body와 512바이트 pathname, 프로세스 limiter를 통과한 이벤트만 받는다. forwarded IP 신뢰 기본값은 0 hop이다.
 
 대표 서비스 계층:
 
@@ -67,6 +67,9 @@ Route group 기준:
 - `src/lib/backup.ts`: 백업 경로와 파일 처리
 - `src/auth.config.ts`: Edge 호환 route UX guard와 JWT/session claim 전달(DB 접근 금지)
 - `src/lib/current-user.ts`: Node 런타임의 DB 기반 현재 사용자·관리자 인가
+- `src/lib/system-log-store.ts`: `SystemLog` 정규화, 1~90일 보관, 공개/전체 행 상한과 oldest-first pruning
+- 클라이언트 주소 경계: 로깅·공개 텔레메트리·요청 제한은 `TRUSTED_PROXY_HOPS`만 사용한다. 기본값 `0`은 `X-Forwarded-For`를 무시하고 공유 unknown 버킷을 사용하며, 설정값은 오른쪽부터 신뢰할 프록시 홉 수 `0..3`만 허용한다.
+- `src/lib/audit.ts`: 공개 텔레메트리와 분리된 폐쇄형 관리자 감사 이벤트 기록
 
 ## 5. 외부 연동
 

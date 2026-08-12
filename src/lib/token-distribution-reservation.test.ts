@@ -1,0 +1,41 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const mocks = vi.hoisted(() => ({ count: vi.fn(), setting: vi.fn(), send: vi.fn(), updateMany: vi.fn(), createLog: vi.fn(), log: vi.fn() }));
+vi.mock("@/lib/db", () => ({ prisma: {
+  tokenDistributionLog: { count: mocks.count, updateMany: mocks.updateMany, create: mocks.createLog, findFirst: vi.fn() },
+  inviteToken: { create: vi.fn(), delete: vi.fn() },
+} }));
+vi.mock("@/lib/brevo", () => ({ sendBrevoEmail: mocks.send }));
+vi.mock("@/lib/grade-utils", () => ({ getGradeMapping: vi.fn() }));
+vi.mock("@/lib/logger", () => ({ logAction: mocks.log }));
+vi.mock("@/lib/system-settings", () => ({ getSystemSettingValue: mocks.setting, SYSTEM_SETTING_KEYS: { tokenPortalEmailGuidance: "guidance" } }));
+
+const reservation = { distributionLogId: "distribution", inviteToken: { id: "token", token: "secret", targetRole: "STUDENT", targetGisu: 40 } };
+const input = { source: "ADMIN_MANUAL" as const, createdBy: "admin", target: { email: "student@example.com", targetRole: "STUDENT", targetGisu: 40 }, reservation };
+
+describe("reserved token email transitions", () => {
+  beforeEach(() => { vi.clearAllMocks(); mocks.count.mockResolvedValue(1); mocks.setting.mockResolvedValue(""); mocks.log.mockResolvedValue(undefined); });
+
+  it("transitions the exact pending reservation to SENT", async () => {
+    mocks.send.mockResolvedValue({ messageId: "message" }); mocks.updateMany.mockResolvedValue({ count: 1 });
+    const { sendInviteTokenEmail } = await import("./token-distribution");
+    expect(await sendInviteTokenEmail(input)).toHaveProperty("success");
+    expect(mocks.updateMany).toHaveBeenCalledWith({ where: { id: "distribution", status: "PENDING" }, data: expect.objectContaining({ status: "SENT", inviteTokenId: "token", brevoMessageId: "message" }) });
+  });
+
+  it("transitions the exact pending reservation to FAILED with bounded details", async () => {
+    mocks.send.mockRejectedValue(new Error("x".repeat(2_000))); mocks.updateMany.mockResolvedValue({ count: 1 });
+    const { sendInviteTokenEmail } = await import("./token-distribution");
+    expect(await sendInviteTokenEmail(input)).toHaveProperty("error");
+    expect(mocks.updateMany).toHaveBeenCalledWith({ where: { id: "distribution", status: "PENDING" }, data: expect.objectContaining({ status: "FAILED", errorMessage: expect.any(String) }) });
+    expect(mocks.updateMany.mock.calls.at(-1)?.[0].data.errorMessage.length).toBeLessThanOrEqual(512);
+  });
+
+  it("leaves the reservation PENDING when delivery succeeds but the SENT transition fails", async () => {
+    mocks.send.mockResolvedValue({ messageId: "accepted" }); mocks.updateMany.mockRejectedValue(new Error("database unavailable"));
+    const { sendInviteTokenEmail } = await import("./token-distribution");
+    await expect(sendInviteTokenEmail(input)).rejects.toThrow("database unavailable");
+    expect(mocks.updateMany).toHaveBeenCalledTimes(1);
+    expect(mocks.updateMany).toHaveBeenCalledWith(expect.objectContaining({ where: { id: "distribution", status: "PENDING" }, data: expect.objectContaining({ status: "SENT" }) }));
+  });
+});

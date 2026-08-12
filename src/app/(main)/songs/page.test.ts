@@ -140,6 +140,7 @@ describe("SongsPage Flight payload", () => {
         status: { in: ["APPROVED", "PLAYED"] },
       },
       orderBy: { priorityScore: "desc" },
+      take: 100,
       select: songRequestSelect,
     });
     expect(mocks.findSongRequests.mock.calls[1][0]).toEqual({
@@ -151,6 +152,7 @@ describe("SongsPage Flight payload", () => {
         status: { in: ["PENDING", "APPROVED", "PLAYED"] },
       },
       orderBy: [{ priorityScore: "desc" }, { createdAt: "asc" }],
+      take: 100,
       select: songRequestSelect,
     });
 

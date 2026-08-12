@@ -5,7 +5,8 @@ import { revalidatePath } from "next/cache";
 import { getCurrentUser } from "@/lib/session";
 import { randomUUID } from "crypto";
 import { redirect } from "next/navigation";
-import { sendInviteTokenEmail } from "@/lib/token-distribution";
+import { getDistributionQuotaSummary, sendInviteTokenEmail } from "@/lib/token-distribution";
+import { writeAuditLog } from "@/lib/audit";
 
 export async function createTokens(formData: FormData) {
   const user = await getCurrentUser();
@@ -17,30 +18,34 @@ export async function createTokens(formData: FormData) {
   const title = formData.get("title") as string;
   const memo = formData.get("memo") as string;
 
-  // Create Batch
-  const batch = await prisma.tokenBatch.create({
-      data: {
-          title: title || `${count} tokens for ${targetRole}`,
-          memo,
-          createdBy: user.id
-      }
-  });
+  await prisma.$transaction(async (tx) => {
+    const batch = await tx.tokenBatch.create({
+        data: {
+            title: title || `${count} tokens for ${targetRole}`,
+            memo,
+            createdBy: user.id
+        }
+    });
 
-  const tokens = [];
-  for (let i = 0; i < count; i++) {
-      const token = randomUUID().substring(0, 8); 
-      tokens.push({
-          token,
-          targetRole,
-          targetGisu,
-          createdBy: user.id,
-          isUsed: false,
-          batchId: batch.id
-      });
-  }
+    const tokens = [];
+    for (let i = 0; i < count; i++) {
+        const token = randomUUID().substring(0, 8);
+        tokens.push({
+            token,
+            targetRole,
+            targetGisu,
+            createdBy: user.id,
+            isUsed: false,
+            batchId: batch.id
+        });
+    }
 
-  await prisma.inviteToken.createMany({
-      data: tokens
+    await tx.inviteToken.createMany({ data: tokens });
+    await writeAuditLog(tx, {
+      actorId: user.id,
+      action: "TOKEN_BATCH_CREATED",
+      target: { type: "TOKEN_BATCH", id: batch.id },
+    });
   });
 
   revalidatePath("/admin/tokens");
@@ -81,6 +86,53 @@ export async function sendTokenByEmail(
     return { error: "학생용 토큰은 기수를 함께 입력해주세요." };
   }
 
+  const quota = await getDistributionQuotaSummary();
+  if (quota.isLimitReached) {
+    return { error: "The daily invitation email limit has been reached." };
+  }
+
+  const reservation = await prisma.$transaction(async (tx) => {
+    const duplicate = await tx.tokenDistributionLog.findFirst({
+      where: {
+        source: "ADMIN_MANUAL",
+        recipientEmail: email,
+        targetRole,
+        targetGisu: targetRole === "STUDENT" ? targetGisu : null,
+        status: { in: ["PENDING", "SENT"] },
+        createdAt: { gte: new Date(Date.now() - 10 * 60_000) },
+      },
+      select: { id: true },
+    });
+    if (duplicate) return null;
+
+    const inviteToken = await tx.inviteToken.create({
+      data: {
+        token: randomUUID().substring(0, 8), targetRole,
+        targetGisu: targetRole === "STUDENT" ? targetGisu : null,
+        createdBy: user.id, isUsed: false, batchId: null,
+      },
+      select: { id: true, token: true, targetRole: true, targetGisu: true },
+    });
+    const distribution = await tx.tokenDistributionLog.create({
+      data: {
+        source: "ADMIN_MANUAL", recipientEmail: email, targetRole,
+        targetGisu: targetRole === "STUDENT" ? targetGisu : null,
+        inviteTokenId: inviteToken.id, status: "PENDING", createdBy: user.id,
+      },
+      select: { id: true },
+    });
+    await writeAuditLog(tx, {
+      actorId: user.id,
+      action: "TOKEN_EMAIL_REQUESTED",
+      target: { type: "TOKEN_DISTRIBUTION", id: distribution.id },
+    });
+    return { distributionLogId: distribution.id, inviteToken };
+  });
+
+  if (!reservation) {
+    return { success: "An equivalent invitation request is already pending or was recently sent." };
+  }
+
   const result = await sendInviteTokenEmail({
     source: "ADMIN_MANUAL",
     createdBy: user.id,
@@ -89,6 +141,7 @@ export async function sendTokenByEmail(
       targetRole,
       targetGisu: targetRole === "STUDENT" ? targetGisu : null,
     },
+    reservation,
   });
 
   revalidatePath("/admin/tokens");
@@ -102,9 +155,12 @@ export async function sendTokenByEmail(
 
 export async function deleteToken(id: string) {
     const user = await getCurrentUser();
-    if (!user || user.role !== 'ADMIN') throw new Error("Unauthorized");
+    if (!user?.id || user.role !== 'ADMIN') throw new Error("Unauthorized");
 
-    await prisma.inviteToken.delete({ where: { id } });
+    await prisma.$transaction(async (tx) => {
+      await tx.inviteToken.delete({ where: { id } });
+      await writeAuditLog(tx, { actorId: user.id, action: "TOKEN_DELETED", target: { type: "INVITE_TOKEN", id } });
+    });
     // We assume revalidation happens on the page where this is called
     // But path is dynamic, so we rely on router.refresh or path revalidation
     // Revalidate all token pages just in case
@@ -113,13 +169,13 @@ export async function deleteToken(id: string) {
 
 export async function deleteTokenBatch(batchId: string) {
     const user = await getCurrentUser();
-    if (!user || user.role !== 'ADMIN') throw new Error("Unauthorized");
+    if (!user?.id || user.role !== 'ADMIN') throw new Error("Unauthorized");
 
-    // Delete tokens first (if no cascade), then batch
-    await prisma.$transaction([
-        prisma.inviteToken.deleteMany({ where: { batchId } }),
-        prisma.tokenBatch.delete({ where: { id: batchId } })
-    ]);
+    await prisma.$transaction(async (tx) => {
+      await tx.inviteToken.deleteMany({ where: { batchId } });
+      await tx.tokenBatch.delete({ where: { id: batchId } });
+      await writeAuditLog(tx, { actorId: user.id, action: "TOKEN_BATCH_DELETED", target: { type: "TOKEN_BATCH", id: batchId } });
+    });
 
     revalidatePath("/admin/tokens");
     redirect("/admin/tokens");

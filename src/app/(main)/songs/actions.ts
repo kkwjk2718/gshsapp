@@ -7,32 +7,47 @@ import { prisma } from "@/lib/db";
 import { getKSTDate, isBreakTime } from "@/lib/date-utils";
 import { getUserGrade } from "@/lib/grade-utils";
 import { logAction } from "@/lib/logger";
-import { FixedWindowRateLimiter } from "@/lib/security/fixed-window-rate-limit";
-import { resolveTrustedClientIp } from "@/lib/security/trusted-client-ip";
+import { parseTrustedProxyHops, resolveTrustedClientAddress } from "@/lib/security/client-address";
+import { BoundedRateLimiter } from "@/lib/security/rate-limit";
 import { canonicalizeYouTubeUrl } from "@/lib/security/youtube-url";
 import { getCurrentUser } from "@/lib/session";
 import { canAccessCoreMemberFeatures } from "@/lib/user-roles";
+import {
+  SONG_DAILY_CAP,
+  SONG_PENDING_CAP,
+  consumeSongSubmissionQuota,
+  validateSongTitle,
+} from "@/lib/security/submission-controls";
 
 const YOUTUBE_OEMBED_TIMEOUT_MS = 3_000;
 const TITLE_RESOLUTION_WINDOW_MS = 60_000;
 const TITLE_RESOLUTION_LIMIT = 5;
 const MAX_TITLE_RESOLUTION_KEYS = 1_024;
 
-const titleResolutionLimiter = new FixedWindowRateLimiter({
-  limit: TITLE_RESOLUTION_LIMIT,
-  windowMs: TITLE_RESOLUTION_WINDOW_MS,
+const titleResolutionPrincipalLimiter = new BoundedRateLimiter({
+  capacity: TITLE_RESOLUTION_LIMIT, refillTokens: TITLE_RESOLUTION_LIMIT,
+  refillIntervalMs: TITLE_RESOLUTION_WINDOW_MS, idleTtlMs: 10 * TITLE_RESOLUTION_WINDOW_MS,
+  maxKeys: MAX_TITLE_RESOLUTION_KEYS,
+});
+const titleResolutionNetworkLimiter = new BoundedRateLimiter({
+  capacity: TITLE_RESOLUTION_LIMIT, refillTokens: TITLE_RESOLUTION_LIMIT,
+  refillIntervalMs: TITLE_RESOLUTION_WINDOW_MS, idleTtlMs: 10 * TITLE_RESOLUTION_WINDOW_MS,
   maxKeys: MAX_TITLE_RESOLUTION_KEYS,
 });
 
 function consumeTitleResolutionQuota(principalId: string, ip: string) {
-  if (!titleResolutionLimiter.consume([`principal:${principalId}`, `ip:${ip}`])) {
+  if (!titleResolutionPrincipalLimiter.consume(`principal:${principalId}`).allowed ||
+      !titleResolutionNetworkLimiter.consume(`ip:${ip}`).allowed) {
     throw new Error("Too many YouTube title resolution attempts. Please try again later.");
   }
 }
 
 async function getClientIp() {
   const requestHeaders = await headers();
-  return resolveTrustedClientIp(requestHeaders, process.env.TRUSTED_CLIENT_IP_HEADER);
+  return resolveTrustedClientAddress(
+    { directAddress: null, forwardedFor: requestHeaders.get("x-forwarded-for") },
+    { trustedProxyHops: parseTrustedProxyHops(process.env.TRUSTED_PROXY_HOPS) },
+  ) ?? "unknown";
 }
 
 async function resolveVideoTitle(
@@ -42,7 +57,7 @@ async function resolveVideoTitle(
 ) {
   const trimmedTitle = rawVideoTitle?.trim() ?? "";
   if (trimmedTitle) {
-    return trimmedTitle;
+    return validateSongTitle(trimmedTitle);
   }
 
   consumeTitleResolutionQuota(principalId, await getClientIp());
@@ -59,7 +74,7 @@ async function resolveVideoTitle(
     if (response.ok) {
       const data = (await response.json()) as { title?: string };
       if (typeof data.title === "string" && data.title.trim()) {
-        return data.title.trim();
+        return validateSongTitle(data.title);
       }
     }
   } catch {
@@ -76,6 +91,7 @@ export async function requestSong(formData: FormData) {
   if (!user?.id || !canAccessCoreMemberFeatures(user.role)) {
     throw new Error("Unauthorized");
   }
+  consumeSongSubmissionQuota(user.id);
 
   const dbUser = await prisma.user.findUnique({
     where: { id: user.id },
@@ -140,15 +156,25 @@ export async function requestSong(formData: FormData) {
 
   const isAnonymous = formData.get("isAnonymous") === "on";
 
-  await prisma.songRequest.create({
-    data: {
-      requesterId: user.id,
-      youtubeUrl,
-      videoTitle,
-      status: "PENDING",
-      priorityScore,
-      isAnonymous,
-    },
+  await prisma.$transaction(async (tx) => {
+    const since = new Date(Date.now() - 86_400_000);
+    const [dailyCount, pendingCount] = await Promise.all([
+      tx.songRequest.count({ where: { requesterId: user.id, createdAt: { gte: since } } }),
+      tx.songRequest.count({ where: { requesterId: user.id, status: "PENDING" } }),
+    ]);
+    if (dailyCount >= SONG_DAILY_CAP || pendingCount >= SONG_PENDING_CAP) {
+      throw new Error("Song request quota exceeded");
+    }
+    await tx.songRequest.create({
+      data: {
+        requesterId: user.id,
+        youtubeUrl,
+        videoTitle,
+        status: "PENDING",
+        priorityScore,
+        isAnonymous,
+      },
+    });
   });
 
   await logAction("SONG_REQUEST", { title: videoTitle, url: youtubeUrl });

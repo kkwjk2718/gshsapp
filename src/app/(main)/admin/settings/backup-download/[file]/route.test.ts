@@ -3,15 +3,17 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const requireAdminMock = vi.fn();
 const readFileMock = vi.fn();
 const getBackupDirMock = vi.fn(() => "C:\\backups");
+const auditCreateMock = vi.fn();
 
 class TestAuthorizationError extends Error {}
 vi.mock("@/lib/current-user", () => ({ requireAdmin: requireAdminMock, AuthorizationError: TestAuthorizationError }));
 vi.mock("@/lib/backup", () => ({ getBackupDir: getBackupDirMock }));
 vi.mock("node:fs/promises", () => ({ default: { readFile: readFileMock } }));
 vi.mock("@/auth", () => ({ auth: vi.fn().mockResolvedValue({ user: { role: "ADMIN" } }) }));
+vi.mock("@/lib/db", () => ({ prisma: { auditLog: { create: auditCreateMock } } }));
 
 describe("backup download route", () => {
-  beforeEach(() => vi.resetAllMocks());
+  beforeEach(() => { vi.resetAllMocks(); auditCreateMock.mockResolvedValue({}); });
 
   it("denies a stale or demoted session through database-backed authorization", async () => {
     requireAdminMock.mockRejectedValue(new TestAuthorizationError("Forbidden"));
@@ -45,5 +47,6 @@ describe("backup download route", () => {
     });
     expect(response.status).toBe(200);
     expect(response.headers.get("Cache-Control")).toBe("private, no-store");
+    expect(auditCreateMock).toHaveBeenCalledWith({ data: expect.objectContaining({ actorId: "admin", action: "BACKUP_DOWNLOADED", targetId: "backup.db" }) });
   });
 });

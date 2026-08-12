@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { AuthorizationError, requireAdmin } from "@/lib/current-user";
+import { writeAuditLog } from "@/lib/audit";
 
 const PRIVATE_NO_STORE = { "Cache-Control": "private, no-store" };
 
 export async function GET() {
   try {
-    await requireAdmin();
+    const actor = await requireAdmin();
 
     const users = await prisma.user.findMany({
       select: {
@@ -21,6 +22,11 @@ export async function GET() {
         createdAt: true,
       },
       orderBy: { createdAt: "asc" },
+    });
+    await writeAuditLog(prisma, {
+      actorId: actor.id,
+      action: "USER_EXPORTED",
+      target: { type: "USER", id: `rows:${users.length}` },
     });
 
     const payload = {

@@ -42,6 +42,10 @@ async function upsertSongRuleRecord(
   allowedGrade: string,
 ) {
   const normalized = allowedGrade.trim().toUpperCase();
+  if (!Number.isInteger(dayOfWeek) || dayOfWeek < 1 || dayOfWeek > 5 ||
+      (normalized !== "ALL" && !/^(?:[123])(?:,[123]){0,2}$/.test(normalized))) {
+    throw new Error("Invalid song rule");
+  }
   const existingRule = await db.songRule.findFirst({
     where: { dayOfWeek },
   });
@@ -98,6 +102,9 @@ export async function updateSongRule(dayOfWeek: number, allowedGrade: string) {
 
 export async function updateSongRulesBulk(rules: Array<{ dayOfWeek: number; allowedGrade: string }>) {
   await checkPermission();
+  if (!Array.isArray(rules) || rules.length < 1 || rules.length > 5 || new Set(rules.map((rule) => rule.dayOfWeek)).size !== rules.length) {
+    throw new Error("Invalid song rule set");
+  }
 
   await prisma.$transaction(async (tx) => {
     for (const rule of rules) {

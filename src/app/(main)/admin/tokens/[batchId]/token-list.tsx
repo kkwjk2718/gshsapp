@@ -4,6 +4,8 @@ import { useState, useTransition } from "react";
 import { Copy, Download, Check, Trash2 } from "lucide-react";
 import { deleteToken } from "../actions";
 import { useRouter } from "next/navigation";
+import { downloadTextFile } from "@/lib/client-download";
+import { getTokenCsvForExport } from "../export-actions";
 
 interface UserInfo {
     name: string;
@@ -23,9 +25,10 @@ interface Token {
 interface TokenListProps {
   tokens: Token[];
   batchTitle: string;
+  batchId: string;
 }
 
-export function TokenList({ tokens, batchTitle }: TokenListProps) {
+export function TokenList({ tokens, batchTitle, batchId }: TokenListProps) {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
@@ -45,29 +48,12 @@ export function TokenList({ tokens, batchTitle }: TokenListProps) {
       });
   };
 
-  const handleDownloadCsv = () => {
-    const headers = ["Token", "Role", "Gisu", "Status", "UsedBy"];
-    const rows = tokens.map(t => [
-        t.token,
-        t.targetRole,
-        t.targetGisu ? t.targetGisu.toString() : "",
-        t.isUsed ? "Used" : "Available",
-        t.usedBy ? `${t.usedBy.name}(${t.usedBy.studentId || t.usedBy.role})` : ""
-    ]);
-
-    const csvContent = [
-        headers.join(","),
-        ...rows.map(row => row.join(','))
-    ].join("\n");
-
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.setAttribute("href", url);
-    link.setAttribute("download", `${batchTitle}_tokens.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  const handleDownloadCsv = async () => {
+    const csv = await getTokenCsvForExport(batchId);
+    downloadTextFile(csv, {
+      filename: `${batchTitle}_tokens.csv`,
+      mimeType: "text/csv;charset=utf-8",
+    });
   };
 
   return (

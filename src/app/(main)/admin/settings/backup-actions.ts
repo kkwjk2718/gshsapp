@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
+import { writeAuditLog } from "@/lib/audit";
 import { getCurrentUser } from "@/lib/session";
 import {
   createBackup,
@@ -35,6 +36,7 @@ async function assertAdmin() {
   if (!user || user.role !== "ADMIN") {
     throw new Error("Unauthorized");
   }
+  return user;
 }
 
 async function getCounts() {
@@ -54,14 +56,21 @@ export async function updateBackupInterval(
   formData: FormData,
 ): Promise<BackupActionState> {
   try {
-    await assertAdmin();
+    const actor = await assertAdmin();
 
     const days = parsePositiveInteger(formData.get("days"));
     if (!days) {
       return { ok: false, message: "Please enter a positive whole number of days." };
     }
 
-    await setBackupIntervalDays(days);
+    await prisma.$transaction(async (tx) => {
+      await setBackupIntervalDays(days, tx);
+      await writeAuditLog(tx, {
+        actorId: actor.id,
+        action: "BACKUP_INTERVAL_CHANGED",
+        target: { type: "SYSTEM_SETTING", id: "BACKUP_INTERVAL_DAYS" },
+      });
+    });
     revalidatePath("/admin/settings");
 
     return {
@@ -78,9 +87,14 @@ export async function updateBackupInterval(
 
 export async function backupNow(_: BackupActionState): Promise<BackupActionState> {
   try {
-    await assertAdmin();
-    await createBackup("manual");
+    const actor = await assertAdmin();
+    const backup = await createBackup("manual");
     await setLastBackupAt(new Date());
+    await writeAuditLog(prisma, {
+      actorId: actor.id,
+      action: "BACKUP_CREATED",
+      target: { type: "BACKUP", id: backup.file },
+    });
     revalidatePath("/admin/settings");
 
     return {

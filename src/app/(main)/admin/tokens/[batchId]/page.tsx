@@ -12,8 +12,8 @@ export default async function TokenBatchDetailPage({ params }: { params: Promise
       where: { id: batchId },
       include: { 
           tokens: {
-              include: { usedBy: true }
-          } 
+              include: { usedBy: { select: { name: true, studentId: true, role: true } } }
+          }
       }
   });
 
@@ -39,7 +39,7 @@ export default async function TokenBatchDetailPage({ params }: { params: Promise
            </form>
        </div>
 
-       <TokenList tokens={batch.tokens} batchTitle={batch.title} />
+       <TokenList tokens={batch.tokens} batchTitle={batch.title} batchId={batch.id} />
     </div>
   )
 }

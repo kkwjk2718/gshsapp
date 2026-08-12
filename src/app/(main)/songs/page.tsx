@@ -12,6 +12,7 @@ import {
   parseAllowedGrades,
 } from "@/lib/song-rules";
 import { canAccessCoreMemberFeatures } from "@/lib/user-roles";
+import { SONG_DAILY_READ_CAP } from "@/lib/security/submission-controls";
 
 import { SongRequestForm } from "./request-form";
 import { SongList, type SongListItem } from "./song-list";
@@ -99,6 +100,7 @@ export default async function SongsPage() {
         },
       },
       orderBy: { priorityScore: "desc" },
+      take: SONG_DAILY_READ_CAP,
       select: SONG_REQUEST_SELECT,
     }),
     prisma.songRequest.findMany({
@@ -112,6 +114,7 @@ export default async function SongsPage() {
         },
       },
       orderBy: [{ priorityScore: "desc" }, { createdAt: "asc" }],
+      take: SONG_DAILY_READ_CAP,
       select: SONG_REQUEST_SELECT,
     }),
     prisma.user.findUnique({

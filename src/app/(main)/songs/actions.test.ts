@@ -9,6 +9,10 @@ const mocks = vi.hoisted(() => ({
   getHeader: vi.fn(),
   logAction: vi.fn(),
   revalidatePath: vi.fn(),
+  countSongRequests: vi.fn(),
+  transaction: vi.fn(),
+  consumeSongQuota: vi.fn(),
+  validateSongTitle: vi.fn((value: unknown) => String(value).trim()),
 }));
 
 vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidatePath }));
@@ -17,9 +21,10 @@ vi.mock("next/headers", () => ({
 }));
 vi.mock("@/lib/db", () => ({
   prisma: {
-    songRequest: { create: mocks.createSongRequest },
+    songRequest: { create: mocks.createSongRequest, count: mocks.countSongRequests },
     songRule: { findFirst: mocks.findSongRule },
     user: { findUnique: mocks.findUser },
+    $transaction: mocks.transaction,
   },
 }));
 vi.mock("@/lib/date-utils", () => ({
@@ -29,6 +34,12 @@ vi.mock("@/lib/date-utils", () => ({
 vi.mock("@/lib/grade-utils", () => ({ getUserGrade: mocks.getUserGrade }));
 vi.mock("@/lib/logger", () => ({ logAction: mocks.logAction }));
 vi.mock("@/lib/session", () => ({ getCurrentUser: mocks.getCurrentUser }));
+vi.mock("@/lib/security/submission-controls", () => ({
+  SONG_DAILY_CAP: 3,
+  SONG_PENDING_CAP: 2,
+  consumeSongSubmissionQuota: mocks.consumeSongQuota,
+  validateSongTitle: mocks.validateSongTitle,
+}));
 
 import { requestSong } from "./actions";
 
@@ -56,12 +67,16 @@ function makeForm(url = "https://youtu.be/dQw4w9WgXcQ", title = "Known title") {
 describe("requestSong", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.stubEnv("TRUSTED_CLIENT_IP_HEADER", "x-gshs-client-ip");
+    vi.stubEnv("TRUSTED_PROXY_HOPS", "1");
     mocks.getHeader.mockReturnValue(null);
     mocks.getHeader.mockImplementation((name: string) =>
-      name === "x-gshs-client-ip" ? "203.0.113.10" : null,
+      name === "x-forwarded-for" ? "203.0.113.10" : null,
     );
     mocks.createSongRequest.mockResolvedValue({ id: "song-1" });
+    mocks.countSongRequests.mockResolvedValue(0);
+    mocks.transaction.mockImplementation(async (callback: (tx: unknown) => unknown) => callback({
+      songRequest: { create: mocks.createSongRequest, count: mocks.countSongRequests },
+    }));
     mocks.logAction.mockResolvedValue(undefined);
     mocks.revalidatePath.mockReturnValue(undefined);
     vi.stubGlobal(
@@ -105,6 +120,14 @@ describe("requestSong", () => {
     });
   });
 
+  it("consumes submission quota even when the caller supplies a title", async () => {
+    const user = makeUser("known-title-user");
+    mocks.getCurrentUser.mockResolvedValue(user);
+    mocks.findUser.mockResolvedValue(user);
+    await requestSong(makeForm());
+    expect(mocks.consumeSongQuota).toHaveBeenCalledWith(user.id);
+  });
+
   it("rejects a banned user before outbound title resolution", async () => {
     const user = {
       ...makeUser("banned-user"),
@@ -145,7 +168,7 @@ describe("requestSong", () => {
     mocks.findUser.mockResolvedValue(user);
     let ipSuffix = 20;
     mocks.getHeader.mockImplementation((name: string) =>
-      name === "x-gshs-client-ip" ? `203.0.113.${ipSuffix++}` : null,
+      name === "x-forwarded-for" ? `203.0.113.${ipSuffix++}` : null,
     );
 
     for (let attempt = 0; attempt < 5; attempt += 1) {
@@ -160,7 +183,7 @@ describe("requestSong", () => {
 
   it("bounds outbound title resolution attempts shared by one IP", async () => {
     mocks.getHeader.mockImplementation((name: string) =>
-      name === "x-gshs-client-ip" ? "203.0.113.200" : null,
+      name === "x-forwarded-for" ? "203.0.113.200" : null,
     );
 
     for (let attempt = 0; attempt < 5; attempt += 1) {
@@ -180,7 +203,7 @@ describe("requestSong", () => {
   });
 
   it("shares the unknown bucket when forwarding headers are not explicitly trusted", async () => {
-    vi.stubEnv("TRUSTED_CLIENT_IP_HEADER", "");
+    vi.stubEnv("TRUSTED_PROXY_HOPS", "0");
     let spoofedIpSuffix = 30;
     mocks.getHeader.mockImplementation((name: string) => {
       if (name === "x-real-ip") return `203.0.113.${spoofedIpSuffix++}`;

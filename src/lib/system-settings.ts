@@ -9,6 +9,7 @@ export const SYSTEM_SETTING_KEYS = {
   tokenPortalPasswordHash: "TOKEN_PORTAL_PASSWORD_HASH",
   tokenPortalSessionVersion: "TOKEN_PORTAL_SESSION_VERSION",
   tokenPortalEmailGuidance: "TOKEN_PORTAL_EMAIL_GUIDANCE",
+  systemLogRetentionDays: "LOG_RETENTION_DAYS",
 } as const;
 
 export async function getSystemSettingValue(key: string) {

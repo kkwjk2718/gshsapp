@@ -1,152 +1,81 @@
-"use server"
+"use server";
 
-import { prisma } from "@/lib/db";
+import type { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
-import { getCurrentUser } from "@/lib/session";
-import { formatKST, getKSTStartOfDay } from "@/lib/date-utils";
 
-// 1. 설정 가져오기
-export async function getLogSettings() {
-    const setting = await prisma.systemSetting.findUnique({
-        where: { key: 'LOG_RETENTION_DAYS' }
-    });
-    return parseInt(setting?.value || "30");
+import { writeAuditLog } from "@/lib/audit";
+import { requireAdmin } from "@/lib/current-user";
+import { formatKST } from "@/lib/date-utils";
+import { prisma } from "@/lib/db";
+import { serializeCsv } from "@/lib/security/csv";
+import { enforceSystemLogBounds, parseSystemLogRetentionDays } from "@/lib/system-log-store";
+import { SYSTEM_SETTING_KEYS } from "@/lib/system-settings";
+import { USER_ROLES } from "@/lib/user-roles";
+
+const LOG_ACTIONS = ["ALL", "LOGIN", "LOGOUT", "LOGIN_FAILED", "LOGIN_BLOCKED", "LOGIN_BLOCKED_MEMBER_SERVICE_SUSPENDED", "PAGE_VIEW", "MEAL_VIEW", "SONG_REQUEST", "ADMIN_ACTION", "ERROR", "SYSTEM_TEST"] as const;
+const LOG_ROLES = ["ALL", ...USER_ROLES] as const;
+const CONTROL = /[\u0000-\u001f\u007f-\u009f\ufeff]/u;
+
+export type SystemLogQuery = Readonly<{ page?: number; limit?: number; action?: string; search?: string; role?: string }>;
+
+function validateQuery(input: SystemLogQuery) {
+  const page = input.page ?? 1;
+  const limit = input.limit ?? 20;
+  const action = input.action ?? "ALL";
+  const search = input.search ?? "";
+  const role = input.role ?? "ALL";
+  if (!Number.isInteger(page) || page < 1 || page > 10_000 || !Number.isInteger(limit) || limit < 1 || limit > 100 ||
+      !LOG_ACTIONS.includes(action as (typeof LOG_ACTIONS)[number]) || !LOG_ROLES.includes(role as (typeof LOG_ROLES)[number]) ||
+      typeof search !== "string" || new TextEncoder().encode(search).byteLength > 100 || CONTROL.test(search)) {
+    throw new Error("Invalid log query");
+  }
+  return { page, limit, action, search, role };
 }
 
-// 2. 설정 저장 및 정리
 export async function saveRetentionSettings(days: number) {
-    const user = await getCurrentUser();
-    if (user?.role !== 'ADMIN') throw new Error("Unauthorized");
-
-    await prisma.systemSetting.upsert({
-        where: { key: 'LOG_RETENTION_DAYS' },
-        update: { value: days.toString() },
-        create: { key: 'LOG_RETENTION_DAYS', value: days.toString(), description: "System log retention period in days" }
+  const actor = await requireAdmin();
+  const retentionDays = parseSystemLogRetentionDays(days);
+  if (retentionDays === null) throw new Error("Retention days must be an integer from 1 through 90");
+  await prisma.$transaction(async (tx) => {
+    await tx.systemSetting.upsert({
+      where: { key: SYSTEM_SETTING_KEYS.systemLogRetentionDays },
+      update: { value: String(retentionDays) },
+      create: { key: SYSTEM_SETTING_KEYS.systemLogRetentionDays, value: String(retentionDays), description: "System log retention period in days" },
     });
-
-    // 정리 작업 수행
-    await cleanupLogs();
-
-    revalidatePath("/admin/logs");
+    const result = await enforceSystemLogBounds(tx, new Date(), retentionDays);
+    await writeAuditLog(tx, { actorId: actor.id, action: "SYSTEM_LOG_RETENTION_CHANGED", target: { type: "SYSTEM_SETTING", id: `days:${retentionDays}` } });
+    await writeAuditLog(tx, { actorId: actor.id, action: "SYSTEM_LOG_CLEANED", target: { type: "SYSTEM_LOG", id: `rows:${result.expired + result.telemetryOverflow + result.totalOverflow}` } });
+  });
+  revalidatePath("/admin/logs");
 }
 
-// 3. 로그 정리 (오래된 로그 삭제)
-export async function cleanupLogs() {
-    const days = await getLogSettings();
-    const cutoffDate = new Date();
-    cutoffDate.setDate(cutoffDate.getDate() - days);
-
-    const result = await prisma.systemLog.deleteMany({
-        where: {
-            createdAt: { lt: cutoffDate }
-        }
-    });
-
-    return result.count;
-}
-
-// 4. 로그 데이터 가져오기 (CSV용)
 export async function getLogsForExport() {
-    const user = await getCurrentUser();
-    if (user?.role !== 'ADMIN') throw new Error("Unauthorized");
-
-    // 최신순 10,000개
-    const logs = await prisma.systemLog.findMany({
-        orderBy: { createdAt: 'desc' },
-        take: 10000,
-        include: { user: { select: { name: true, studentId: true } } }
-    });
-
-    const header = "Time,Action,User,StudentId,IP,Path,Details\n";
-    const rows = logs.map(log => {
-        const time = formatKST(log.createdAt, "yyyy-MM-dd HH:mm:ss");
-        const userName = log.user?.name || "Guest";
-        const studentId = log.user?.studentId || "-";
-        const details = (log.details || "").replace(/"/g, '""').replace(/\n/g, ' '); // 줄바꿈 제거
-
-        return `"${time}","${log.action}","${userName}","${studentId}","${log.ip}","${log.path || ''}","${details}"`;
-    }).join("\n");
-
-    return header + rows;
+  const actor = await requireAdmin();
+  const logs = await prisma.systemLog.findMany({
+    orderBy: { createdAt: "desc" }, take: 10_000,
+    select: { id: true, createdAt: true, action: true, ip: true, path: true, details: true, user: { select: { name: true, studentId: true } } },
+  });
+  const csv = serializeCsv([
+    ["Time", "Action", "User", "StudentId", "IP", "Path", "Details"],
+    ...logs.map((log) => [formatKST(log.createdAt, "yyyy-MM-dd HH:mm:ss"), log.action, log.user?.name ?? "Guest", log.user?.studentId ?? "-", log.ip, log.path ?? "", log.details ?? ""]),
+  ], { includeUtf8Bom: true });
+  await writeAuditLog(prisma, { actorId: actor.id, action: "SYSTEM_LOG_EXPORTED", target: { type: "SYSTEM_LOG", id: `rows:${logs.length}` } });
+  return csv;
 }
 
-// 5. 통계
-export async function getLogStats() {
-    const totalCount = await prisma.systemLog.count();
-    const todayCount = await prisma.systemLog.count({
-        where: { createdAt: { gte: getKSTStartOfDay() } }
-    });
-    return { totalCount, todayCount };
-}
-
-// 6. 로그 뷰어용 데이터 조회 (페이지네이션)
-export async function getSystemLogs(
-    page: number = 1,
-    limit: number = 20,
-    type?: string,
-    searchUser?: string,
-    role?: string
-) {
-    const user = await getCurrentUser();
-    if (user?.role !== 'ADMIN') throw new Error("Unauthorized");
-
-    const skip = (page - 1) * limit;
-
-    // 조건 설정
-    const where: any = {};
-
-    // 1. Action Type Filter
-    if (type && type !== 'ALL') {
-        where.action = type;
-    }
-
-    // 2. User Search Filter (Name or StudentID)
-    if (searchUser) {
-        where.user = {
-            OR: [
-                { name: { contains: searchUser } },
-                { studentId: { contains: searchUser } },
-                { userId: { contains: searchUser } } // Also searchable by login ID
-            ]
-        };
-    }
-
-    // 3. User Role Filter
-    if (role && role !== 'ALL') {
-        // If user search filter already exists, we need to merge logic
-        // prisma filter merging is implicit with object properties.
-        // where.user already exists if searchUser is present.
-
-        if (where.user) {
-            // If existing user filter (from search), add role condition to it
-            where.user = {
-                AND: [
-                    where.user, // The OR condition from search
-                    { role: role }
-                ]
-            };
-        } else {
-            where.user = { role: role };
-        }
-    }
-
-    const [logs, total] = await Promise.all([
-        prisma.systemLog.findMany({
-            where,
-            orderBy: { createdAt: 'desc' },
-            skip,
-            take: limit,
-            include: {
-                user: { select: { name: true, studentId: true, role: true, userId: true } }
-            }
-        }),
-        prisma.systemLog.count({ where })
-    ]);
-
-    return {
-        logs,
-        total,
-        totalPages: Math.ceil(total / limit),
-        currentPage: page
-    };
+export async function getSystemLogs(input: SystemLogQuery = {}) {
+  await requireAdmin();
+  const { page, limit, action, search, role } = validateQuery(input);
+  const where: Prisma.SystemLogWhereInput = {};
+  if (action !== "ALL") where.action = action;
+  if (search) where.user = { OR: [{ name: { contains: search } }, { studentId: { contains: search } }, { userId: { contains: search } }] };
+  if (role !== "ALL") where.user = where.user ? { AND: [where.user, { role }] } : { role };
+  const [logs, total] = await Promise.all([
+    prisma.systemLog.findMany({
+      where, orderBy: { createdAt: "desc" }, skip: (page - 1) * limit, take: limit,
+      select: { id: true, action: true, ip: true, path: true, details: true, createdAt: true, user: { select: { name: true, studentId: true, role: true, userId: true } } },
+    }),
+    prisma.systemLog.count({ where }),
+  ]);
+  return { logs, total, totalPages: Math.ceil(total / limit), currentPage: page };
 }

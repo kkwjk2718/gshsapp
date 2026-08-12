@@ -13,6 +13,10 @@ export async function getErrorReports(
     if (user?.role !== "ADMIN") {
         throw new Error("Unauthorized");
     }
+    if (!Number.isInteger(page) || page < 1 || page > 10_000 || !Number.isInteger(limit) || limit < 1 || limit > 100 ||
+        (status && !["ALL", "PENDING", "REVIEWING", "RESOLVED"].includes(status))) {
+        throw new Error("Invalid report query");
+    }
 
     const skip = (page - 1) * limit;
     const where: any = {};
@@ -58,12 +62,17 @@ export async function updateReportStatus(
     if (user?.role !== "ADMIN") {
         throw new Error("Unauthorized");
     }
+    const notes = adminNotes?.trim();
+    if (!id || new TextEncoder().encode(id).byteLength > 128 || !["PENDING", "REVIEWING", "RESOLVED"].includes(status) ||
+        (notes !== undefined && ([...notes].length > 2_000 || new TextEncoder().encode(notes).byteLength > 4_096))) {
+        throw new Error("Invalid report update");
+    }
 
     await prisma.errorReport.update({
         where: { id },
         data: {
             status,
-            adminNotes,
+            adminNotes: notes,
             resolvedAt: status === "RESOLVED" ? new Date() : null,
         }
     });

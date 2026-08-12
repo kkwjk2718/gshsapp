@@ -12,7 +12,7 @@ import { getSystemSettingValue, SYSTEM_SETTING_KEYS } from "@/lib/system-setting
 const SEOUL_TZ = "Asia/Seoul";
 
 export type TokenDistributionSource = "PORTAL_AUTO" | "ADMIN_MANUAL";
-export type TokenDistributionStatus = "SENT" | "FAILED" | "BLOCKED";
+export type TokenDistributionStatus = "PENDING" | "SENT" | "FAILED" | "BLOCKED";
 
 type DistributionTarget = {
   email: string;
@@ -27,6 +27,10 @@ type SendDistributionEmailInput = {
   createdBy: string;
   clientKey?: string | null;
   target: DistributionTarget;
+  reservation?: Readonly<{
+    distributionLogId: string;
+    inviteToken: Readonly<{ id: string; token: string; targetRole: string; targetGisu: number | null }>;
+  }>;
 };
 
 export type SendDistributionEmailResult = {
@@ -51,7 +55,7 @@ export async function getTodayDistributionUsage() {
   const { start, end } = getKstDayRange();
   return prisma.tokenDistributionLog.count({
     where: {
-      status: "SENT",
+      status: { in: ["PENDING", "SENT"] },
       createdAt: {
         gte: start,
         lt: end,
@@ -248,13 +252,24 @@ async function enforceDailyQuota({
   createdBy,
   clientKey,
   target,
+  reservation,
 }: SendDistributionEmailInput) {
   const quota = await getDistributionQuotaSummary();
-  if (!quota.isLimitReached) {
-    return quota;
+  const isLimitReached = reservation ? quota.used > TOKEN_DISTRIBUTION_DAILY_LIMIT : quota.isLimitReached;
+  if (!isLimitReached) {
+    return { ...quota, isLimitReached: false };
   }
 
-  await createDistributionLog({
+  if (reservation) {
+    await prisma.$transaction(async (tx) => {
+      const transition = await tx.tokenDistributionLog.updateMany({
+        where: { id: reservation.distributionLogId, status: "PENDING" },
+        data: { status: "BLOCKED", inviteTokenId: null, errorMessage: "Daily send limit reached." },
+      });
+      if (transition.count !== 1) throw new Error("Distribution reservation is no longer pending");
+      await tx.inviteToken.delete({ where: { id: reservation.inviteToken.id } });
+    });
+  } else await createDistributionLog({
     source,
     recipientEmail: target.email,
     requesterName: target.name,
@@ -274,7 +289,7 @@ async function enforceDailyQuota({
     targetRole: target.targetRole,
   });
 
-  return quota;
+  return { ...quota, isLimitReached: true };
 }
 
 async function createInviteTokenRecord({
@@ -330,8 +345,10 @@ export async function sendInviteTokenEmail(input: SendDistributionEmailInput): P
       ? await findReusableStudentInviteToken(input.target.email, input.target.studentId)
       : null;
 
-  let inviteToken = reusableToken;
+  let inviteToken: { id: string; token: string; targetRole: string; targetGisu: number | null } | null = reusableToken;
   let createdNewToken = false;
+
+  if (input.reservation) inviteToken = input.reservation.inviteToken;
 
   if (!inviteToken) {
     inviteToken = await createInviteTokenRecord({
@@ -342,6 +359,7 @@ export async function sendInviteTokenEmail(input: SendDistributionEmailInput): P
     createdNewToken = true;
   }
 
+  let providerAccepted = false;
   try {
     const emailPayload = buildInviteEmail({
       name: input.target.name,
@@ -358,8 +376,16 @@ export async function sendInviteTokenEmail(input: SendDistributionEmailInput): P
       htmlContent: emailPayload.htmlContent,
       textContent: emailPayload.textContent,
     });
+    providerAccepted = true;
 
-    await createDistributionLog({
+    if (input.reservation) {
+      const messageId = typeof response.messageId === "string" ? response.messageId.replace(/[\u0000-\u001f\u007f-\u009f\ufeff]/gu, "").slice(0, 256) : null;
+      const transition = await prisma.tokenDistributionLog.updateMany({
+        where: { id: input.reservation.distributionLogId, status: "PENDING" },
+        data: { status: "SENT", inviteTokenId: inviteToken.id, brevoMessageId: messageId, errorMessage: null },
+      });
+      if (transition.count !== 1) throw new Error("Distribution reservation is no longer pending");
+    } else await createDistributionLog({
       source: input.source,
       recipientEmail: input.target.email,
       requesterName: input.target.name,
@@ -372,7 +398,6 @@ export async function sendInviteTokenEmail(input: SendDistributionEmailInput): P
       clientKey: input.clientKey ?? null,
       createdBy: input.createdBy,
     });
-
     await logAction("token_distribution_sent", {
       source: input.source,
       recipientEmail: input.target.email,
@@ -387,7 +412,8 @@ export async function sendInviteTokenEmail(input: SendDistributionEmailInput): P
       quotaUsed: quota.used + 1,
     };
   } catch (error) {
-    if (createdNewToken) {
+    if (providerAccepted) throw error;
+    if (createdNewToken && !input.reservation) {
       await prisma.inviteToken
         .delete({
           where: {
@@ -397,9 +423,16 @@ export async function sendInviteTokenEmail(input: SendDistributionEmailInput): P
         .catch(() => undefined);
     }
 
-    const errorMessage = error instanceof Error ? error.message : "Unknown email delivery failure";
+    const rawError = error instanceof Error ? error.message : "Unknown email delivery failure";
+    const errorMessage = [...rawError.replace(/[\u0000-\u001f\u007f-\u009f\ufeff]/gu, " ")].slice(0, 512).join("");
 
-    await createDistributionLog({
+    if (input.reservation) {
+      const transition = await prisma.tokenDistributionLog.updateMany({
+        where: { id: input.reservation.distributionLogId, status: "PENDING" },
+        data: { status: "FAILED", inviteTokenId: inviteToken.id, brevoMessageId: null, errorMessage },
+      });
+      if (transition.count !== 1) throw new Error("Distribution reservation is no longer pending");
+    } else await createDistributionLog({
       source: input.source,
       recipientEmail: input.target.email,
       requesterName: input.target.name,

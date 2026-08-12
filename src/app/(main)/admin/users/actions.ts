@@ -11,6 +11,7 @@ import { resolveUserRoleChange, UserRoleChangeError, isUserRole } from "@/lib/us
 import { canChangeGisu } from "@/lib/user-roles";
 import { randomBytes } from "node:crypto";
 import { buildPasswordCredentialUpdate, buildRoleCredentialUpdate, updateImportedUserSafely } from "@/lib/security/user-auth-mutations";
+import { writeAuditLog } from "@/lib/audit";
 
 export async function importUsersBackup(_: any, formData: FormData) {
     const sessionUser = await getCurrentUser();
@@ -87,8 +88,13 @@ export async function importUsersBackup(_: any, formData: FormData) {
                     invalidCount += 1;
                     continue;
                 }
-                await prisma.user.create({
-                    data: { userId: u.userId, ...payload, passwordHash: u.passwordHash },
+                await prisma.$transaction(async (tx) => {
+                  const created = await tx.user.create({
+                      data: { userId: u.userId, ...payload, passwordHash: u.passwordHash },
+                  });
+                  await writeAuditLog(tx, {
+                    actorId: sessionUser.id!, action: "USER_IMPORTED", target: { type: "USER", id: created.id },
+                  });
                 });
                 inserted += 1;
                 continue;
@@ -110,26 +116,31 @@ export async function importUsersBackup(_: any, formData: FormData) {
             }
 
             // 2) 교집합(기존 userId 존재)은 새 데이터로 덮어씀
-            await updateImportedUserSafely(ex, payload, {
-                findCurrent: (id) => prisma.user.findUnique({
-                    where: { id },
-                    select: {
-                        id: true,
-                        passwordHash: true,
-                        name: true,
-                        email: true,
-                        role: true,
-                        studentId: true,
-                        gisu: true,
-                        banExpiresAt: true,
-                        isOnboarded: true,
-                        sessionVersion: true,
-                    },
-                }),
-                updateIfCurrent: ({ where, data }) => prisma.user.updateMany({
-                    where,
-                    data,
-                }),
+            await prisma.$transaction(async (tx) => {
+              await updateImportedUserSafely(ex, payload, {
+                  findCurrent: (id) => tx.user.findUnique({
+                      where: { id },
+                      select: {
+                          id: true,
+                          passwordHash: true,
+                          name: true,
+                          email: true,
+                          role: true,
+                          studentId: true,
+                          gisu: true,
+                          banExpiresAt: true,
+                          isOnboarded: true,
+                          sessionVersion: true,
+                      },
+                  }),
+                  updateIfCurrent: ({ where, data }) => tx.user.updateMany({
+                      where,
+                      data,
+                  }),
+              });
+              await writeAuditLog(tx, {
+                actorId: sessionUser.id!, action: "USER_IMPORTED", target: { type: "USER", id: ex.id },
+              });
             });
             updated += 1;
         }
@@ -158,9 +169,16 @@ export async function resetPassword(formData: FormData) {
         const newPassword = randomBytes(18).toString("base64url");
         const passwordHash = await bcrypt.hash(newPassword, 10);
 
-        await prisma.user.update({
-            where: { id: userId },
-            data: buildPasswordCredentialUpdate(passwordHash),
+        await prisma.$transaction(async (tx) => {
+          await tx.user.update({
+              where: { id: userId },
+              data: buildPasswordCredentialUpdate(passwordHash),
+          });
+          await writeAuditLog(tx, {
+            actorId: sessionUser.id!,
+            action: "USER_PASSWORD_RESET",
+            target: { type: "USER", id: userId },
+          });
         });
 
         revalidatePath("/admin/users");
@@ -312,6 +330,11 @@ export async function changeUserRole(formData: FormData): Promise<ChangeUserRole
                     gisu: true,
                 },
             });
+            await writeAuditLog(tx, {
+                actorId: sessionUser.id,
+                action: "USER_ROLE_CHANGED",
+                target: { type: "USER", id: targetUser.id },
+            });
 
             return {
                 before: targetUser,
@@ -432,6 +455,11 @@ export async function changeUserGisu(formData: FormData): Promise<ChangeUserGisu
                     role: true,
                     gisu: true,
                 },
+            });
+            await writeAuditLog(tx, {
+                actorId: sessionUser.id,
+                action: "USER_GISU_CHANGED",
+                target: { type: "USER", id: targetUser.id },
             });
 
             return { before: targetUser, after: updatedUser };
@@ -562,6 +590,11 @@ export async function deleteUserAccount(formData: FormData): Promise<DeleteUserR
             await tx.notice.deleteMany({ where: { writerId: targetUser.id } });
             await tx.schedule.deleteMany({ where: { writerId: targetUser.id } });
             await tx.user.delete({ where: { id: targetUser.id } });
+            await writeAuditLog(tx, {
+                actorId: sessionUser.id,
+                action: "USER_DELETED",
+                target: { type: "USER", id: targetUser.id },
+            });
 
             return {
                 targetUser,
@@ -611,18 +644,24 @@ export async function banUser(formData: FormData) {
 
     const userId = formData.get("userId") as string;
     const banUntilDate = formData.get("banUntil") as string;
-    const reason = formData.get("reason") as string;
+    const reason = String(formData.get("reason") || "").trim();
 
-    if (!userId || !banUntilDate) {
+    const banUntil = new Date(banUntilDate);
+    const maximumBan = new Date(Date.now() + 30 * 86_400_000);
+    if (!userId || !banUntilDate || !reason || [...reason].length > 500 || new TextEncoder().encode(reason).byteLength > 1_000 ||
+        /[\u0000-\u001f\u007f-\u009f\ufeff]/u.test(reason) || !Number.isFinite(banUntil.getTime()) || banUntil <= new Date() || banUntil > maximumBan) {
         return { error: "User ID and ban date are required." };
     }
 
     try {
-        await prisma.user.update({
-            where: { id: userId },
-            data: {
-                banExpiresAt: new Date(banUntilDate),
-            },
+        await prisma.$transaction(async (tx) => {
+            const target = await tx.user.findUnique({ where: { id: userId }, select: { id: true, role: true } });
+            if (!target) throw new Error("TARGET_USER_NOT_FOUND");
+            if (sessionUser.role === "BROADCAST" && (target.id === sessionUser.id || !["STUDENT", "TEACHER"].includes(target.role))) {
+                throw new Error("INELIGIBLE_BROADCAST_TARGET");
+            }
+            await tx.user.update({ where: { id: target.id }, data: { banExpiresAt: banUntil } });
+            await writeAuditLog(tx, { actorId: sessionUser.id!, action: "USER_BANNED", target: { type: "USER", id: target.id } });
         });
 
         const message = reason
@@ -640,6 +679,7 @@ export async function banUser(formData: FormData) {
         revalidatePath("/admin/users");
         return { success: "User has been banned." };
     } catch (e) {
+        if (e instanceof Error && e.message === "INELIGIBLE_BROADCAST_TARGET") return { error: "Target is not eligible for a song-request ban." };
         return { error: "Failed to ban user." };
     }
 }
@@ -657,11 +697,9 @@ export async function unbanUser(formData: FormData) {
     }
 
     try {
-        await prisma.user.update({
-            where: { id: userId },
-            data: {
-                banExpiresAt: null,
-            },
+        await prisma.$transaction(async (tx) => {
+            await tx.user.update({ where: { id: userId }, data: { banExpiresAt: null } });
+            await writeAuditLog(tx, { actorId: sessionUser.id!, action: "USER_UNBANNED", target: { type: "USER", id: userId } });
         });
 
         await createNotification(

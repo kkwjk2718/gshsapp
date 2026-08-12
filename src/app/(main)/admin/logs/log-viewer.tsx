@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { getSystemLogs } from "./actions";
 import { Loader2, ChevronLeft, ChevronRight, Search, Eye, X } from "lucide-react";
 import { formatKST } from "@/lib/date-utils";
@@ -16,18 +16,10 @@ export function LogViewer() {
     const [searchUser, setSearchUser] = useState("");
     const [selectedLog, setSelectedLog] = useState<any>(null);
 
-    // Debounce search
-    useEffect(() => {
-        const timer = setTimeout(() => {
-            fetchLogs();
-        }, 500);
-        return () => clearTimeout(timer);
-    }, [page, filterType, filterRole, searchUser]);
-
-    const fetchLogs = async () => {
+    const fetchLogs = useCallback(async () => {
         setLoading(true);
         try {
-            const data = await getSystemLogs(page, 15, filterType, searchUser, filterRole);
+            const data = await getSystemLogs({ page, limit: 15, action: filterType, search: searchUser, role: filterRole });
             setLogs(data.logs);
             setTotalPage(data.totalPages);
         } catch (error) {
@@ -35,7 +27,12 @@ export function LogViewer() {
         } finally {
             setLoading(false);
         }
-    };
+    }, [page, filterType, filterRole, searchUser]);
+
+    useEffect(() => {
+        const timer = setTimeout(() => { void fetchLogs(); }, 500);
+        return () => clearTimeout(timer);
+    }, [fetchLogs]);
 
     // Removed manual useEffect for fetchLogs to avoid double calling due to debouncing logic covering it.
     // The debounce effect covers page changes too.

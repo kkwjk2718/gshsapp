@@ -4,6 +4,7 @@ import path from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { prisma } from "@/lib/db";
+import type { Prisma } from "@prisma/client";
 
 const execFileAsync = promisify(execFile);
 
@@ -185,8 +186,10 @@ export async function getBackupIntervalDays() {
   return Number.isFinite(d) && d > 0 ? d : 1;
 }
 
-export async function setBackupIntervalDays(days: number) {
-  await prisma.systemSetting.upsert({
+type BackupSettingsDb = Pick<Prisma.TransactionClient, "systemSetting">;
+
+export async function setBackupIntervalDays(days: number, db: BackupSettingsDb = prisma) {
+  await db.systemSetting.upsert({
     where: { key: "BACKUP_INTERVAL_DAYS" },
     update: { value: String(days), description: "자동 백업 주기(일)" },
     create: { key: "BACKUP_INTERVAL_DAYS", value: String(days), description: "자동 백업 주기(일)" },
@@ -198,8 +201,8 @@ export async function getLastBackupAt() {
   return s?.value ? new Date(s.value) : null;
 }
 
-export async function setLastBackupAt(d: Date) {
-  await prisma.systemSetting.upsert({
+export async function setLastBackupAt(d: Date, db: BackupSettingsDb = prisma) {
+  await db.systemSetting.upsert({
     where: { key: "LAST_BACKUP_AT" },
     update: { value: d.toISOString(), description: "마지막 자동 백업 시각" },
     create: { key: "LAST_BACKUP_AT", value: d.toISOString(), description: "마지막 자동 백업 시각" },

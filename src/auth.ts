@@ -21,17 +21,17 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
   events: {
     async signIn({ user }) {
-      await logAction("LOGIN", { role: user.role });
+      await logAction("LOGIN", { role: user.role }, undefined, { userId: user.id });
     },
     async signOut() {
-      await logAction("LOGOUT");
+      await logAction("LOGOUT", undefined, undefined, { userId: null });
     }
   },
   providers: [
     Credentials({
       async authorize(credentials) {
         if (MEMBER_SERVICE_SUSPENDED) {
-          await logAction("LOGIN_BLOCKED_MEMBER_SERVICE_SUSPENDED");
+          await logAction("LOGIN_BLOCKED_MEMBER_SERVICE_SUSPENDED", undefined, undefined, { userId: null });
           return null;
         }
 
@@ -44,14 +44,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           const userId = parsedCredentials.data.userId.trim();
 
           if (await isLoginTemporarilyLocked(userId)) {
-            await logAction("LOGIN_BLOCKED", { loginId: userId, reason: "rate-limit" });
+            await logAction("LOGIN_BLOCKED", { loginId: userId, reason: "rate-limit" }, undefined, { userId: null });
             throw new LoginTemporarilyLockedError();
           }
 
           const user = await prisma.user.findUnique({ where: { userId } });
 
           if (!user) {
-            await logAction("LOGIN_FAILED", { loginId: userId, reason: "User not found" });
+            await logAction("LOGIN_FAILED", { loginId: userId, reason: "User not found" }, undefined, { userId: null });
             return null;
           }
 
@@ -68,7 +68,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
               sessionVersion: user.sessionVersion,
             };
           } else {
-            await logAction("LOGIN_FAILED", { loginId: userId, reason: "Invalid password" });
+            await logAction("LOGIN_FAILED", { loginId: userId, reason: "Invalid password" }, undefined, { userId: user.id });
           }
         }
 

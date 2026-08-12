@@ -2,13 +2,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const requireAdminMock = vi.fn();
 const findManyMock = vi.fn();
+const auditCreateMock = vi.fn();
 
 class TestAuthorizationError extends Error {}
 vi.mock("@/lib/current-user", () => ({ requireAdmin: requireAdminMock, AuthorizationError: TestAuthorizationError }));
-vi.mock("@/lib/db", () => ({ prisma: { user: { findMany: findManyMock } } }));
+vi.mock("@/lib/db", () => ({ prisma: { user: { findMany: findManyMock }, auditLog: { create: auditCreateMock } } }));
 
 describe("user export route", () => {
-  beforeEach(() => vi.resetAllMocks());
+  beforeEach(() => { vi.resetAllMocks(); auditCreateMock.mockResolvedValue({}); });
 
   it("self-authorizes against the current database admin", async () => {
     requireAdminMock.mockRejectedValue(new TestAuthorizationError("Forbidden"));
@@ -45,5 +46,16 @@ describe("user export route", () => {
     expect(payload.version).toBe(2);
     expect(payload.users[0]).not.toHaveProperty("passwordHash");
     expect(payload.users[0]).not.toHaveProperty("sessionVersion");
+    expect(auditCreateMock).toHaveBeenCalledWith({ data: expect.objectContaining({ actorId: "admin", action: "USER_EXPORTED", targetId: "rows:1" }) });
+  });
+
+  it("returns no export payload when audit persistence fails", async () => {
+    requireAdminMock.mockResolvedValue({ id: "admin", role: "ADMIN" });
+    findManyMock.mockResolvedValue([]);
+    auditCreateMock.mockRejectedValue(new Error("audit unavailable"));
+    const { GET } = await import("./route");
+    const response = await GET();
+    expect(response.status).toBe(500);
+    expect(await response.text()).toBe("Internal Server Error");
   });
 });
