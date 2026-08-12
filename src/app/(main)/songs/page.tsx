@@ -2,8 +2,9 @@ import { Metadata } from "next";
 import { redirect } from "next/navigation";
 
 import { prisma } from "@/lib/db";
-import { getKSTDate } from "@/lib/date-utils";
+import { getKSTDate, getSongTimeRanges } from "@/lib/date-utils";
 import { getUserGrade } from "@/lib/grade-utils";
+import { canonicalizeYouTubeUrl } from "@/lib/security/youtube-url";
 import { getCurrentUser } from "@/lib/session";
 import {
   SONG_RULE_DAYS,
@@ -12,9 +13,64 @@ import {
 } from "@/lib/song-rules";
 import { canAccessCoreMemberFeatures } from "@/lib/user-roles";
 
-import { getNextMorningSongs, getTodayMorningSongs } from "./actions";
 import { SongRequestForm } from "./request-form";
-import { SongList } from "./song-list";
+import { SongList, type SongListItem } from "./song-list";
+
+const SONG_REQUEST_SELECT = {
+  id: true,
+  videoTitle: true,
+  youtubeUrl: true,
+  status: true,
+  createdAt: true,
+  isAnonymous: true,
+  requester: {
+    select: {
+      name: true,
+      studentId: true,
+    },
+  },
+} as const;
+
+type SongRequestRow = {
+  id: string;
+  videoTitle: string;
+  youtubeUrl: string;
+  status: string;
+  createdAt: Date;
+  isAnonymous: boolean;
+  requester: {
+    name: string;
+    studentId: string | null;
+  };
+};
+
+function toSongListItem(row: SongRequestRow): SongListItem | null {
+  if (!(["PENDING", "APPROVED", "PLAYED"] as const).includes(row.status as SongListItem["status"])) {
+    return null;
+  }
+
+  try {
+    return {
+      id: row.id,
+      videoTitle: row.videoTitle,
+      youtubeUrl: canonicalizeYouTubeUrl(row.youtubeUrl),
+      status: row.status as SongListItem["status"],
+      createdAt: row.createdAt.toISOString(),
+      requester: row.isAnonymous
+        ? null
+        : {
+            name: row.requester.name,
+            studentId: row.requester.studentId,
+          },
+    };
+  } catch {
+    return null;
+  }
+}
+
+function toSongList(rows: SongRequestRow[]) {
+  return rows.map(toSongListItem).filter((song): song is SongListItem => song !== null);
+}
 
 export const metadata: Metadata = {
   title: "기상곡 신청",
@@ -26,18 +82,58 @@ export default async function SongsPage() {
   if (!user) redirect("/login");
   if (!canAccessCoreMemberFeatures(user.role)) redirect("/");
 
-  const todaySongs = await getTodayMorningSongs();
-  const nextSongs = await getNextMorningSongs();
-
-  const dbUser = await prisma.user.findUnique({
-    where: { id: user.id },
-  });
-
-  let isAllowedGrade = true;
   const todayDay = getKSTDate().getDay();
-  const songRules = await prisma.songRule.findMany({
-    orderBy: { dayOfWeek: "asc" },
-  });
+  const { todayMorning, nextMorning } = getSongTimeRanges();
+  const currentHour = getKSTDate().getHours();
+  const nextTargetRange = currentHour < 7 ? todayMorning : nextMorning;
+
+  const [todaySongRows, nextSongRows, dbUser, songRules] = await Promise.all([
+    prisma.songRequest.findMany({
+      where: {
+        createdAt: {
+          gte: todayMorning.start,
+          lt: todayMorning.end,
+        },
+        status: {
+          in: ["APPROVED", "PLAYED"],
+        },
+      },
+      orderBy: { priorityScore: "desc" },
+      select: SONG_REQUEST_SELECT,
+    }),
+    prisma.songRequest.findMany({
+      where: {
+        createdAt: {
+          gte: nextTargetRange.start,
+          lt: nextTargetRange.end,
+        },
+        status: {
+          in: ["PENDING", "APPROVED", "PLAYED"],
+        },
+      },
+      orderBy: [{ priorityScore: "desc" }, { createdAt: "asc" }],
+      select: SONG_REQUEST_SELECT,
+    }),
+    prisma.user.findUnique({
+      where: { id: user.id },
+      select: {
+        role: true,
+        gisu: true,
+        studentId: true,
+      },
+    }),
+    prisma.songRule.findMany({
+      orderBy: { dayOfWeek: "asc" },
+      select: {
+        dayOfWeek: true,
+        allowedGrade: true,
+      },
+    }),
+  ]);
+
+  const todaySongs = toSongList(todaySongRows);
+  const nextSongs = toSongList(nextSongRows);
+  let isAllowedGrade = true;
   const ruleByDay = new Map(songRules.map((rule) => [rule.dayOfWeek, rule.allowedGrade]));
   const todayAllowedGrades = ruleByDay.get(todayDay) ?? "ALL";
   const weeklyRules = SONG_RULE_DAYS.map((day) => ({
@@ -47,18 +143,16 @@ export default async function SongsPage() {
   }));
 
   if (dbUser && dbUser.role !== "ADMIN") {
-    const rule = await prisma.songRule.findFirst({
-      where: { dayOfWeek: todayDay },
-    });
+    const allowedGrade = ruleByDay.get(todayDay);
 
-    if (rule && rule.allowedGrade !== "ALL") {
+    if (allowedGrade && allowedGrade !== "ALL") {
       let grade = await getUserGrade(dbUser.gisu);
 
       if (!grade && dbUser.studentId && dbUser.studentId.length >= 3) {
         grade = dbUser.studentId.substring(0, 1);
       }
 
-      const allowedGrades = parseAllowedGrades(rule.allowedGrade);
+      const allowedGrades = parseAllowedGrades(allowedGrade);
 
       isAllowedGrade = !!grade && allowedGrades.includes(grade);
     }
@@ -97,7 +191,7 @@ export default async function SongsPage() {
             </span>
           </div>
           {todaySongs.length > 0 ? (
-            <SongList songs={todaySongs} currentUser={user} emptyMessage="오늘 나온 기상곡 내역이 없습니다." />
+            <SongList songs={todaySongs} emptyMessage="오늘 나온 기상곡 내역이 없습니다." />
           ) : (
             <div
               className="rounded-2xl border border-dashed p-8 text-center"
@@ -122,7 +216,6 @@ export default async function SongsPage() {
           </div>
           <SongList
             songs={nextSongs}
-            currentUser={user}
             emptyMessage="아직 신청된 노래가 없습니다. 첫 번째 주인공이 되어보세요! 🎵"
           />
         </div>

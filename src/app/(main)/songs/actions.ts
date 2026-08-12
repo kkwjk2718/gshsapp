@@ -1,20 +1,102 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
 
 import { prisma } from "@/lib/db";
-import { getSongTimeRanges, getKSTDate, isBreakTime } from "@/lib/date-utils";
+import { getKSTDate, isBreakTime } from "@/lib/date-utils";
 import { getUserGrade } from "@/lib/grade-utils";
 import { logAction } from "@/lib/logger";
+import { canonicalizeYouTubeUrl } from "@/lib/security/youtube-url";
 import { getCurrentUser } from "@/lib/session";
+import { canAccessCoreMemberFeatures } from "@/lib/user-roles";
 
 const YOUTUBE_OEMBED_TIMEOUT_MS = 3_000;
+const TITLE_RESOLUTION_WINDOW_MS = 60_000;
+const TITLE_RESOLUTION_LIMIT = 5;
+const MAX_TITLE_RESOLUTION_KEYS = 1_024;
 
-async function resolveVideoTitle(youtubeUrl: string, rawVideoTitle: string | null) {
+type ResolutionRateEntry = {
+  count: number;
+  resetAt: number;
+};
+
+const titleResolutionAttempts = new Map<string, ResolutionRateEntry>();
+
+function removeExpiredResolutionAttempts(now: number) {
+  for (const [key, entry] of titleResolutionAttempts) {
+    if (entry.resetAt <= now) {
+      titleResolutionAttempts.delete(key);
+    }
+  }
+}
+
+function addResolutionAttempt(key: string, now: number) {
+  const existingEntry = titleResolutionAttempts.get(key);
+  if (existingEntry && existingEntry.resetAt > now) {
+    titleResolutionAttempts.set(key, {
+      count: existingEntry.count + 1,
+      resetAt: existingEntry.resetAt,
+    });
+    return;
+  }
+
+  while (titleResolutionAttempts.size >= MAX_TITLE_RESOLUTION_KEYS) {
+    const oldestKey = titleResolutionAttempts.keys().next().value;
+    if (typeof oldestKey !== "string") break;
+    titleResolutionAttempts.delete(oldestKey);
+  }
+
+  titleResolutionAttempts.set(key, {
+    count: 1,
+    resetAt: now + TITLE_RESOLUTION_WINDOW_MS,
+  });
+}
+
+function consumeTitleResolutionQuota(principalId: string, ip: string | null) {
+  const now = Date.now();
+  removeExpiredResolutionAttempts(now);
+
+  const keys = [`principal:${principalId}`];
+  if (ip) keys.push(`ip:${ip}`);
+
+  if (
+    keys.some((key) => {
+      const entry = titleResolutionAttempts.get(key);
+      return entry && entry.resetAt > now && entry.count >= TITLE_RESOLUTION_LIMIT;
+    })
+  ) {
+    throw new Error("Too many YouTube title resolution attempts. Please try again later.");
+  }
+
+  for (const key of keys) {
+    addResolutionAttempt(key, now);
+  }
+}
+
+async function getClientIp() {
+  const requestHeaders = await headers();
+  const forwardedFor = requestHeaders.get("x-forwarded-for")?.split(",")[0]?.trim();
+  const candidate = requestHeaders.get("x-real-ip")?.trim() || forwardedFor;
+
+  if (!candidate || candidate.length > 64) {
+    return null;
+  }
+
+  return candidate;
+}
+
+async function resolveVideoTitle(
+  youtubeUrl: string,
+  rawVideoTitle: string | null,
+  principalId: string,
+) {
   const trimmedTitle = rawVideoTitle?.trim() ?? "";
   if (trimmedTitle) {
     return trimmedTitle;
   }
+
+  consumeTitleResolutionQuota(principalId, await getClientIp());
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), YOUTUBE_OEMBED_TIMEOUT_MS);
@@ -41,21 +123,39 @@ async function resolveVideoTitle(youtubeUrl: string, rawVideoTitle: string | nul
 }
 
 export async function requestSong(formData: FormData) {
+  const user = await getCurrentUser();
+  if (!user?.id || !canAccessCoreMemberFeatures(user.role)) {
+    throw new Error("Unauthorized");
+  }
+
+  const dbUser = await prisma.user.findUnique({
+    where: { id: user.id },
+    select: {
+      id: true,
+      role: true,
+      gisu: true,
+      studentId: true,
+      banExpiresAt: true,
+    },
+  });
+  if (!dbUser) throw new Error("Unauthorized");
+
   if (isBreakTime()) {
     throw new Error("지금은 기상곡 신청 시간이 아닙니다. (신청 가능: 07:00 ~ 익일 05:00)");
   }
 
-  const youtubeUrl = formData.get("youtubeUrl") as string;
+  const rawYoutubeUrl = formData.get("youtubeUrl");
+  if (typeof rawYoutubeUrl !== "string") {
+    throw new Error("Invalid YouTube URL.");
+  }
+
+  const youtubeUrl = canonicalizeYouTubeUrl(rawYoutubeUrl);
+  const rawVideoTitle = formData.get("videoTitle");
   const videoTitle = await resolveVideoTitle(
     youtubeUrl,
-    formData.get("videoTitle") as string | null,
+    typeof rawVideoTitle === "string" ? rawVideoTitle : null,
+    dbUser.id,
   );
-
-  const user = await getCurrentUser();
-  if (!user || !user.id) throw new Error("Unauthorized");
-
-  const dbUser = await prisma.user.findUnique({ where: { id: user.id } });
-  if (!dbUser) throw new Error("User not found");
 
   if (dbUser.banExpiresAt && dbUser.banExpiresAt > new Date()) {
     return;
@@ -105,40 +205,4 @@ export async function requestSong(formData: FormData) {
   await logAction("SONG_REQUEST", { title: videoTitle, url: youtubeUrl });
 
   revalidatePath("/songs");
-}
-
-export async function getTodayMorningSongs() {
-  const { todayMorning } = getSongTimeRanges();
-
-  return await prisma.songRequest.findMany({
-    where: {
-      createdAt: {
-        gte: todayMorning.start,
-        lt: todayMorning.end,
-      },
-      status: {
-        in: ["APPROVED", "PLAYED"],
-      },
-    },
-    orderBy: { priorityScore: "desc" },
-    include: { requester: true },
-  });
-}
-
-export async function getNextMorningSongs() {
-  const { todayMorning, nextMorning } = getSongTimeRanges();
-  const now = getKSTDate();
-  const currentHour = now.getHours();
-  const targetRange = currentHour < 7 ? todayMorning : nextMorning;
-
-  return await prisma.songRequest.findMany({
-    where: {
-      createdAt: {
-        gte: targetRange.start,
-        lt: targetRange.end,
-      },
-    },
-    orderBy: [{ priorityScore: "desc" }, { createdAt: "asc" }],
-    include: { requester: true },
-  });
 }
