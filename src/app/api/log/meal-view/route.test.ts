@@ -39,4 +39,18 @@ describe("meal-view telemetry route", () => {
     expect(response.status).toBe(400);
     expect(appendBoundedSystemLog).not.toHaveBeenCalled();
   });
+
+  it("applies the ten-per-minute client limit to the default unknown address", async () => {
+    const { POST } = await import("./route");
+    const makeRequest = () => new Request("https://gshs.app/api/log/meal-view", {
+      method: "POST",
+      headers: {
+        Origin: "https://gshs.app", "Content-Type": "application/json",
+        "Sec-Fetch-Site": "same-origin", "Sec-Fetch-Mode": "cors", "Sec-Fetch-Dest": "empty",
+      },
+      body: "{}",
+    });
+    for (let index = 0; index < 10; index += 1) expect((await POST(makeRequest())).status).toBe(202);
+    expect((await POST(makeRequest())).status).toBe(429);
+  });
 });

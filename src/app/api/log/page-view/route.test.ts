@@ -63,6 +63,18 @@ describe("page-view telemetry route", () => {
     expect((await POST(request('{"pathname":"/"}', { "x-forwarded-for": "203.0.113.2" }))).status).toBe(202);
   });
 
+  it("rate-limits the default unknown client before charging global quota", async () => {
+    const { POST } = await import("./route");
+    for (let index = 0; index < 30; index += 1) {
+      expect((await POST(request('{"pathname":"/"}'))).status).toBe(202);
+    }
+    for (let index = 0; index < 600; index += 1) {
+      expect((await POST(request('{"pathname":"/"}'))).status).toBe(429);
+    }
+    process.env.TRUSTED_PROXY_HOPS = "1";
+    expect((await POST(request('{"pathname":"/"}', { "x-forwarded-for": "203.0.113.9" }))).status).toBe(202);
+  });
+
   it("ignores the legacy arbitrary trusted header without a trusted proxy hop", async () => {
     process.env.TRUSTED_CLIENT_IP_HEADER = "x-gshs-client-ip";
     const { POST } = await import("./route");

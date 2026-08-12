@@ -12,6 +12,7 @@ import { appendBoundedSystemLog } from "@/lib/system-log-store";
 
 type TelemetryKind = "PAGE_VIEW" | "MEAL_VIEW";
 const TEN_MINUTES = 600_000;
+const UNKNOWN_CLIENT_LIMIT_KEY = "unknown";
 const pageClient = new BoundedRateLimiter({ capacity: 30, refillTokens: 30, refillIntervalMs: 60_000, idleTtlMs: TEN_MINUTES, maxKeys: 4_096 });
 const pageGlobal = new BoundedRateLimiter({ capacity: 600, refillTokens: 600, refillIntervalMs: 60_000, idleTtlMs: TEN_MINUTES, maxKeys: 1 });
 const mealClient = new BoundedRateLimiter({ capacity: 10, refillTokens: 10, refillIntervalMs: 60_000, idleTtlMs: TEN_MINUTES, maxKeys: 4_096 });
@@ -33,10 +34,8 @@ function resolveClientAddress(request: Request): string | null {
 }
 
 function applyLimit(kind: TelemetryKind, address: string | null): RateLimitDecision | null {
-  if (address) {
-    const clientDecision = (kind === "PAGE_VIEW" ? pageClient : mealClient).consume(address);
-    if (!clientDecision.allowed) return clientDecision;
-  }
+  const clientDecision = (kind === "PAGE_VIEW" ? pageClient : mealClient).consume(address ?? UNKNOWN_CLIENT_LIMIT_KEY);
+  if (!clientDecision.allowed) return clientDecision;
   const globalDecision = (kind === "PAGE_VIEW" ? pageGlobal : mealGlobal).consume("global");
   return globalDecision.allowed ? null : globalDecision;
 }
