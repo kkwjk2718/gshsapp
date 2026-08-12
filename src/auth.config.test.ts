@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+vi.mock("@/lib/member-service-suspension", () => ({ MEMBER_SERVICE_SUSPENDED: false }));
 import { authConfig } from "./auth.config";
 
 describe("auth session version callbacks", () => {
@@ -36,5 +37,22 @@ describe("auth session version callbacks", () => {
       token: { sub: "user-1" },
     } as never);
     expect(result.user.sessionVersion).toBeUndefined();
+  });
+
+  it("propagates forced-rotation state and redirects protected navigation to the password surface", async () => {
+    const jwt = authConfig.callbacks?.jwt;
+    const sessionCallback = authConfig.callbacks?.session;
+    const authorized = authConfig.callbacks?.authorized;
+    if (!jwt || !sessionCallback || !authorized) throw new Error("auth callback missing");
+    const token = await jwt({ token: { sub: "user-1" }, user: { id: "user-1", sessionVersion: 7, mustChangePassword: true } } as never);
+    const session = await sessionCallback({ session: { user: {}, expires: new Date() }, token } as never);
+    expect(session.user.mustChangePassword).toBe(true);
+
+    const result = await authorized({
+      auth: session,
+      request: { nextUrl: new URL("https://gshs.app/admin") },
+    } as never);
+    expect(result).toBeInstanceOf(Response);
+    expect((result as Response).headers.get("location")).toBe("https://gshs.app/me?forcePasswordChange=1");
   });
 });

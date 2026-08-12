@@ -17,6 +17,7 @@ model User {
   userId         String   @unique // 로그인 ID
   passwordHash   String
   sessionVersion Int      @default(1)
+  mustChangePassword Boolean @default(false)
   name           String
   email          String?  @unique
   role           String   @default("STUDENT") // STUDENT, TEACHER, ADMIN
@@ -51,7 +52,10 @@ model TokenBatch {
 
 model InviteToken {
   id          String   @id @default(uuid())
-  token       String   @unique
+  token       String?  @unique // temporary seven-day legacy fallback; new tokens are hash-only
+  tokenHash   String?  @unique
+  boundEmail     String?
+  boundStudentId String?
   targetRole  String   // STUDENT, TEACHER, ADMIN
   targetGisu  Int?
   isUsed      Boolean  @default(false)
@@ -199,14 +203,14 @@ model Notification {
 // D. 시스템 관리
 model AuditLog {
   id         String   @id @default(uuid())
-  actorId    String
+  actorId    String?
   action     String
   targetType String?
   targetId   String?
   ipAddress  String?
   createdAt  DateTime @default(now())
 
-  actor      User     @relation(fields: [actorId], references: [id])
+  actor      User?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
 }
 
 model SystemSetting {

@@ -50,4 +50,14 @@ describe("database-backed current user authorization", () => {
 
     await expect(requireAdmin()).rejects.toThrow("Forbidden");
   });
+
+  it("denies normal protected access during forced rotation but permits the password-change surface", async () => {
+    const dbUser = { id: "user-1", role: "STUDENT", sessionVersion: 3, mustChangePassword: true };
+    authMock.mockResolvedValue({ user: { id: "user-1", sessionVersion: 3, mustChangePassword: true } });
+    findUniqueMock.mockResolvedValue(dbUser);
+    const { getCurrentUser } = await import("./current-user");
+
+    await expect(getCurrentUser()).resolves.toBeNull();
+    await expect(getCurrentUser({ allowPasswordChangeRequired: true })).resolves.toEqual(dbUser);
+  });
 });

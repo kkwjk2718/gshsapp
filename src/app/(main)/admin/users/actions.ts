@@ -9,9 +9,10 @@ import { getGradeMapping } from "@/lib/grade-utils";
 import { logAction } from "@/lib/logger";
 import { resolveUserRoleChange, UserRoleChangeError, isUserRole } from "@/lib/user-role-change";
 import { canChangeGisu } from "@/lib/user-roles";
-import { randomBytes } from "node:crypto";
-import { buildPasswordCredentialUpdate, buildRoleCredentialUpdate, updateImportedUserSafely } from "@/lib/security/user-auth-mutations";
+import { buildTemporaryPasswordCredentialUpdate, buildRoleCredentialUpdate, updateImportedUserSafely } from "@/lib/security/user-auth-mutations";
 import { writeAuditLog } from "@/lib/audit";
+import { generateTemporaryPassword } from "@/lib/security/temporary-password";
+import { assertUserImportBounds } from "@/lib/security/user-import-bounds";
 
 export async function importUsersBackup(_: any, formData: FormData) {
     const sessionUser = await getCurrentUser();
@@ -30,11 +31,13 @@ export async function importUsersBackup(_: any, formData: FormData) {
     }
 
     try {
+        assertUserImportBounds(f.size, 0);
         const raw = await f.text();
         const parsed = JSON.parse(raw);
         if (parsed?.type !== 'gshs-users-backup' || ![1, 2].includes(parsed?.version) || !Array.isArray(parsed?.users)) {
             return { error: '올바른 사용자 백업 파일이 아닙니다.' };
         }
+        assertUserImportBounds(f.size, parsed.users.length);
 
         // 1) 파일 내부 중복 제거 (userId 기준)
         const deduped = new Map<string, any>();
@@ -48,6 +51,7 @@ export async function importUsersBackup(_: any, formData: FormData) {
         }
 
         const users = Array.from(deduped.values());
+        assertUserImportBounds(f.size, parsed.users.length, users.length);
         const existing = await prisma.user.findMany({
             where: { userId: { in: users.map((u) => String(u.userId)) } },
             select: {
@@ -90,7 +94,7 @@ export async function importUsersBackup(_: any, formData: FormData) {
                 }
                 await prisma.$transaction(async (tx) => {
                   const created = await tx.user.create({
-                      data: { userId: u.userId, ...payload, passwordHash: u.passwordHash },
+                      data: { userId: u.userId, ...payload, passwordHash: u.passwordHash, mustChangePassword: true },
                   });
                   await writeAuditLog(tx, {
                     actorId: sessionUser.id!, action: "USER_IMPORTED", target: { type: "USER", id: created.id },
@@ -166,13 +170,13 @@ export async function resetPassword(formData: FormData) {
     if (!userId) return { error: "User ID is required." };
 
     try {
-        const newPassword = randomBytes(18).toString("base64url");
+        const newPassword = generateTemporaryPassword();
         const passwordHash = await bcrypt.hash(newPassword, 10);
 
         await prisma.$transaction(async (tx) => {
           await tx.user.update({
               where: { id: userId },
-              data: buildPasswordCredentialUpdate(passwordHash),
+              data: buildTemporaryPasswordCredentialUpdate(passwordHash),
           });
           await writeAuditLog(tx, {
             actorId: sessionUser.id!,
@@ -584,7 +588,6 @@ export async function deleteUserAccount(formData: FormData): Promise<DeleteUserR
             await tx.notification.deleteMany({ where: { userId: targetUser.id } });
             await tx.personalEvent.deleteMany({ where: { userId: targetUser.id } });
             await tx.teacherProfile.deleteMany({ where: { userId: targetUser.id } });
-            await tx.auditLog.deleteMany({ where: { actorId: targetUser.id } });
             await tx.errorReport.deleteMany({ where: { userId: targetUser.id } });
             await tx.songRequest.deleteMany({ where: { requesterId: targetUser.id } });
             await tx.notice.deleteMany({ where: { writerId: targetUser.id } });

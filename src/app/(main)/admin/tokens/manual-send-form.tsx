@@ -45,6 +45,7 @@ export function ManualSendForm() {
           >
             <option value="STUDENT">학생</option>
             <option value="TEACHER">교사</option>
+            <option value="BROADCAST">방송부</option>
             <option value="ADMIN">관리자</option>
           </select>
         </div>

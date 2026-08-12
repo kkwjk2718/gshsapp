@@ -6,6 +6,7 @@ declare module "next-auth" {
     studentId?: string | null;
     gisu?: number | null;
     sessionVersion?: number;
+    mustChangePassword?: boolean;
   }
 
   interface Session {
@@ -15,6 +16,7 @@ declare module "next-auth" {
       studentId?: string | null;
       gisu?: number | null;
       sessionVersion?: number;
+      mustChangePassword?: boolean;
     };
   }
 }
@@ -26,6 +28,7 @@ declare module "next-auth/jwt" {
     studentId?: string | null;
     gisu?: number | null;
     sessionVersion?: number;
+    mustChangePassword?: boolean;
   }
 }
 

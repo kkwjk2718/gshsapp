@@ -61,7 +61,7 @@ npm ci
 
 ```dotenv
 DATABASE_URL=file:./dev.db
-AUTH_SECRET=change-me
+AUTH_SECRET=replace-with-long-random-secret
 AUTH_TRUST_HOST=true
 AUTH_URL=http://localhost:3000
 NEXTAUTH_URL=http://localhost:3000
@@ -71,6 +71,7 @@ NEXT_PUBLIC_NEIS_API_KEY=
 
 추가 메모:
 
+- `AUTH_SECRET`은 `openssl rand -base64 48` 같은 CSPRNG로 새로 생성한 32바이트 이상의 값을 사용합니다. 예시 placeholder는 런타임에서 거부됩니다.
 - Google Analytics는 환경 변수가 아니라 `/admin/settings`에서 관리합니다.
 - Brevo 메일 발송은 `BREVO_API_KEY`, `BREVO_SENDER_EMAIL`, `BREVO_SENDER_NAME`이 있어야 실제 동작합니다.
 

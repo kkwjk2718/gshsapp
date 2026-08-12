@@ -1,0 +1,38 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const count = vi.fn();
+vi.mock("@/lib/db", () => ({ prisma: { systemLog: { count } } }));
+
+describe("login failure persistence boundary", () => {
+  beforeEach(() => count.mockReset().mockResolvedValue(0));
+
+  it("counts only genuine verification failures, never blocked probes", async () => {
+    const { countRecentFailedLogins } = await import("./login-rate-limit");
+    await countRecentFailedLogins("student01");
+
+    expect(count).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ action: "LOGIN_FAILED" }),
+    }));
+  });
+
+  it("rejects empty or oversized identifiers before querying logs", async () => {
+    const { countRecentFailedLogins } = await import("./login-rate-limit");
+    await expect(countRecentFailedLogins(" ")).resolves.toBe(0);
+    await expect(countRecentFailedLogins("x".repeat(129))).resolves.toBe(0);
+    expect(count).not.toHaveBeenCalled();
+  });
+
+  it("uses bounded identifier and network dimensions without extending blocked checks", async () => {
+    const { createLoginAttemptLimiter } = await import("./login-rate-limit");
+    let now = 0;
+    const limiter = createLoginAttemptLimiter({ now: () => now, maxFailures: 2, windowMs: 10_000, maxKeys: 2 });
+
+    expect(limiter.recordFailure("id-a", "net-a")).toMatchObject({ locked: false });
+    expect(limiter.recordFailure("id-a", "net-a")).toMatchObject({ locked: true });
+    now = 5_000;
+    expect(limiter.check("id-a", "net-a")).toMatchObject({ locked: true, retryAfterMs: 5_000 });
+    expect(limiter.check("id-a", "net-a")).toMatchObject({ locked: true, retryAfterMs: 5_000 });
+    now = 10_000;
+    expect(limiter.check("id-a", "net-a")).toMatchObject({ locked: false });
+  });
+});

@@ -59,6 +59,7 @@ NEXT_PUBLIC_NEIS_API_KEY=
 
 추가 메모:
 
+- `AUTH_SECRET`은 CSPRNG로 생성한 32바이트 이상의 실제 시크릿이어야 하며 예시 placeholder는 런타임에서 거부됩니다.
 - Google Analytics는 `/admin/settings`에서 관리합니다.
 - Brevo 메일 발송은 서버 `.env`에 별도 API 키가 필요합니다.
 - `APP_VERSION`은 배포 시점에 workflow와 `deploy.sh`가 주입합니다.

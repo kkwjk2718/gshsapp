@@ -62,7 +62,9 @@ Route group 기준:
 대표 서비스 계층:
 
 - `src/lib/public-content.ts`: 공개 데이터 조회 및 캐시
-- `src/lib/token-distribution.ts`: 토큰 발급/재사용/메일 발송
+- `src/lib/distribution-reservation.ts`: SQLite writer lock 아래 `PENDING` 예약, 쿨다운, 일일 한도, 토큰 해시 저장을 원자적으로 처리
+- `src/lib/invite-redemption.ts`: 수신자 결합 검증과 조건부 1회 claim 이후 계정 생성
+- `src/lib/token-distribution.ts`: 예약된 토큰의 메일 발송과 fail-closed provider 상태 전이
 - `src/lib/brevo.ts`: Brevo 메일 연동
 - `src/lib/backup.ts`: 백업 경로와 파일 처리
 - `src/auth.config.ts`: Edge 호환 route UX guard와 JWT/session claim 전달(DB 접근 금지)
@@ -70,6 +72,8 @@ Route group 기준:
 - `src/lib/system-log-store.ts`: `SystemLog` 정규화, 1~90일 보관, 공개/전체 행 상한과 oldest-first pruning
 - 클라이언트 주소 경계: 로깅·공개 텔레메트리·요청 제한은 `TRUSTED_PROXY_HOPS`만 사용한다. 기본값 `0`은 `X-Forwarded-For`를 무시하고 공유 unknown 버킷을 사용하며, 설정값은 오른쪽부터 신뢰할 프록시 홉 수 `0..3`만 허용한다.
 - `src/lib/audit.ts`: 공개 텔레메트리와 분리된 폐쇄형 관리자 감사 이벤트 기록
+- `InviteToken.token`은 7일 legacy 호환을 위한 nullable 필드이고 신규 발급은 `tokenHash`만 저장한다. 원문은 DB에서 복구하지 않는다.
+- `AuditLog.actorId`는 사용자 삭제 뒤에도 감사 행을 보존하기 위해 nullable `ON DELETE SET NULL` 관계를 사용한다.
 
 ## 5. 외부 연동
 
@@ -111,6 +115,8 @@ Route group 기준:
 - 보호된 Node route/action은 JWT subject와 정수 `sessionVersion`을 DB 값과 정확히 비교하고 DB의 현재 역할을 사용
 - 기존 JWT에 version claim이 없거나 값이 잘못되면 fail closed되어 재로그인이 필요
 - 비밀번호 변경/초기화, 역할 변경, 인증 필드 import는 같은 DB write에서 `sessionVersion`을 원자적으로 증가
+- 관리자 초기화 비밀번호는 `mustChangePassword`를 설정하고 정상 보호 기능보다 비밀번호 변경을 먼저 강제
+- 로그인/포털의 keyed 제한과 포털 세션 서명에는 placeholder가 아닌 32바이트 이상의 `AUTH_SECRET`이 필요하며, 조건을 만족하지 않으면 fail closed
 - `/teachers`는 현재 회원 세션을 요구하며 이름, 이메일, 과목, 위치, 소개 문구만 조회
 
 ## 7. 배포 아키텍처

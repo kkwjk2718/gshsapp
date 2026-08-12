@@ -1,5 +1,4 @@
-import { randomUUID } from "node:crypto";
-import { addDays, differenceInDays, startOfDay } from "date-fns";
+import { addDays, startOfDay } from "date-fns";
 import { fromZonedTime, toZonedTime } from "date-fns-tz";
 import { prisma } from "@/lib/db";
 import { sendBrevoEmail } from "@/lib/brevo";
@@ -8,6 +7,8 @@ import { logAction } from "@/lib/logger";
 import { getGradeFromStudentId, isValidStudentId } from "@/lib/student-id";
 import { DEFAULT_TOKEN_PORTAL_EMAIL_GUIDANCE, TOKEN_DISTRIBUTION_DAILY_LIMIT } from "@/lib/token-portal-config";
 import { getSystemSettingValue, SYSTEM_SETTING_KEYS } from "@/lib/system-settings";
+import { generateInviteSecret, hashInviteSecret } from "@/lib/security/invite-token";
+import { enforceDistributionLogBounds, normalizeDistributionLogText } from "@/lib/distribution-log-store";
 
 const SEOUL_TZ = "Asia/Seoul";
 
@@ -71,37 +72,6 @@ export async function getDistributionQuotaSummary() {
     remaining: Math.max(0, TOKEN_DISTRIBUTION_DAILY_LIMIT - used),
     isLimitReached: used >= TOKEN_DISTRIBUTION_DAILY_LIMIT,
   };
-}
-
-function isInviteTokenReusable(createdAt: Date) {
-  return differenceInDays(new Date(), createdAt) < 7;
-}
-
-export async function findReusableStudentInviteToken(email: string, studentId: string) {
-  const latestDistribution = await prisma.tokenDistributionLog.findFirst({
-    where: {
-      recipientEmail: email,
-      studentId,
-      targetRole: "STUDENT",
-      status: "SENT",
-      inviteTokenId: {
-        not: null,
-      },
-    },
-    include: {
-      inviteToken: true,
-    },
-    orderBy: {
-      createdAt: "desc",
-    },
-  });
-
-  const inviteToken = latestDistribution?.inviteToken;
-  if (!inviteToken || inviteToken.isUsed || !isInviteTokenReusable(inviteToken.createdAt)) {
-    return null;
-  }
-
-  return inviteToken;
 }
 
 function getAppBaseUrl() {
@@ -233,17 +203,20 @@ export async function recordBlockedTokenDistribution({
   clientKey?: string | null;
   createdBy: string;
 }) {
-  await createDistributionLog({
-    source,
-    recipientEmail,
-    requesterName,
-    studentId,
-    targetRole,
-    targetGisu,
-    status: "BLOCKED",
-    errorMessage,
-    clientKey,
-    createdBy,
+  await prisma.$transaction(async (tx) => {
+    await tx.tokenDistributionLog.create({ data: {
+      source,
+      recipientEmail: normalizeDistributionLogText(recipientEmail.toLowerCase(), 254) ?? "invalid",
+      requesterName: normalizeDistributionLogText(requesterName, 240),
+      studentId: normalizeDistributionLogText(studentId, 16),
+      targetRole: normalizeDistributionLogText(targetRole, 32) ?? "UNKNOWN",
+      targetGisu: targetGisu ?? null,
+      status: "BLOCKED",
+      errorMessage: normalizeDistributionLogText(errorMessage, 512),
+      clientKey: normalizeDistributionLogText(clientKey, 128),
+      createdBy: normalizeDistributionLogText(createdBy, 128) ?? "system",
+    } });
+    await enforceDistributionLogBounds(tx);
   });
 }
 
@@ -296,21 +269,31 @@ async function createInviteTokenRecord({
   createdBy,
   targetRole,
   targetGisu,
+  boundEmail,
+  boundStudentId,
 }: {
   createdBy: string;
   targetRole: string;
   targetGisu?: number | null;
+  boundEmail: string;
+  boundStudentId?: string | null;
 }) {
-  return prisma.inviteToken.create({
+  const token = generateInviteSecret();
+  const inviteToken = await prisma.inviteToken.create({
     data: {
-      token: randomUUID().substring(0, 8),
+      token: null,
+      tokenHash: hashInviteSecret(token),
+      boundEmail: boundEmail.trim().toLowerCase(),
+      boundStudentId: boundStudentId?.trim() || null,
       targetRole,
       targetGisu: targetGisu ?? null,
       createdBy,
       isUsed: false,
       batchId: null,
     },
+    select: { id: true, targetRole: true, targetGisu: true },
   });
+  return { ...inviteToken, token };
 }
 
 export async function resolveStudentTargetGisu(studentId: string) {
@@ -340,23 +323,19 @@ export async function sendInviteTokenEmail(input: SendDistributionEmailInput): P
     (await getSystemSettingValue(SYSTEM_SETTING_KEYS.tokenPortalEmailGuidance)) ||
     DEFAULT_TOKEN_PORTAL_EMAIL_GUIDANCE;
 
-  const reusableToken =
-    input.source === "PORTAL_AUTO" && input.target.studentId
-      ? await findReusableStudentInviteToken(input.target.email, input.target.studentId)
-      : null;
-
-  let inviteToken: { id: string; token: string; targetRole: string; targetGisu: number | null } | null = reusableToken;
-  let createdNewToken = false;
-
-  if (input.reservation) inviteToken = input.reservation.inviteToken;
+  let inviteToken: { id: string; token: string; targetRole: string; targetGisu: number | null } | null =
+    input.reservation?.inviteToken ?? null;
+  let createdWithoutReservation = false;
 
   if (!inviteToken) {
     inviteToken = await createInviteTokenRecord({
       createdBy: input.createdBy,
       targetRole: input.target.targetRole,
       targetGisu: input.target.targetGisu,
+      boundEmail: input.target.email,
+      boundStudentId: input.target.studentId,
     });
-    createdNewToken = true;
+    createdWithoutReservation = true;
   }
 
   let providerAccepted = false;
@@ -403,17 +382,17 @@ export async function sendInviteTokenEmail(input: SendDistributionEmailInput): P
       recipientEmail: input.target.email,
       targetRole: input.target.targetRole,
       targetGisu: input.target.targetGisu ?? null,
-      reusedToken: !createdNewToken,
+      reusedToken: false,
     });
 
     return {
       success: `${input.target.email}로 초대 메일을 발송했습니다.`,
-      reusedToken: !createdNewToken,
+      reusedToken: false,
       quotaUsed: quota.used + 1,
     };
   } catch (error) {
     if (providerAccepted) throw error;
-    if (createdNewToken && !input.reservation) {
+    if (createdWithoutReservation) {
       await prisma.inviteToken
         .delete({
           where: {

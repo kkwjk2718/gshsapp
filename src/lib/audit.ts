@@ -4,7 +4,7 @@ import { normalizeIpAddress } from "@/lib/security/client-address";
 
 export const AUDIT_ACTIONS = [
   "SYSTEM_LOG_RETENTION_CHANGED", "SYSTEM_LOG_CLEANED", "SYSTEM_LOG_EXPORTED",
-  "USER_EXPORTED", "USER_IMPORTED", "USER_PASSWORD_RESET", "USER_ROLE_CHANGED",
+  "USER_EXPORTED", "USER_IMPORTED", "USER_PASSWORD_RESET", "USER_PASSWORD_CHANGED", "USER_PROFILE_CHANGED", "USER_ROLE_CHANGED",
   "USER_GISU_CHANGED", "USER_BANNED", "USER_UNBANNED", "USER_DELETED",
   "TOKEN_BATCH_CREATED", "TOKEN_EXPORTED", "TOKEN_DELETED", "TOKEN_BATCH_DELETED",
   "TOKEN_EMAIL_REQUESTED", "TOKEN_PORTAL_CONFIG_CHANGED", "TOKEN_PORTAL_PASSWORD_ROTATED",
@@ -19,7 +19,7 @@ export type AuditEvent = Readonly<{
   ipAddress?: string | null;
 }>;
 export type AuditLogData = Readonly<{
-  actorId: string;
+  actorId: string | null;
   action: AuditAction;
   targetType: AuditTargetType | null;
   targetId: string | null;

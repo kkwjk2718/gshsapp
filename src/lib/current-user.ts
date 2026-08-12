@@ -15,6 +15,7 @@ const currentUserSelect = {
   banExpiresAt: true,
   createdAt: true,
   sessionVersion: true,
+  mustChangePassword: true,
 } as const;
 
 export class AuthorizationError extends Error {
@@ -24,7 +25,7 @@ export class AuthorizationError extends Error {
   }
 }
 
-export async function getCurrentUser() {
+export async function getCurrentUser(options: Readonly<{ allowPasswordChangeRequired?: boolean }> = {}) {
   const session = await auth();
   const subject = session?.user?.id;
   const sessionVersion = session?.user?.sessionVersion;
@@ -37,6 +38,7 @@ export async function getCurrentUser() {
   });
 
   if (!user || user.sessionVersion !== sessionVersion) return null;
+  if (user.mustChangePassword && !options.allowPasswordChangeRequired) return null;
   return user;
 }
 

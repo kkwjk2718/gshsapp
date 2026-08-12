@@ -11,6 +11,7 @@ type ImportedMutableFields = {
 type ImportedUserFields = Partial<ImportedMutableFields> & { role: string };
 type ImportedUserSnapshot = ImportedMutableFields & { id: string; sessionVersion: number };
 type ImportedUserUpdateData = Partial<ImportedMutableFields> & {
+  mustChangePassword?: boolean;
   sessionVersion?: { increment: 1 };
 };
 type ImportedUserCasWhere = { id: string; sessionVersion: number } & Partial<ImportedMutableFields>;
@@ -39,7 +40,11 @@ function valuesEqual(left: unknown, right: unknown) {
 }
 
 export function buildPasswordCredentialUpdate(passwordHash: string) {
-  return { passwordHash, sessionVersion: { increment: 1 } } as const;
+  return { passwordHash, mustChangePassword: false, sessionVersion: { increment: 1 } } as const;
+}
+
+export function buildTemporaryPasswordCredentialUpdate(passwordHash: string) {
+  return { passwordHash, mustChangePassword: true, sessionVersion: { increment: 1 } } as const;
 }
 
 export function buildRoleCredentialUpdate<T extends { role: string; studentId: string | null; gisu: number | null }>(fields: T) {
@@ -71,6 +76,7 @@ export async function updateImportedUserSafely(
     if (updateKeys.includes("passwordHash") || updateKeys.includes("role")) {
       data.sessionVersion = { increment: 1 };
     }
+    if (updateKeys.includes("passwordHash")) data.mustChangePassword = true;
 
     const result = await operations.updateIfCurrent({
       where,

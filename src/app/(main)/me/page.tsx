@@ -20,7 +20,7 @@ export const metadata: Metadata = {
 };
 
 export default async function MyPage() {
-  const user = await getCurrentUser();
+  const user = await getCurrentUser({ allowPasswordChangeRequired: true });
   if (!user) redirect("/login");
 
   const pageData = await loadMePageData(user.id);
@@ -31,12 +31,17 @@ export default async function MyPage() {
      <div className="mobile-page mobile-safe-bottom max-w-2xl mx-auto space-y-6">
         <h1 className="text-2xl font-bold" style={{ color: "var(--foreground)" }}>내 정보</h1>
         
-        <ProfileCard user={pageData.profile} />
+        {user.mustChangePassword && (
+          <div className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm font-medium text-amber-900">
+            An administrator reset this account. Change the temporary password before using other member features.
+          </div>
+        )}
+        {!user.mustChangePassword && <ProfileCard user={pageData.profile} />}
         <PasswordChangeForm />
 
 
 
-        <div className="glass rounded-3xl p-6 space-y-4">
+        {!user.mustChangePassword && <div className="glass rounded-3xl p-6 space-y-4">
             <div className="flex justify-between items-center">
                 <h3 className="font-bold flex items-center gap-2" style={{ color: "var(--foreground)" }}>
                     <Calendar className="w-5 h-5" style={{ color: "var(--accent)" }} />
@@ -77,9 +82,9 @@ export default async function MyPage() {
                     <button className="p-2 tap-target rounded-xl transition-colors flex items-center justify-center" style={{ backgroundColor: "var(--accent)", color: "var(--brand-sub)" }}><Plus className="w-5 h-5" /></button>
                 </form>
             )}
-        </div>
+        </div>}
 
-        <div className="glass rounded-3xl p-6 space-y-4">
+        {!user.mustChangePassword && <div className="glass rounded-3xl p-6 space-y-4">
              <h3 className="font-bold flex items-center gap-2" style={{ color: "var(--foreground)" }}>
                 <Music className="w-5 h-5" style={{ color: "var(--accent)" }} />
                 최근 기상곡 신청
@@ -108,7 +113,7 @@ export default async function MyPage() {
                     <div className="text-center text-sm text-slate-400 py-2">신청 내역이 없습니다.</div>
                 )}
              </div>
-        </div>
+        </div>}
         
         <LogoutButton
             className="md:hidden justify-center rounded-2xl border border-[color:var(--border)] py-3 text-sm font-medium"

@@ -5,9 +5,12 @@ import { authConfig } from './auth.config';
 import { z } from 'zod';
 import { prisma } from '@/lib/db';
 import { logAction } from '@/lib/logger';
-import { isLoginTemporarilyLocked } from '@/lib/login-rate-limit';
+import { isLoginTemporarilyLocked, loginAttemptLimiter } from '@/lib/login-rate-limit';
 import { MEMBER_SERVICE_SUSPENDED } from '@/lib/member-service-suspension';
 import bcrypt from 'bcryptjs';
+import { verifyLoginCandidate } from '@/lib/security/login-verification';
+import { getApplicationSecuritySecret, hashSecurityPrincipal, networkPrincipal } from '@/lib/security/principal-key';
+import { parseTrustedProxyHops, resolveTrustedClientAddress } from '@/lib/security/client-address';
 
 async function verifyPassword(password: string, hash: string) {
   return await bcrypt.compare(password, hash);
@@ -29,46 +32,52 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   },
   providers: [
     Credentials({
-      async authorize(credentials) {
+      async authorize(credentials, request) {
         if (MEMBER_SERVICE_SUSPENDED) {
           await logAction("LOGIN_BLOCKED_MEMBER_SERVICE_SUSPENDED", undefined, undefined, { userId: null });
           return null;
         }
 
         const parsedCredentials = z
-          .object({ userId: z.string(), password: z.string().min(4) })
+          .object({
+            userId: z.string().trim().min(1).max(128),
+            password: z.string().min(1).max(72),
+          })
           .safeParse(credentials);
 
         if (parsedCredentials.success) {
           const { password } = parsedCredentials.data;
           const userId = parsedCredentials.data.userId.trim();
+          const securitySecret = getApplicationSecuritySecret();
+          const identifierKey = hashSecurityPrincipal("login-id", userId.normalize("NFKC").toLocaleLowerCase("en-US"), securitySecret);
+          const clientAddress = resolveTrustedClientAddress({
+            forwardedFor: request.headers.get("x-forwarded-for"),
+          }, { trustedProxyHops: parseTrustedProxyHops(process.env.TRUSTED_PROXY_HOPS) });
+          const networkKey = hashSecurityPrincipal("login-network", networkPrincipal(clientAddress, identifierKey), securitySecret);
 
-          if (await isLoginTemporarilyLocked(userId)) {
+          if (loginAttemptLimiter.check(identifierKey, networkKey).locked || await isLoginTemporarilyLocked(userId)) {
             await logAction("LOGIN_BLOCKED", { loginId: userId, reason: "rate-limit" }, undefined, { userId: null });
             throw new LoginTemporarilyLockedError();
           }
 
           const user = await prisma.user.findUnique({ where: { userId } });
+          const verifiedUser = await verifyLoginCandidate(password, user, verifyPassword);
 
-          if (!user) {
-            await logAction("LOGIN_FAILED", { loginId: userId, reason: "User not found" }, undefined, { userId: null });
-            return null;
-          }
-
-          const passwordsMatch = await verifyPassword(password, user.passwordHash);
-
-          if (passwordsMatch) {
+          if (verifiedUser) {
+            loginAttemptLimiter.clearIdentifier(identifierKey);
             return {
-              id: user.id,
-              name: user.name,
-              email: user.email,
-              role: user.role,
-              studentId: user.studentId,
-              gisu: user.gisu,
-              sessionVersion: user.sessionVersion,
+              id: verifiedUser.id,
+              name: verifiedUser.name,
+              email: verifiedUser.email,
+              role: verifiedUser.role,
+              studentId: verifiedUser.studentId,
+              gisu: verifiedUser.gisu,
+              sessionVersion: verifiedUser.sessionVersion,
+              mustChangePassword: verifiedUser.mustChangePassword,
             };
           } else {
-            await logAction("LOGIN_FAILED", { loginId: userId, reason: "Invalid password" }, undefined, { userId: user.id });
+            loginAttemptLimiter.recordFailure(identifierKey, networkKey);
+            await logAction("LOGIN_FAILED", { loginId: userId, reason: "Invalid credentials" }, undefined, { userId: user?.id ?? null });
           }
         }
 

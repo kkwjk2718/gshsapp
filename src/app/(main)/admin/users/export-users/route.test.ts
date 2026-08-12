@@ -58,4 +58,14 @@ describe("user export route", () => {
     expect(response.status).toBe(500);
     expect(await response.text()).toBe("Internal Server Error");
   });
+
+  it("rejects exports above the explicit 10,000-user hard maximum", async () => {
+    requireAdminMock.mockResolvedValue({ id: "admin", role: "ADMIN" });
+    findManyMock.mockResolvedValue(Array.from({ length: 10_001 }, () => ({})));
+    const { GET } = await import("./route");
+    const response = await GET();
+    expect(response.status).toBe(413);
+    expect(findManyMock).toHaveBeenCalledWith(expect.objectContaining({ take: 10_001 }));
+    expect(auditCreateMock).not.toHaveBeenCalled();
+  });
 });

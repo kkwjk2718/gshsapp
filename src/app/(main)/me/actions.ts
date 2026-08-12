@@ -6,6 +6,9 @@ import { revalidatePath } from "next/cache";
 import bcrypt from "bcryptjs";
 import { signOut } from "@/auth";
 import { buildPasswordCredentialUpdate } from "@/lib/security/user-auth-mutations";
+import { validatePassword } from "@/lib/security/password-policy";
+import { validateSelfProfileInput } from "@/lib/security/profile-input";
+import { writeAuditLog } from "@/lib/audit";
 
 export async function createDDay(formData: FormData) {
   const title = formData.get("title") as string;
@@ -58,24 +61,26 @@ export async function updateProfile(formData: FormData) {
     const user = await getCurrentUser();
     if (!user || !user.id) return { error: "Unauthorized" };
 
-    const name = formData.get("name") as string;
-    const email = formData.get("email") as string;
-    const studentId = formData.get("studentId") as string;
-
-    if (!name || !email || !studentId) {
-        return { error: "모든 필드를 입력해주세요." };
-    }
-
-    await prisma.user.update({
-        where: { id: user.id },
-        data: { name, email, studentId }
+    const validated = validateSelfProfileInput({
+      name: String(formData.get("name") ?? ""),
+      email: String(formData.get("email") ?? ""),
     });
+    if (!validated.ok) return { error: validated.error };
 
-    revalidatePath("/me");
+    try {
+      await prisma.$transaction(async (tx) => {
+        await tx.user.update({ where: { id: user.id }, data: validated.data });
+        await writeAuditLog(tx, { actorId: user.id, action: "USER_PROFILE_CHANGED", target: { type: "USER", id: user.id } });
+      });
+      revalidatePath("/me");
+      return { success: "Profile updated." };
+    } catch {
+      return { error: "Unable to update profile." };
+    }
 }
 
 export async function changePassword(formData: FormData) {
-    const user = await getCurrentUser();
+    const user = await getCurrentUser({ allowPasswordChangeRequired: true });
     if (!user || !user.id) return { error: "Unauthorized" };
 
     const dbUser = await prisma.user.findUnique({
@@ -97,19 +102,18 @@ export async function changePassword(formData: FormData) {
         return { error: "현재 비밀번호가 일치하지 않습니다." };
     }
 
-    if (newPassword.length < 4) {
-        return { error: "새 비밀번호는 4자 이상이어야 합니다." };
-    }
-
     if (newPassword !== confirmPassword) {
         return { error: "새 비밀번호가 일치하지 않습니다." };
     }
 
+    const passwordPolicy = validatePassword(newPassword);
+    if (!passwordPolicy.ok) return { error: passwordPolicy.message };
+
     const newPasswordHash = await bcrypt.hash(newPassword, 10);
 
-    await prisma.user.update({
-        where: { id: user.id },
-        data: buildPasswordCredentialUpdate(newPasswordHash)
+    await prisma.$transaction(async (tx) => {
+      await tx.user.update({ where: { id: user.id }, data: buildPasswordCredentialUpdate(newPasswordHash) });
+      await writeAuditLog(tx, { actorId: user.id, action: "USER_PASSWORD_CHANGED", target: { type: "USER", id: user.id } });
     });
 
     await signOut({ redirectTo: "/login" });

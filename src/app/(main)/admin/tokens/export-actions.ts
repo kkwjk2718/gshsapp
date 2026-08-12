@@ -18,14 +18,14 @@ export async function getTokenCsvForExport(batchId: string) {
         orderBy: { createdAt: "asc" },
         take: 10_000,
         select: {
-          token: true, targetRole: true, targetGisu: true, isUsed: true,
+          id: true, targetRole: true, targetGisu: true, isUsed: true,
           usedBy: { select: { name: true, studentId: true, role: true } },
         },
       },
     },
   });
   if (!batch) throw new Error("Token batch not found");
-  const csv = serializeTokenCsv(batch.tokens);
+  const csv = serializeTokenCsv(batch.tokens.map((token) => ({ ...token, token: "Unavailable (stored as a one-way hash)" })));
   await writeAuditLog(prisma, { actorId: actor.id, action: "TOKEN_EXPORTED", target: { type: "TOKEN_BATCH", id: batch.id } });
   return csv;
 }

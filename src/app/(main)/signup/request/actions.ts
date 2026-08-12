@@ -2,10 +2,14 @@
 
 import bcrypt from "bcryptjs";
 import { logAction } from "@/lib/logger";
-import { hasValidPortalSession, setPortalSessionCookie } from "@/lib/token-portal-session";
+import { getPortalClientKey, hasValidPortalSession, setPortalSessionCookie } from "@/lib/token-portal-session";
 import { sendPortalStudentInvite } from "@/lib/token-portal";
 import { getTokenPortalSettings } from "@/lib/system-settings";
 import { MEMBER_SERVICE_SUSPENDED } from "@/lib/member-service-suspension";
+import { getApplicationSecuritySecret, hashSecurityPrincipal, networkPrincipal } from "@/lib/security/principal-key";
+import { PortalUnlockLimiter } from "@/lib/security/portal-unlock-limit";
+import { headers } from "next/headers";
+import { parseTrustedProxyHops, resolveTrustedClientAddress } from "@/lib/security/client-address";
 
 export type PortalActionResult = {
   success?: string;
@@ -14,6 +18,20 @@ export type PortalActionResult = {
 
 function isValidEmail(email: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+const portalUnlockLimiter = new PortalUnlockLimiter();
+
+async function getPortalUnlockKeys() {
+  const [rawClientKey, requestHeaders] = await Promise.all([getPortalClientKey(), headers()]);
+  const secret = getApplicationSecuritySecret();
+  const address = resolveTrustedClientAddress({ forwardedFor: requestHeaders.get("x-forwarded-for") }, {
+    trustedProxyHops: parseTrustedProxyHops(process.env.TRUSTED_PROXY_HOPS),
+  });
+  return {
+    clientKey: hashSecurityPrincipal("portal-client", rawClientKey, secret),
+    networkKey: hashSecurityPrincipal("portal-network", networkPrincipal(address, rawClientKey), secret),
+  };
 }
 
 export async function unlockTokenPortal(
@@ -33,6 +51,12 @@ export async function unlockTokenPortal(
     return { error: "접근 비밀번호가 아직 설정되지 않았습니다. 관리자에게 문의해주세요." };
   }
 
+  const unlockKeys = await getPortalUnlockKeys();
+  const limiterDecision = portalUnlockLimiter.check(unlockKeys.clientKey, unlockKeys.networkKey);
+  if (!limiterDecision.allowed) {
+    return { error: "Too many failed attempts. Please wait before trying again." };
+  }
+
   const password = (formData.get("password") as string | null)?.trim() || "";
   if (!password) {
     return { error: "포털 비밀번호를 입력해주세요." };
@@ -40,10 +64,12 @@ export async function unlockTokenPortal(
 
   const isMatch = await bcrypt.compare(password, settings.passwordHash);
   if (!isMatch) {
+    portalUnlockLimiter.recordFailure(unlockKeys.clientKey, unlockKeys.networkKey);
     await logAction("token_portal_password_failed", { provided: true });
     return { error: "비밀번호가 올바르지 않습니다." };
   }
 
+  portalUnlockLimiter.clearClient(unlockKeys.clientKey);
   await setPortalSessionCookie(settings.sessionVersion);
   await logAction("token_portal_password_success", {
     sessionVersion: settings.sessionVersion,

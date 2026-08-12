@@ -10,11 +10,13 @@ export default async function TokenBatchDetailPage({ params }: { params: Promise
 
   const batch = await prisma.tokenBatch.findUnique({
       where: { id: batchId },
-      include: { 
-          tokens: {
-              include: { usedBy: { select: { name: true, studentId: true, role: true } } }
-          }
-      }
+      select: {
+        id: true, title: true, memo: true, createdAt: true,
+        tokens: {
+          orderBy: { createdAt: "asc" }, take: 10_000,
+          select: { id: true, targetRole: true, targetGisu: true, isUsed: true, usedBy: { select: { name: true, studentId: true, role: true } } },
+        },
+      },
   });
 
   if (!batch) return <div>존재하지 않는 그룹입니다.</div>;

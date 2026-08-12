@@ -19,5 +19,9 @@ describe("password reset audit gate", () => {
     expect(await resetPassword(form)).toHaveProperty("success");
     expect(mocks.transaction).toHaveBeenCalledOnce();
     expect(mocks.auditCreate).toHaveBeenCalledWith({ data: expect.objectContaining({ action: "USER_PASSWORD_RESET", targetId: "user" }) });
+    expect(mocks.update).toHaveBeenCalledWith({
+      where: { id: "user" },
+      data: expect.objectContaining({ mustChangePassword: true, sessionVersion: { increment: 1 } }),
+    });
   });
 });

@@ -4,6 +4,7 @@ import { AuthorizationError, requireAdmin } from "@/lib/current-user";
 import { writeAuditLog } from "@/lib/audit";
 
 const PRIVATE_NO_STORE = { "Cache-Control": "private, no-store" };
+const MAX_EXPORTED_USERS = 10_000;
 
 export async function GET() {
   try {
@@ -22,7 +23,11 @@ export async function GET() {
         createdAt: true,
       },
       orderBy: { createdAt: "asc" },
+      take: MAX_EXPORTED_USERS + 1,
     });
+    if (users.length > MAX_EXPORTED_USERS) {
+      return new NextResponse("Export exceeds the 10,000-user safety limit", { status: 413, headers: PRIVATE_NO_STORE });
+    }
     await writeAuditLog(prisma, {
       actorId: actor.id,
       action: "USER_EXPORTED",

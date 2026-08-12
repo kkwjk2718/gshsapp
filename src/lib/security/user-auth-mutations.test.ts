@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildPasswordCredentialUpdate,
   buildRoleCredentialUpdate,
+  buildTemporaryPasswordCredentialUpdate,
   updateImportedUserSafely,
 } from "./user-auth-mutations";
 
@@ -9,6 +10,15 @@ describe("credential mutation writes", () => {
   it("increments the session version in the same password update", () => {
     expect(buildPasswordCredentialUpdate("new-hash")).toEqual({
       passwordHash: "new-hash",
+      mustChangePassword: false,
+      sessionVersion: { increment: 1 },
+    });
+  });
+
+  it("marks an administrator reset for forced rotation in the same write", () => {
+    expect(buildTemporaryPasswordCredentialUpdate("new-hash")).toEqual({
+      passwordHash: "new-hash",
+      mustChangePassword: true,
       sessionVersion: { increment: 1 },
     });
   });
@@ -68,6 +78,24 @@ describe("credential mutation writes", () => {
       sessionVersion: { increment: 1 },
     });
     expect(writes[1].data).not.toHaveProperty("passwordHash");
+  });
+
+  it("forces rotation when an opaque imported password hash replaces the current credential", async () => {
+    const writes: Array<{ where: Record<string, unknown>; data: Record<string, unknown> }> = [];
+    const initial = {
+      id: "u1", passwordHash: "old", role: "STUDENT", sessionVersion: 3,
+      name: "Old", email: null, studentId: "1101", gisu: 42, banExpiresAt: null, isOnboarded: true,
+    };
+    await updateImportedUserSafely(initial, { ...initial, passwordHash: "imported" }, {
+      findCurrent: async () => initial,
+      updateIfCurrent: async (write) => { writes.push(write); return { count: 1 }; },
+    });
+
+    expect(writes[0].data).toMatchObject({
+      passwordHash: "imported",
+      mustChangePassword: true,
+      sessionVersion: { increment: 1 },
+    });
   });
 
   it("increments the session version in the same role update", () => {

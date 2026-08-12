@@ -8,6 +8,7 @@ import { assertSafeExternalHttpsUrl } from "@/lib/network-safety";
 import { getCurrentUser } from "@/lib/session";
 import { SYSTEM_SETTING_KEYS, isValidGoogleAnalyticsId } from "@/lib/system-settings";
 import { writeAuditLog } from "@/lib/audit";
+import { validatePassword } from "@/lib/security/password-policy";
 
 export async function updateGradeMapping(formData: FormData) {
   const user = await getCurrentUser();
@@ -173,22 +174,16 @@ export async function updateTokenPortalPassword(
   const password = (formData.get("password") as string | null)?.trim() || "";
   const confirmPassword = (formData.get("confirmPassword") as string | null)?.trim() || "";
 
-  if (password.length < 6) {
-    return { error: "?ы꽭 鍮꾨?踰덊샇??6???댁긽?쇰줈 ?ㅼ젙?댁＜?몄슂." };
-  }
-
   if (password !== confirmPassword) {
     return { error: "鍮꾨?踰덊샇? 鍮꾨?踰덊샇 ?뺤씤???쇱튂?섏? ?딆뒿?덈떎." };
   }
 
-  const sessionVersionSetting = await prisma.systemSetting.findUnique({
-    where: { key: SYSTEM_SETTING_KEYS.tokenPortalSessionVersion },
-  });
-  const currentVersion = Number.parseInt(sessionVersionSetting?.value || "", 10);
-  const nextVersion = Number.isFinite(currentVersion) && currentVersion > 0 ? currentVersion + 1 : 1;
+  const passwordPolicy = validatePassword(password);
+  if (!passwordPolicy.ok) return { error: passwordPolicy.message };
+
   const passwordHash = await bcrypt.hash(password, 10);
 
-  await prisma.$transaction(async (tx) => {
+  const nextVersion = await prisma.$transaction(async (tx) => {
     await tx.systemSetting.upsert({
       where: { key: SYSTEM_SETTING_KEYS.tokenPortalPasswordHash },
       update: { value: passwordHash },
@@ -198,6 +193,11 @@ export async function updateTokenPortalPassword(
         description: "?좏겙 諛곕? ?ы꽭 ?묎렐 鍮꾨?踰덊샇 ?댁떆",
       },
     });
+    const sessionVersionSetting = await tx.systemSetting.findUnique({
+      where: { key: SYSTEM_SETTING_KEYS.tokenPortalSessionVersion },
+    });
+    const currentVersion = Number.parseInt(sessionVersionSetting?.value || "", 10);
+    const nextVersion = Number.isFinite(currentVersion) && currentVersion > 0 ? currentVersion + 1 : 1;
     await tx.systemSetting.upsert({
       where: { key: SYSTEM_SETTING_KEYS.tokenPortalSessionVersion },
       update: { value: String(nextVersion) },
@@ -212,6 +212,7 @@ export async function updateTokenPortalPassword(
       action: "TOKEN_PORTAL_PASSWORD_ROTATED",
       target: { type: "SYSTEM_SETTING", id: SYSTEM_SETTING_KEYS.tokenPortalPasswordHash },
     });
+    return nextVersion;
   });
 
   await logAction("token_portal_password_rotated", {

@@ -22,4 +22,23 @@ describe("token portal audit gates", () => {
     expect(await updateTokenPortalConfig({}, form)).toHaveProperty("success");
     expect(mocks.auditCreate).toHaveBeenCalledWith({ data: expect.objectContaining({ action: "TOKEN_PORTAL_CONFIG_CHANGED" }) });
   });
+
+  it("rejects a weak portal password before hashing or writing", async () => {
+    const { updateTokenPortalPassword } = await import("./actions");
+    const form = new FormData(); form.set("password", "short"); form.set("confirmPassword", "short");
+    expect(await updateTokenPortalPassword({}, form)).toHaveProperty("error");
+    expect(mocks.transaction).not.toHaveBeenCalled();
+  });
+
+  it("reads and increments the portal session version after taking a writer lock", async () => {
+    const order: string[] = [];
+    mocks.findUnique.mockImplementation(async () => { order.push("read-version"); return { value: "7" }; });
+    mocks.upsert.mockImplementation(async ({ where }: { where: { key: string } }) => { order.push(where.key.includes("PASSWORD") ? "password" : "version"); return {}; });
+    mocks.transaction.mockImplementation(async (callback: (tx: unknown) => unknown) => callback({ systemSetting: { upsert: mocks.upsert, findUnique: mocks.findUnique }, auditLog: { create: mocks.auditCreate } }));
+    const { updateTokenPortalPassword } = await import("./actions");
+    const form = new FormData(); form.set("password", "safe-portal-password-2026"); form.set("confirmPassword", "safe-portal-password-2026");
+    expect(await updateTokenPortalPassword({}, form)).toHaveProperty("success");
+    expect(order.slice(0, 3)).toEqual(["password", "read-version", "version"]);
+    expect(mocks.upsert).toHaveBeenCalledWith(expect.objectContaining({ update: { value: "8" } }));
+  });
 });
