@@ -92,15 +92,21 @@ const songRequestSelect = {
   requester: { select: { name: true, studentId: true } },
 };
 
-function collectElements(node: ReactNode, type: unknown, result: React.ReactElement[] = []) {
+type CollectedElementProps = { children?: ReactNode } & Record<string, unknown>;
+
+function collectElements(
+  node: ReactNode,
+  type: unknown,
+  result: React.ReactElement<CollectedElementProps>[] = [],
+) {
   if (Array.isArray(node)) {
     for (const child of node) collectElements(child, type, result);
     return result;
   }
 
-  if (!isValidElement(node)) return result;
+  if (!isValidElement<CollectedElementProps>(node)) return result;
   if (node.type === type) result.push(node);
-  collectElements((node.props as { children?: ReactNode }).children, type, result);
+  collectElements(node.props.children, type, result);
   return result;
 }
 

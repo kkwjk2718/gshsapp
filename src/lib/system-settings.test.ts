@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isValidGoogleAnalyticsId } from "./system-settings";
+import { isValidGoogleAnalyticsId, normalizeGoogleAnalyticsId } from "./system-settings";
 
 describe("isValidGoogleAnalyticsId", () => {
   it("accepts valid GA4 measurement ids", () => {
@@ -20,5 +20,12 @@ describe("isValidGoogleAnalyticsId", () => {
 
   it("rejects unsupported characters", () => {
     expect(isValidGoogleAnalyticsId("G-ABC_123")).toBe(false);
+  });
+
+  it("rejects unbounded or script-shaped persisted values before client serialization", () => {
+    expect(normalizeGoogleAnalyticsId("G-ABC123")).toBe("G-ABC123");
+    expect(normalizeGoogleAnalyticsId(" g-abc123 ")).toBe("G-ABC123");
+    expect(normalizeGoogleAnalyticsId("G-ABC123';alert(1)//")).toBeNull();
+    expect(normalizeGoogleAnalyticsId(`G-${"A".repeat(65)}`)).toBeNull();
   });
 });

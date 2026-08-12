@@ -6,7 +6,7 @@ import { prisma } from "@/lib/db";
 import { logAction } from "@/lib/logger";
 import { assertSafeExternalHttpsUrl } from "@/lib/network-safety";
 import { getCurrentUser } from "@/lib/session";
-import { SYSTEM_SETTING_KEYS, isValidGoogleAnalyticsId } from "@/lib/system-settings";
+import { SYSTEM_SETTING_KEYS, normalizeGoogleAnalyticsId } from "@/lib/system-settings";
 import { writeAuditLog } from "@/lib/audit";
 import { validatePassword } from "@/lib/security/password-policy";
 
@@ -18,16 +18,27 @@ export async function updateGradeMapping(formData: FormData) {
   const g2 = Number.parseInt(formData.get("grade2") as string, 10);
   const g3 = Number.parseInt(formData.get("grade3") as string, 10);
 
+  if (![g1, g2, g3].every((value) => Number.isInteger(value) && value >= 1 && value <= 100)) {
+    throw new Error("Invalid grade mapping");
+  }
+
   const mapping = {
     "1": g1,
     "2": g2,
     "3": g3,
   };
 
-  await prisma.systemSetting.upsert({
+  await prisma.$transaction(async (tx) => {
+    await tx.systemSetting.upsert({
     where: { key: "GRADE_MAPPING" },
     update: { value: JSON.stringify(mapping) },
     create: { key: "GRADE_MAPPING", value: JSON.stringify(mapping), description: "?숇뀈蹂?湲곗닔 留ㅽ븨" },
+    });
+    await writeAuditLog(tx, {
+      actorId: user.id,
+      action: "GRADE_MAPPING_CHANGED",
+      target: { type: "SYSTEM_SETTING", id: "GRADE_MAPPING" },
+    });
   });
 
   revalidatePath("/", "layout");
@@ -45,11 +56,11 @@ export async function updateICalUrl(prevState: any, formData: FormData): Promise
   const user = await getCurrentUser();
   if (!user || user.role !== "ADMIN") throw new Error("Unauthorized");
 
-  const url = ((formData.get("icalUrl") as string | null) || "").trim();
+  let url = ((formData.get("icalUrl") as string | null) || "").trim();
 
   if (url) {
     try {
-      await assertSafeExternalHttpsUrl(url);
+      url = (await assertSafeExternalHttpsUrl(url)).toString();
     } catch (error) {
       return {
         error:
@@ -60,10 +71,17 @@ export async function updateICalUrl(prevState: any, formData: FormData): Promise
     }
   }
 
-  await prisma.systemSetting.upsert({
-    where: { key: "ICAL_URL" },
-    update: { value: url },
-    create: { key: "ICAL_URL", value: url, description: "Google Calendar iCal URL for sync" },
+  await prisma.$transaction(async (tx) => {
+    await tx.systemSetting.upsert({
+      where: { key: "ICAL_URL" },
+      update: { value: url },
+      create: { key: "ICAL_URL", value: url, description: "Google Calendar iCal URL for sync" },
+    });
+    await writeAuditLog(tx, {
+      actorId: user.id,
+      action: "ICAL_FEED_CHANGED",
+      target: { type: "SYSTEM_SETTING", id: "ICAL_URL" },
+    });
   });
 
   revalidatePath("/admin/settings");
@@ -76,20 +94,28 @@ export async function updateGoogleAnalyticsId(prevState: any, formData: FormData
   const user = await getCurrentUser();
   if (!user || user.role !== "ADMIN") throw new Error("Unauthorized");
 
-  const googleAnalyticsId = (formData.get("googleAnalyticsId") as string | null)?.trim() || "";
+  const rawGoogleAnalyticsId = (formData.get("googleAnalyticsId") as string | null)?.trim() || "";
+  const googleAnalyticsId = normalizeGoogleAnalyticsId(rawGoogleAnalyticsId);
 
-  if (googleAnalyticsId && !isValidGoogleAnalyticsId(googleAnalyticsId)) {
+  if (rawGoogleAnalyticsId && !googleAnalyticsId) {
     return { error: "Google Analytics measurement IDs must look like G-XXXXXXXXXX." };
   }
 
-  await prisma.systemSetting.upsert({
-    where: { key: SYSTEM_SETTING_KEYS.googleAnalyticsId },
-    update: { value: googleAnalyticsId },
-    create: {
-      key: SYSTEM_SETTING_KEYS.googleAnalyticsId,
-      value: googleAnalyticsId,
-      description: "Google Analytics measurement ID",
-    },
+  await prisma.$transaction(async (tx) => {
+    await tx.systemSetting.upsert({
+      where: { key: SYSTEM_SETTING_KEYS.googleAnalyticsId },
+      update: { value: googleAnalyticsId ?? "" },
+      create: {
+        key: SYSTEM_SETTING_KEYS.googleAnalyticsId,
+        value: googleAnalyticsId ?? "",
+        description: "Google Analytics measurement ID",
+      },
+    });
+    await writeAuditLog(tx, {
+      actorId: user.id,
+      action: "ANALYTICS_SETTING_CHANGED",
+      target: { type: "SYSTEM_SETTING", id: SYSTEM_SETTING_KEYS.googleAnalyticsId },
+    });
   });
 
   revalidatePath("/admin/settings");

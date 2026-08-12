@@ -5,6 +5,7 @@ import { CheckCircle, X, Bell, Info, Calendar, ExternalLink } from "lucide-react
 import { markAsRead, deleteNotification } from "@/app/(main)/notifications/actions";
 import Link from "next/link";
 import { formatKST } from "@/lib/date-utils";
+import { normalizeNotificationLink } from "@/lib/security/public-input";
 
 interface NotificationItemProps {
     notification: {
@@ -20,6 +21,7 @@ interface NotificationItemProps {
 
 export function NotificationItem({ notification }: NotificationItemProps) {
     const [isPending, startTransition] = useTransition();
+    const safeLink = normalizeNotificationLink(notification.link);
 
     const getIcon = (type: string) => {
         switch (type) {
@@ -97,9 +99,9 @@ export function NotificationItem({ notification }: NotificationItemProps) {
                             읽음 처리
                         </button>
                     )}
-                    {notification.link && (
+                    {safeLink && (
                         <Link
-                            href={notification.link}
+                            href={safeLink}
                             className="text-xs font-medium text-slate-500 hover:text-indigo-500 flex items-center gap-1 transition-colors"
                         >
                             <ExternalLink className="w-3 h-3" />

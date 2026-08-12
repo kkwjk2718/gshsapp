@@ -65,9 +65,9 @@ describe("telemetry request validation", () => {
     });
     const request = new Request("https://gshs.app/api/log", { method: "POST", body, duplex: "half" } as RequestInit);
 
-    await expect(readBoundedJsonBody(request)).rejects.toMatchObject<TelemetryBodyError>({
+    await expect(readBoundedJsonBody(request)).rejects.toMatchObject({
       code: "BODY_TOO_LARGE", status: 413,
-    });
+    } satisfies Partial<TelemetryBodyError>);
     expect(cancelled).toBe(true);
   });
 });

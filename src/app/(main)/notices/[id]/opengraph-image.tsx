@@ -1,5 +1,7 @@
 import { ImageResponse } from "next/og";
 import { prisma } from "@/lib/db";
+import { notFound } from "next/navigation";
+import { isCanonicalUuid } from "@/lib/security/public-input";
 
 export const runtime = "nodejs";
 export const size = {
@@ -14,11 +16,19 @@ type Props = {
 
 export default async function Image({ params }: Props) {
   const { id } = await params;
+  if (!isCanonicalUuid(id)) notFound();
 
   const notice = await prisma.notice.findUnique({
     where: { id },
-    include: { writer: true },
+    select: {
+      id: true,
+      title: true,
+      content: true,
+      category: true,
+      writer: { select: { name: true } },
+    },
   });
+  if (!notice) notFound();
 
   const title = notice?.title ?? "공지사항";
   const description = (notice?.content ?? "경남과학고 통합 플랫폼 공지사항")

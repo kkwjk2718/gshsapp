@@ -10,6 +10,8 @@ export default async function AdminSitesPage() {
 
     const sites = await prisma.relatedSite.findMany({
         orderBy: { createdAt: "desc" },
+        take: 100,
+        select: { id: true, name: true, url: true, description: true, category: true },
     });
 
     return (

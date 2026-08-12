@@ -22,13 +22,16 @@ export async function getSystemSettingValue(key: string) {
 
 export async function getGoogleAnalyticsId() {
   const value = await getSystemSettingValue(SYSTEM_SETTING_KEYS.googleAnalyticsId);
-  const trimmedValue = value?.trim();
-
-  return trimmedValue ? trimmedValue : null;
+  return normalizeGoogleAnalyticsId(value);
 }
 
 export function isValidGoogleAnalyticsId(value: string) {
-  return /^G-[A-Z0-9]+$/i.test(value);
+  return /^G-[A-Z0-9]{4,32}$/i.test(value);
+}
+
+export function normalizeGoogleAnalyticsId(value: string | null | undefined) {
+  const normalized = value?.trim().toUpperCase() ?? "";
+  return isValidGoogleAnalyticsId(normalized) ? normalized : null;
 }
 
 function parseBooleanSetting(value: string | null) {

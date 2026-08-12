@@ -28,7 +28,7 @@ export function LinkCard({ link, canEdit }: { link: LinkItem, canEdit: boolean }
         <input name="title" defaultValue={link.title} placeholder="제목" required className="px-3 py-2 rounded-lg border text-sm font-bold" style={{ backgroundColor: "var(--surface)", borderColor: "var(--border)", color: "var(--foreground)" }} />
         <input name="url" defaultValue={link.url} placeholder="URL" required className="px-3 py-2 rounded-lg border text-xs" style={{ backgroundColor: "var(--surface)", borderColor: "var(--border)", color: "var(--foreground)" }} />
         {/* Hidden category input with default value */}
-        <input type="hidden" name="category" value="GENERAL" />
+        <input type="hidden" name="category" value={link.category} />
         <input name="description" defaultValue={link.description || ""} placeholder="설명" className="px-3 py-2 rounded-lg border text-xs" style={{ backgroundColor: "var(--surface)", borderColor: "var(--border)", color: "var(--foreground)" }} />
         
         <div className="flex items-center justify-end gap-2 mt-2">

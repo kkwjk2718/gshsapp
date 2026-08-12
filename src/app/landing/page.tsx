@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight, Calendar, Utensils, Bell, Wrench, Shield } from "lucide-react";
+import { headers } from "next/headers";
 
 export const metadata: Metadata = {
   title: "GSHS.app 소개",
@@ -36,7 +37,8 @@ const features = [
   },
 ];
 
-export default function LandingPage() {
+export default async function LandingPage() {
+  const nonce = (await headers()).get("x-nonce") ?? undefined;
   const websiteJsonLd = {
     "@context": "https://schema.org",
     "@type": "WebSite",
@@ -142,7 +144,7 @@ export default function LandingPage() {
           </section>
         </main>
 
-        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteJsonLd) }} />
+        <script nonce={nonce} type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteJsonLd) }} />
 
         <footer className="border-t border-white/10 py-8 text-xs text-white/45">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-3">

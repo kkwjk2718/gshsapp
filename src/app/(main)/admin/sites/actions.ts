@@ -3,6 +3,10 @@
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
 import { revalidatePath } from "next/cache";
+import { writeAuditLog } from "@/lib/audit";
+import { isCanonicalUuid, normalizeRelatedSiteInput } from "@/lib/security/public-input";
+
+const MAX_RELATED_SITES = 100;
 
 export async function createRelatedSite(formData: FormData) {
     const user = await getCurrentUser();
@@ -10,22 +14,21 @@ export async function createRelatedSite(formData: FormData) {
         throw new Error("Unauthorized");
     }
 
-    const name = formData.get("name") as string;
-    let url = formData.get("url") as string;
-    const description = formData.get("description") as string;
-    const category = formData.get("category") as string;
+    const data = normalizeRelatedSiteInput({
+      name: formData.get("name"),
+      url: formData.get("url"),
+      description: formData.get("description"),
+      category: formData.get("category"),
+    });
 
-    if (url && !url.startsWith("http://") && !url.startsWith("https://")) {
-        url = `https://${url}`;
-    }
-
-    await prisma.relatedSite.create({
-        data: {
-            name,
-            url,
-            description,
-            category,
-        },
+    await prisma.$transaction(async (tx) => {
+      const created = await tx.relatedSite.create({ data });
+      if (await tx.relatedSite.count() > MAX_RELATED_SITES) throw new Error("Related site limit reached");
+      await writeAuditLog(tx, {
+        actorId: user.id,
+        action: "RELATED_SITE_CREATED",
+        target: { type: "RELATED_SITE", id: created.id },
+      });
     });
 
     revalidatePath("/sites");
@@ -33,13 +36,21 @@ export async function createRelatedSite(formData: FormData) {
 }
 
 export async function deleteRelatedSite(formData: FormData) {
-    const id = formData.get("id") as string;
     const user = await getCurrentUser();
     if (!user || user.role !== 'ADMIN') {
         throw new Error("Unauthorized");
     }
 
-    await prisma.relatedSite.delete({ where: { id } });
+    const id = formData.get("id");
+    if (!isCanonicalUuid(id)) throw new Error("Invalid related site identifier");
+    await prisma.$transaction(async (tx) => {
+      await tx.relatedSite.delete({ where: { id } });
+      await writeAuditLog(tx, {
+        actorId: user.id,
+        action: "RELATED_SITE_DELETED",
+        target: { type: "RELATED_SITE", id },
+      });
+    });
     revalidatePath("/sites");
     revalidatePath("/admin/sites");
 }

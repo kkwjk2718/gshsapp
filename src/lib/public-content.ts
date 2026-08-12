@@ -2,6 +2,7 @@ import { unstable_cache } from "next/cache";
 import { prisma } from "@/lib/db";
 import { getEventsFromICal } from "@/lib/google-calendar";
 import { getSchoolSchedule } from "@/lib/neis";
+import { normalizeStoredExternalHttpsUrl } from "@/lib/security/public-input";
 
 function logPublicContentError(source: string, error: unknown) {
   console.warn(
@@ -48,7 +49,14 @@ export const getVisibleNotices = unstable_cache(
             { expiresAt: null },
           ],
         },
-        include: {
+        take: 100,
+        select: {
+          id: true,
+          category: true,
+          title: true,
+          content: true,
+          expiresAt: true,
+          createdAt: true,
           writer: {
             select: {
               name: true,
@@ -75,6 +83,7 @@ export const getNextAcademicSchedule = unstable_cache(
           startDate: { gte: new Date() },
         },
         orderBy: { startDate: "asc" },
+        select: { title: true, startDate: true },
       });
     } catch (error) {
       logPublicContentError("next academic schedule", error);
@@ -88,8 +97,14 @@ export const getNextAcademicSchedule = unstable_cache(
 export const getRelatedSites = unstable_cache(
   async () => {
     try {
-      return await prisma.relatedSite.findMany({
+      const rows = await prisma.relatedSite.findMany({
         orderBy: { createdAt: "desc" },
+        take: 100,
+        select: { id: true, name: true, url: true, category: true, description: true },
+      });
+      return rows.flatMap((site) => {
+        const url = normalizeStoredExternalHttpsUrl(site.url);
+        return url ? [{ ...site, url }] : [];
       });
     } catch (error) {
       logPublicContentError("related sites", error);

@@ -2,8 +2,9 @@
 
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
-import { createNotification } from "@/lib/notifications";
 import { revalidatePath } from "next/cache";
+import { writeAuditLog } from "@/lib/audit";
+import { normalizeNotificationLink } from "@/lib/security/public-input";
 
 export async function sendAdminNotification(formData: FormData) {
     const user = await getCurrentUser();
@@ -17,15 +18,21 @@ export async function sendAdminNotification(formData: FormData) {
     const targetUserId = formData.get("targetUserId") as string;
     const title = formData.get("title") as string;
     const content = formData.get("content") as string;
-    const link = formData.get("link") as string;
+    const rawLink = formData.get("link");
     const expiresAfter = formData.get("expiresAfter") as string; // days
 
     const titleBytes = new TextEncoder().encode(title || "").byteLength;
     const contentBytes = new TextEncoder().encode(content || "").byteLength;
-    const linkBytes = new TextEncoder().encode(link || "").byteLength;
+    const linkValue = typeof rawLink === "string" ? rawLink : "";
+    const linkBytes = new TextEncoder().encode(linkValue).byteLength;
     if (!title || !content || !["ALL", "USER"].includes(targetType) || [...title].length > 120 || titleBytes > 240 ||
-        [...content].length > 2_000 || contentBytes > 4_000 || [...(link || "")].length > 512 || linkBytes > 1_024) {
+        [...content].length > 2_000 || contentBytes > 4_000 || [...linkValue].length > 512 || linkBytes > 1_024) {
         return { error: "제목과 내용을 입력해주세요." };
+    }
+
+    const link = normalizeNotificationLink(linkValue);
+    if (linkValue.trim() && !link) {
+        return { error: "Notification links must be local application paths." };
     }
 
     let expiresAt: Date | undefined;
@@ -57,8 +64,13 @@ export async function sendAdminNotification(formData: FormData) {
                 isRead: false
             }));
 
-            await prisma.notification.createMany({
-                data: notifications
+            await prisma.$transaction(async (tx) => {
+              await tx.notification.createMany({ data: notifications });
+              await writeAuditLog(tx, {
+                actorId: user.id,
+                action: "ADMIN_NOTIFICATION_SENT",
+                target: { type: "NOTIFICATION", id: "ALL" },
+              });
             });
 
         } else {
@@ -76,14 +88,24 @@ export async function sendAdminNotification(formData: FormData) {
                 return { error: "존재하지 않는 사용자 ID입니다." };
             }
 
-            await createNotification(
-                targetUser.id,
-                "NOTICE",
-                title,
-                content,
-                link,
-                expiresAt
-            );
+            await prisma.$transaction(async (tx) => {
+              await tx.notification.create({
+                data: {
+                  userId: targetUser.id,
+                  type: "NOTICE",
+                  title,
+                  content,
+                  link,
+                  expiresAt: expiresAt ?? null,
+                  isRead: false,
+                },
+              });
+              await writeAuditLog(tx, {
+                actorId: user.id,
+                action: "ADMIN_NOTIFICATION_SENT",
+                target: { type: "NOTIFICATION", id: targetUser.id },
+              });
+            });
         }
 
         revalidatePath("/admin/notifications");

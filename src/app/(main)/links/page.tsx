@@ -6,6 +6,7 @@ import { getCurrentUser } from "@/lib/session";
 import { LinkCard } from "./link-card";
 import { createLink } from "./actions";
 import { canAccessCoreMemberFeatures, canEditLinks } from "@/lib/user-roles";
+import { normalizeStoredExternalHttpsUrl } from "@/lib/security/public-input";
 
 export const metadata: Metadata = {
   title: "링크모음",
@@ -18,8 +19,14 @@ export default async function LinksPage() {
   if (!canAccessCoreMemberFeatures(user.role)) redirect("/");
 
   const canEdit = canEditLinks(user.role);
-  const links = await prisma.linkItem.findMany({
+  const linkRows = await prisma.linkItem.findMany({
     orderBy: { createdAt: "desc" },
+    take: 250,
+    select: { id: true, title: true, url: true, description: true, category: true },
+  });
+  const links = linkRows.flatMap((link) => {
+    const url = normalizeStoredExternalHttpsUrl(link.url);
+    return url ? [{ ...link, url }] : [];
   });
 
   return (
