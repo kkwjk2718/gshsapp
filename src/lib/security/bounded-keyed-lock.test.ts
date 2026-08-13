@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createLoginAttemptLimiter } from "@/lib/login-rate-limit";
 import { PortalUnlockLimiter } from "@/lib/security/portal-unlock-limit";
 import { BoundedAttemptAdmission } from "./attempt-admission";
+import { BoundedConcurrencyGate } from "./bounded-concurrency-gate";
 import { BoundedKeyedLock, BoundedKeyedLockError, securityPrincipalLockKey } from "./bounded-keyed-lock";
 
 describe("bounded keyed authentication serialization", () => {
@@ -58,6 +59,26 @@ describe("bounded keyed authentication serialization", () => {
     const admission = new BoundedAttemptAdmission({ maxAttempts: 3, windowMs: 60_000, maxKeys: 1 });
     admission.reserve("old-network")!.commitFailure();
     expect(admission.reserve("new-network")).not.toBeNull();
+  });
+
+  it("separately caps in-flight work for one network and across all networks", () => {
+    const admission = new BoundedAttemptAdmission({
+      maxAttempts: 100,
+      maxPendingPerKey: 2,
+      windowMs: 60_000,
+      maxKeys: 10,
+    });
+    expect([1, 2, 3].map(() => Boolean(admission.reserve("same-network"))))
+      .toEqual([true, true, false]);
+
+    const globalGate = new BoundedConcurrencyGate(2);
+    const first = globalGate.tryAcquire();
+    const second = globalGate.tryAcquire();
+    expect(first).not.toBeNull();
+    expect(second).not.toBeNull();
+    expect(globalGate.tryAcquire()).toBeNull();
+    first!.release();
+    expect(globalGate.tryAcquire()).not.toBeNull();
   });
 
   it("fails closed instead of growing unbounded queues or active key state", async () => {

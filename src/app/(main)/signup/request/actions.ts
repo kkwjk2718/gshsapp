@@ -15,6 +15,7 @@ import { prisma } from "@/lib/db";
 import { validatePortalRosterIdentity } from "@/lib/student-roster";
 import { BoundedKeyedLock, BoundedKeyedLockError, securityPrincipalLockKey } from "@/lib/security/bounded-keyed-lock";
 import { BoundedAttemptAdmission } from "@/lib/security/attempt-admission";
+import { credentialVerificationGate } from "@/lib/security/bounded-concurrency-gate";
 
 export type PortalActionResult = {
   success?: string;
@@ -23,7 +24,7 @@ export type PortalActionResult = {
 
 const portalUnlockLimiter = new PortalUnlockLimiter();
 const portalVerificationLock = new BoundedKeyedLock();
-const portalNetworkAdmission = new BoundedAttemptAdmission({ maxAttempts: 100, windowMs: 10 * 60_000, maxKeys: 1_024 });
+const portalNetworkAdmission = new BoundedAttemptAdmission({ maxAttempts: 100, maxPendingPerKey: 8, windowMs: 10 * 60_000, maxKeys: 1_024 });
 
 async function getPortalUnlockKeys() {
   const [rawClientKey, requestHeaders] = await Promise.all([getPortalClientKey(), headers()]);
@@ -74,7 +75,16 @@ export async function unlockTokenPortal(
     return { error: "Too many failed attempts. Please wait before trying again." };
   }
 
-  const isMatch = await bcrypt.compare(password, settings.passwordHash!);
+  const verificationPermit = credentialVerificationGate.tryAcquire();
+  if (!verificationPermit) {
+    return { error: "Too many concurrent password checks. Please try again shortly." };
+  }
+  let isMatch: boolean;
+  try {
+    isMatch = await bcrypt.compare(password, settings.passwordHash!);
+  } finally {
+    verificationPermit.release();
+  }
   if (!isMatch) {
     networkReservation.commitFailure();
     portalUnlockLimiter.recordFailure(unlockKeys.clientKey, unlockKeys.networkKey);

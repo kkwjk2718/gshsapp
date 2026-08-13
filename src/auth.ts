@@ -15,9 +15,10 @@ import { isValidBcryptInput } from '@/lib/security/password-policy';
 import { hasActiveRosterMembership, isRosterGovernedRole } from '@/lib/student-membership';
 import { BoundedKeyedLock, BoundedKeyedLockError, securityPrincipalLockKey } from '@/lib/security/bounded-keyed-lock';
 import { BoundedAttemptAdmission } from '@/lib/security/attempt-admission';
+import { credentialVerificationGate } from '@/lib/security/bounded-concurrency-gate';
 
 const loginVerificationLock = new BoundedKeyedLock();
-const loginNetworkAdmission = new BoundedAttemptAdmission({ maxAttempts: 200, windowMs: 10 * 60_000, maxKeys: 1_024 });
+const loginNetworkAdmission = new BoundedAttemptAdmission({ maxAttempts: 200, maxPendingPerKey: 8, windowMs: 10 * 60_000, maxKeys: 1_024 });
 
 async function verifyPassword(password: string, hash: string) {
   return await bcrypt.compare(password, hash);
@@ -80,7 +81,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
                 }
 
                 const user = await prisma.user.findUnique({ where: { userId } });
-                const verifiedUser = await verifyLoginCandidate(password, user, verifyPassword);
+                const verificationPermit = credentialVerificationGate.tryAcquire();
+                if (!verificationPermit) throw new LoginTemporarilyLockedError();
+                let verifiedUser;
+                try {
+                  verifiedUser = await verifyLoginCandidate(password, user, verifyPassword);
+                } finally {
+                  verificationPermit.release();
+                }
                 if (verifiedUser && isRosterGovernedRole(verifiedUser.role) && !(await hasActiveRosterMembership(prisma, verifiedUser))) {
                   networkReservation.commitFailure();
                   loginAttemptLimiter.recordFailure(identifierKey, networkKey);

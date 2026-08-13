@@ -15,13 +15,17 @@ export class BoundedAttemptAdmission {
 
   constructor(readonly policy: Readonly<{
     maxAttempts: number;
+    maxPendingPerKey?: number;
     windowMs: number;
     maxKeys: number;
     pendingTtlMs?: number;
     now?: () => number;
   }>) {
-    for (const value of [policy.maxAttempts, policy.windowMs, policy.maxKeys, policy.pendingTtlMs ?? 120_000]) {
+    for (const value of [policy.maxAttempts, policy.maxPendingPerKey ?? Math.min(policy.maxAttempts, 8), policy.windowMs, policy.maxKeys, policy.pendingTtlMs ?? 120_000]) {
       if (!Number.isInteger(value) || value < 1) throw new Error("Invalid attempt admission policy");
+    }
+    if ((policy.maxPendingPerKey ?? Math.min(policy.maxAttempts, 8)) > policy.maxAttempts) {
+      throw new Error("Pending admission limit cannot exceed the attempt limit");
     }
     this.#now = policy.now ?? Date.now;
   }
@@ -66,7 +70,8 @@ export class BoundedAttemptAdmission {
       this.#states.set(key, state);
     }
     this.#normalize(state, now);
-    if (state.failures.length + state.pending.size >= this.policy.maxAttempts) return null;
+    const maxPending = this.policy.maxPendingPerKey ?? Math.min(this.policy.maxAttempts, 8);
+    if (state.pending.size >= maxPending || state.failures.length + state.pending.size >= this.policy.maxAttempts) return null;
 
     const token = Symbol(key);
     state.pending.set(token, now);
