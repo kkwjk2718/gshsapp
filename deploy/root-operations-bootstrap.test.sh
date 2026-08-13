@@ -313,7 +313,7 @@ if command -v flock >/dev/null 2>&1; then
   if (
     exec 7>&-
     exec 8>"$busy_lock"
-    flock -n 8
+    flock -n 8 || exit 1
     : >"$test_root/published"
   ) 2>/dev/null; then
     flock -u 7
