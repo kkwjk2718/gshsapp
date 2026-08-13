@@ -63,3 +63,12 @@ export async function getTokenPortalSettings() {
     guidance: guidanceValue?.trim() || DEFAULT_TOKEN_PORTAL_EMAIL_GUIDANCE,
   };
 }
+
+export function publicTokenPortalSettings(settings: Awaited<ReturnType<typeof getTokenPortalSettings>>) {
+  return {
+    enabled: settings.enabled,
+    hasPassword: settings.hasPassword,
+    sessionVersion: settings.sessionVersion,
+    guidance: settings.guidance,
+  };
+}

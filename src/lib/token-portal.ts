@@ -14,13 +14,13 @@ import {
   setPortalCooldownCookie,
 } from "@/lib/token-portal-session";
 import { isValidStudentId } from "@/lib/student-id";
-import { getTokenPortalSettings } from "@/lib/system-settings";
+import { getTokenPortalSettings, publicTokenPortalSettings } from "@/lib/system-settings";
 
 export async function getPublicPortalState() {
   const settings = await getTokenPortalSettings();
   const cooldownSeconds = await getPortalCooldownRemainingSeconds();
   const quota = await getDistributionQuotaSummary();
-  return { settings, cooldownSeconds, quota };
+  return { settings: publicTokenPortalSettings(settings), cooldownSeconds, quota };
 }
 
 export async function sendPortalStudentInvite({ name, studentId, email }: {
