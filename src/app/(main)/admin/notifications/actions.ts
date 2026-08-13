@@ -5,6 +5,7 @@ import { getCurrentUser } from "@/lib/session";
 import { revalidatePath } from "next/cache";
 import { writeAuditLog } from "@/lib/audit";
 import { normalizeNotificationLink } from "@/lib/security/public-input";
+import { enforceNotificationLifecycle } from "@/lib/notifications";
 
 export async function sendAdminNotification(formData: FormData) {
     const user = await getCurrentUser();
@@ -63,8 +64,10 @@ export async function sendAdminNotification(formData: FormData) {
                 expiresAt: expiresAt || null,
                 isRead: false
             }));
+            if (notifications.length === 0) return { error: "There are no notification recipients." };
 
             await prisma.$transaction(async (tx) => {
+              await enforceNotificationLifecycle(tx, notifications.length);
               await tx.notification.createMany({ data: notifications });
               await writeAuditLog(tx, {
                 actorId: user.id,
@@ -81,7 +84,8 @@ export async function sendAdminNotification(formData: FormData) {
             // Check if user exists by verifying their internal ID or login ID?
             // Usually admins know the login UserId. Let's find internal ID first.
             const targetUser = await prisma.user.findUnique({
-                where: { userId: targetUserId }
+                where: { userId: targetUserId },
+                select: { id: true },
             });
 
             if (!targetUser) {
@@ -89,6 +93,7 @@ export async function sendAdminNotification(formData: FormData) {
             }
 
             await prisma.$transaction(async (tx) => {
+              await enforceNotificationLifecycle(tx, 1);
               await tx.notification.create({
                 data: {
                   userId: targetUser.id,

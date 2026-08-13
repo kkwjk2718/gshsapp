@@ -9,6 +9,7 @@ import {
     consumeReportSubmissionQuota,
     validateReportSubmission,
 } from "@/lib/security/submission-controls";
+import { enforceErrorReportLifecycle } from "@/lib/submission-lifecycle";
 
 export async function submitErrorReport(title: string, content: string) {
     const user = await getCurrentUser();
@@ -19,6 +20,7 @@ export async function submitErrorReport(title: string, content: string) {
     consumeReportSubmissionQuota(user.id);
 
     const report = await prisma.$transaction(async (tx) => {
+        await enforceErrorReportLifecycle(tx);
         const since = new Date(Date.now() - 86_400_000);
         const [dailyCount, pendingCount] = await Promise.all([
             tx.errorReport.count({ where: { userId: user.id, createdAt: { gte: since } } }),

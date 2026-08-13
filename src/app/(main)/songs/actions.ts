@@ -13,6 +13,7 @@ import { canonicalizeYouTubeUrl } from "@/lib/security/youtube-url";
 import { getCurrentUser } from "@/lib/session";
 import { canAccessCoreMemberFeatures } from "@/lib/user-roles";
 import { readBoundedJsonResponse } from "@/lib/outbound-response";
+import { enforceSongRequestLifecycle } from "@/lib/submission-lifecycle";
 import {
   SONG_DAILY_CAP,
   SONG_PENDING_CAP,
@@ -165,6 +166,7 @@ export async function requestSong(formData: FormData) {
   const isAnonymous = formData.get("isAnonymous") === "on";
 
   await prisma.$transaction(async (tx) => {
+    await enforceSongRequestLifecycle(tx);
     const since = new Date(Date.now() - 86_400_000);
     const [dailyCount, pendingCount] = await Promise.all([
       tx.songRequest.count({ where: { requesterId: user.id, createdAt: { gte: since } } }),

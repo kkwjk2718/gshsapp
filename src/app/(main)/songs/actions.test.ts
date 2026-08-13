@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   transaction: vi.fn(),
   consumeSongQuota: vi.fn(),
   validateSongTitle: vi.fn((value: unknown) => String(value).trim()),
+  lifecycle: vi.fn(),
 }));
 
 vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidatePath }));
@@ -40,6 +41,7 @@ vi.mock("@/lib/security/submission-controls", () => ({
   consumeSongSubmissionQuota: mocks.consumeSongQuota,
   validateSongTitle: mocks.validateSongTitle,
 }));
+vi.mock("@/lib/submission-lifecycle", () => ({ enforceSongRequestLifecycle: mocks.lifecycle }));
 
 import { requestSong } from "./actions";
 

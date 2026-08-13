@@ -4,6 +4,7 @@ const mocks = vi.hoisted(() => ({
   create: vi.fn(),
   deleteMany: vi.fn(),
   findMany: vi.fn(),
+  count: vi.fn(),
   transaction: vi.fn(),
 }));
 
@@ -15,8 +16,9 @@ describe("notification storage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.findMany.mockResolvedValue([]);
+    mocks.count.mockResolvedValue(0);
     mocks.transaction.mockImplementation(async (callback: (tx: unknown) => unknown) => callback({
-      notification: { create: mocks.create, deleteMany: mocks.deleteMany, findMany: mocks.findMany },
+      notification: { create: mocks.create, deleteMany: mocks.deleteMany, findMany: mocks.findMany, count: mocks.count },
     }));
   });
 
@@ -41,5 +43,13 @@ describe("notification storage", () => {
     const { createNotification } = await import("./notifications");
     await expect(createNotification("user", "SYSTEM", "title", "body"))
       .rejects.toThrow("write failed");
+  });
+
+  it("rejects a write when the global hard cap is reached", async () => {
+    mocks.count.mockResolvedValue(250_000);
+    const { createNotification } = await import("./notifications");
+    await expect(createNotification("user", "SYSTEM", "title", "body"))
+      .rejects.toThrow("Notification storage limit reached");
+    expect(mocks.create).not.toHaveBeenCalled();
   });
 });

@@ -1,6 +1,7 @@
 import type { Prisma } from "@prisma/client";
 
 import { writeAuditLog } from "@/lib/audit";
+import { enforceNotificationLifecycle } from "@/lib/notifications";
 import { isCanonicalUuid } from "@/lib/security/public-input";
 
 export const SONG_STATUSES = ["PENDING", "APPROVED", "REJECTED", "PLAYED"] as const;
@@ -103,6 +104,7 @@ export async function moderateSongRequest(db: SongModerationDb, rawInput: SongMo
     if (updated.count !== 1) throw new Error("Song status changed concurrently");
 
     const message = buildSongStatusMessage(song.videoTitle, input.status, input.rejectionReason);
+    await enforceNotificationLifecycle(tx, 1);
     await tx.notification.create({
       data: {
         userId: song.requesterId,

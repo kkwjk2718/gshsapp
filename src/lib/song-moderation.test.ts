@@ -19,7 +19,11 @@ function createDb(currentStatus = "PENDING", updateCount = 1) {
       }),
       updateMany: vi.fn().mockResolvedValue({ count: updateCount }),
     },
-    notification: { create: vi.fn().mockResolvedValue({ id: "notification-1" }) },
+    notification: {
+      create: vi.fn().mockResolvedValue({ id: "notification-1" }),
+      deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+      count: vi.fn().mockResolvedValue(0),
+    },
     auditLog: { create: vi.fn().mockResolvedValue({ id: "audit-1" }) },
   };
   return {

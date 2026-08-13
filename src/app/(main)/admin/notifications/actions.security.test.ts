@@ -7,12 +7,16 @@ const mocks = vi.hoisted(() => ({
   audit: vi.fn(),
   transaction: vi.fn(),
   revalidatePath: vi.fn(),
+  lifecycle: vi.fn(),
 }));
 
 vi.mock("@/lib/session", () => ({ getCurrentUser: mocks.getCurrentUser }));
 vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidatePath }));
 vi.mock("@/lib/audit", () => ({ writeAuditLog: mocks.audit }));
-vi.mock("@/lib/notifications", () => ({ createNotification: vi.fn() }));
+vi.mock("@/lib/notifications", () => ({
+  createNotification: vi.fn(),
+  enforceNotificationLifecycle: mocks.lifecycle,
+}));
 vi.mock("@/lib/db", () => ({
   prisma: {
     user: { findMany: vi.fn(), findUnique: mocks.findUser },
@@ -61,6 +65,7 @@ describe("admin notification security", () => {
     expect(mocks.createNotification).toHaveBeenCalledWith({
       data: expect.objectContaining({ userId: "user-1", link: "/me?tab=security" }),
     });
+    expect(mocks.lifecycle).toHaveBeenCalledWith(expect.anything(), 1);
     expect(mocks.audit).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
       actorId: "admin-1",
       action: "ADMIN_NOTIFICATION_SENT",
