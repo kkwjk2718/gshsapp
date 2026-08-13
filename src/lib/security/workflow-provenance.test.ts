@@ -95,10 +95,14 @@ describe("deployment workflow provenance boundaries", () => {
     }
   });
 
-  it("creates the pre-deployment backup in the already-running trusted container", async () => {
+  it("keeps the trusted-container backup path while isolating the first-deployment bootstrap", async () => {
     const deploy = await source("deploy/deploy.sh");
+    const backup = await source("deploy/predeployment-backup.sh");
 
-    expect(deploy).toContain('docker exec "$CONTAINER_NAME"');
-    expect(deploy).not.toMatch(/create_predeployment_backup\(\)[\s\S]*?docker run[\s\S]*?^\}/mu);
+    expect(deploy).toContain("predeployment-backup.sh");
+    expect(backup).toContain('docker exec "$CONTAINER_NAME"');
+    expect(backup).toContain("--network none");
+    expect(backup).toContain("/input/bootstrap.tar.gz,readonly");
+    expect(backup).not.toContain("dst=/app/data");
   });
 });

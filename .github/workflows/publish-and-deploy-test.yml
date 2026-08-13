@@ -102,6 +102,8 @@ jobs:
           install -m 644 deploy/validate-ufw-rules.py "$DEPLOY_PATH/validate-ufw-rules.py"
           install -m 755 deploy/offsite-backup.sh "$DEPLOY_PATH/offsite-backup.sh"
           install -m 755 deploy/run-scheduled-backup.sh "$DEPLOY_PATH/run-scheduled-backup.sh"
+          install -m 755 deploy/predeployment-backup.sh "$DEPLOY_PATH/predeployment-backup.sh"
+          install -m 755 deploy/bootstrap-backup.py "$DEPLOY_PATH/bootstrap-backup.py"
           install -m 755 deploy/restore-drill.sh "$DEPLOY_PATH/restore-drill.sh"
       - name: Deploy test server
         shell: bash

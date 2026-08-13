@@ -81,7 +81,7 @@ NEXT_PUBLIC_NEIS_API_KEY=
 ## 4. SQLite 운영 원칙
 
 - DB 파일은 `/app/data/dev.db` 영속 볼륨 경로를 사용합니다.
-- 배포 전 백업은 새 이미지의 공용 백업 엔진이 `VACUUM INTO`로 만든 일관된 스냅샷이어야 합니다. 라이브 DB 파일을 `cp`하지 않습니다.
+- 일반 배포 전 백업은 실행 중인 마지막 신뢰 이미지의 공용 엔진이 `VACUUM INTO`로 만든 일관된 스냅샷이어야 합니다. 최초 강화 배포에서 구형 이미지에 ops 런타임이 없을 때만 호스트 Python SQLite online-backup으로 DB-only v2 쌍을 만들며, 후보 이미지는 네트워크 없이 아카이브만 읽어 격리 migration 검증합니다. 어느 경로도 라이브 DB 파일을 `cp`하거나 후보 이미지에 라이브 data root를 마운트하지 않습니다.
 - 백업 엔진은 backup directory의 cross-process heartbeat lease를 획득한 한 writer만 capacity check, snapshot, archive, retention을 수행합니다. 새 세대의 검증과 metadata 영속화가 끝난 뒤에만 완전한 archive/metadata 쌍을 count, age, total-bytes 정책으로 정리합니다. 최신 세대와 최소 3세대는 항상 남기며, 예상 스냅샷 공간과 256 MiB 여유를 확보하지 못하면 생성 전에 중단합니다.
 - 라이브 DB를 컨테이너 임시 경로에 두지 않습니다.
 - 복원 리허설은 라이브 DB를 직접 덮어쓰지 않습니다.

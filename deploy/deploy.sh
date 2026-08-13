@@ -138,31 +138,14 @@ PY
 }
 
 create_predeployment_backup() {
-  if [[ -L "$DB_FILE" ]]; then
-    echo "Refusing to back up a symbolic-link database." >&2
-    exit 1
-  fi
-  if [[ ! -e "$DB_FILE" ]]; then
-    return
-  fi
-  if [[ ! -f "$DB_FILE" ]]; then
-    echo "The configured database is not a regular file." >&2
-    exit 1
-  fi
-
-  echo "Creating a SQLite-consistent pre-deployment backup..."
-  if ! docker container inspect "$CONTAINER_NAME" >/dev/null 2>&1 ||
-     [[ "$(docker container inspect --format '{{.State.Running}}' "$CONTAINER_NAME")" != "true" ]]; then
-    echo "An existing database may only be backed up by the already-running trusted application container." >&2
-    echo "Restore the last known-good service or create a reviewed offline backup before deploying." >&2
-    exit 1
-  fi
-
-  # Never execute the not-yet-deployed candidate image against the live DB.
-  # The current service already owns DB access and provides the consistent
-  # snapshot implementation that was accepted with the last deployment.
-  docker exec "$CONTAINER_NAME" \
-    node /app/.next/ops/run-scheduled-backup.mjs --force
+  DATA_DIR="$DATA_DIR" \
+  BACKUP_DIR="$BACKUP_DIR" \
+  DB_FILE="$DB_FILE" \
+  CONTAINER_NAME="$CONTAINER_NAME" \
+  PYTHON_BIN="$PYTHON_BIN" \
+  DOCKER_IMAGE="$DOCKER_IMAGE" \
+  IMAGE_DIGEST="$IMAGE_DIGEST" \
+    "$DEPLOY_ROOT/predeployment-backup.sh"
 }
 
 require_command docker

@@ -163,7 +163,7 @@ prepare_restore_source() {
     --mount "type=bind,src=$BACKUP_DIR,dst=/input,readonly" \
     --mount "type=bind,src=$TEMP_DIR/validated,dst=/output" \
     "${DOCKER_IMAGE}@${IMAGE_DIGEST}" \
-    node .next/ops/validate-backup.mjs "/input/$RESTORE_SOURCE_NAME" /output
+    node .next/ops/validate-backup.mjs "/input/$RESTORE_SOURCE_NAME" /output --migrate-reviewed-input
 
   mv "$TEMP_DIR/validated/data" "$TEMP_DIR/data"
   rmdir "$TEMP_DIR/validated"

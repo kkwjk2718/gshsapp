@@ -106,4 +106,18 @@ describe("production migration preflight", () => {
     predicateDrift.close();
     tableDrift.close();
   });
+
+  it("treats CRLF and LF inside otherwise identical schema SQL as the same reviewed schema", () => {
+    const lf = new DatabaseSync(":memory:");
+    const crlf = new DatabaseSync(":memory:");
+    const schema = `CREATE TABLE "LineEnding" (
+      "id" TEXT PRIMARY KEY,
+      "value" TEXT NOT NULL
+    )`;
+    lf.exec(schema);
+    crlf.exec(schema.replaceAll("\n", "\r\n"));
+    expect(schemaFingerprint(crlf)).toBe(schemaFingerprint(lf));
+    lf.close();
+    crlf.close();
+  });
 });

@@ -10,6 +10,8 @@
 - [restore-drill.sh](./restore-drill.sh): 임시 컨테이너 기반 복원 리허설
 - [offsite-backup.sh](./offsite-backup.sh): 오프호스트 백업 내보내기
 - [run-scheduled-backup.sh](./run-scheduled-backup.sh): self-hosted runner가 실행하는 정기 백업 진입점
+- [predeployment-backup.sh](./predeployment-backup.sh): 배포 잠금 안에서 신뢰 컨테이너 또는 최초 강화 배포용 호스트 백업을 선택
+- [bootstrap-backup.py](./bootstrap-backup.py): 구형 컨테이너용 SQLite online-backup 및 v2 archive/metadata 검증기
 - [verify-image-provenance.sh](./verify-image-provenance.sh): GitHub-hosted prepare job에서 `main` ancestry, Docker Hub digest, GitHub Sigstore build provenance를 함께 검증
 - [verify-rehearsal-proof.sh](./verify-rehearsal-proof.sh): 운영 배포 전에 동일 control SHA에서 동일 후보/digest의 E2E·restore drill 리허설이 성공했는지 GitHub run과 proof artifact로 검증
 
@@ -23,6 +25,8 @@
   restore-drill.sh
   offsite-backup.sh
   run-scheduled-backup.sh
+  predeployment-backup.sh
+  bootstrap-backup.py
   data/
   backup/
 ```
@@ -35,6 +39,7 @@
 - `restore-drill.sh`: 복원 리허설 실행용 스크립트
 - `offsite-backup.sh`: 외부 백업 저장소로 복사하는 스크립트
 - `run-scheduled-backup.sh`: 정기 백업용 호스트 스크립트
+- `predeployment-backup.sh`, `bootstrap-backup.py`: 최초 강화 배포 호환 사전 백업 경계
 - `data/`: SQLite DB 보관 디렉터리
 - `backup/`: 백업 파일 보관 디렉터리
 
@@ -60,7 +65,7 @@
 3. 임시 `.deploy.env` 생성
 4. 필요 시 Docker Hub 로그인
 5. GitHub-hosted prepare job이 승인한 digest로 이미지를 pull하고 revision label을 보조 검증
-6. 기존 SQLite DB는 현재 실행 중인 마지막 신뢰 컨테이너 내부의 snapshot 엔진으로만 일관된 사전 백업 생성(미검증 후보 이미지는 라이브 DB에 마운트하지 않음)
+6. 기존 SQLite DB는 현재 실행 중인 마지막 신뢰 컨테이너 내부의 snapshot 엔진으로 일관된 사전 백업 생성. 단, 그 구형 컨테이너에 ops 런타임이 아직 없는 최초 강화 배포는 검토된 호스트 Python online-backup으로 DB 전용 v2 쌍을 만들고, 후보 이미지는 네트워크 없이 그 아카이브만 읽어 격리 마이그레이션 검증(후보에 라이브 DB·data root·runtime secret을 마운트하지 않음)
 7. 검토된 Prisma migration을 일회성 컨테이너에서 적용
 8. `docker compose up -d --remove-orphans --wait web`
 9. `/api/health` 버전 응답 확인
@@ -142,11 +147,11 @@ Runner labels:
 - private registry 자격증명이 필요한 경우에도 배포/복원 스크립트는 `0700` 임시 `DOCKER_CONFIG`만 사용하고 종료 시 삭제합니다. publish 권한 토큰을 runner의 기본 `~/.docker/config.json`에 남기지 않습니다.
 - SQLite를 사용하므로 대규모 변경 전에는 백업 상태를 먼저 확인합니다.
 
-백업 보존은 완전한 archive/metadata 쌍을 세대 단위로 다루며 새 백업이 검증·영속화된 뒤에만 실행됩니다. manual, scheduled, pre-deployment가 다른 Node process에서 겹쳐도 backup directory의 원자적 lock directory와 heartbeat lease를 획득한 한 writer만 전체 생명주기를 수행하고 나머지는 `BACKUP_BUSY`로 중단합니다. 기본값은 최소 3세대, 최대 30세대, 90일, 총 20 GiB이고 최신 검증 세대와 최소 세대 수가 age/bytes 제한보다 우선합니다. 생성 전에는 DB와 선택된 content root를 기준으로 snapshot+archive 동시 점유량과 256 MiB reserve를 보수적으로 검사합니다. 24시간이 지난 정해진 이름의 `.create-*`, `.partial`, unpaired archive/metadata만 일반 파일·디렉터리와 inode를 재검증한 뒤 정리합니다.
+백업 보존은 완전한 archive/metadata 쌍을 세대 단위로 다루며 새 백업이 검증·영속화된 뒤에만 실행됩니다. manual, scheduled, 일반 pre-deployment가 다른 Node process에서 겹쳐도 backup directory의 원자적 lock directory와 heartbeat lease를 획득한 한 writer만 전체 생명주기를 수행하고 나머지는 `BACKUP_BUSY`로 중단합니다. 최초 강화 배포의 호스트 bootstrap은 바깥의 `.deploy.lock`으로 정기 작업과 직렬화되고 보존 삭제를 수행하지 않으며, 고유 이름의 DB-only 쌍을 완전히 검증한 뒤에만 남깁니다. 기본값은 최소 3세대, 최대 30세대, 90일, 총 20 GiB이고 최신 검증 세대와 최소 세대 수가 age/bytes 제한보다 우선합니다. 생성 전에는 DB와 선택된 content root를 기준으로 snapshot+archive 동시 점유량과 256 MiB reserve를 보수적으로 검사합니다. 24시간이 지난 정해진 이름의 `.create-*`, `.partial`, unpaired archive/metadata만 일반 파일·디렉터리와 inode를 재검증한 뒤 정리합니다.
 
 ## 복원 리허설
 
-`restore-drill.sh`는 정해진 이름의 최신 백업이 freshness 기준을 만족할 때만 사용합니다. 새 이미지 내부의 공용 검증기로 아카이브를 격리 검증한 뒤 별도 포트에서 컨테이너를 띄우며, 라이브 DB 복사본이나 호스트 `tar` 폴백은 사용하지 않습니다.
+`restore-drill.sh`는 정해진 이름의 최신 백업이 freshness 기준을 만족할 때만 사용합니다. 새 이미지 내부의 공용 검증기로 아카이브를 격리 검증하고, 검토된 legacy/current 스키마는 격리 사본에서 migration까지 통과시킨 뒤 별도 포트에서 컨테이너를 띄웁니다. 라이브 DB 복사본이나 호스트 `tar` 폴백은 사용하지 않습니다.
 
 관련 환경 변수:
 

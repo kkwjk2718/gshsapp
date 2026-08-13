@@ -63,6 +63,8 @@ Local pair-aware retention runs only after a new archive and metadata are valida
 
 Set `OFFSITE_BACKUP_READY=true` only after a fresh off-host copy and successful restore drill.
 
+The first hardened deployment may start from an older trusted container that does not contain `.next/ops/run-scheduled-backup.mjs`. In that one compatibility case, `predeployment-backup.sh` uses Python's SQLite online-backup API on the host to publish a DB-only v2 archive/metadata pair. The digest-pinned candidate then receives only that archive read-only, with no network, runtime secrets, live database, data root, or backup-directory mount, and must migrate and validate an isolated copy before deployment continues. Later deployments return to the running trusted container's normal backup engine.
+
 ## 4. DNS and mail policy
 
 Observed on 2026-08-13:

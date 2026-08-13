@@ -9,8 +9,7 @@ async function source(relative: string) {
 describe("deployment backup boundaries", () => {
   it("creates the pre-deployment backup through the consistent snapshot engine", async () => {
     const script = await source("deploy/deploy.sh");
-    expect(script).toContain(".next/ops/run-scheduled-backup.mjs");
-    expect(script).toContain("--force");
+    expect(script).toContain("predeployment-backup.sh");
     expect(script).not.toMatch(/\bcp\s+["']?\$DB_FILE/u);
   });
 
@@ -32,6 +31,7 @@ describe("deployment backup boundaries", () => {
     expect(offsite).not.toMatch(/\bcp\b/u);
     expect(drill).not.toMatch(/\btar\s+-/u);
     expect(drill).toContain(".next/ops/validate-backup.mjs");
+    expect(drill).toContain("--migrate-reviewed-input");
     expect(drill).toContain('--group-add "$(id -g)"');
     expect(drill).not.toContain('--user "$(id -u):$(id -g)"');
   });
@@ -44,5 +44,15 @@ describe("deployment backup boundaries", () => {
     expect(production).toContain("schedule:");
     expect(scheduled).toContain(".deploy.lock");
     expect(scheduled).toContain("flock -n 9");
+  });
+
+  it.each([
+    ".github/workflows/publish-and-deploy-test.yml",
+    ".github/workflows/preproduction-rehearsal.yml",
+    ".github/workflows/deploy-prod.yml",
+  ])("installs the reviewed first-deployment bootstrap controls in %s", async (workflow) => {
+    const sourceText = await source(workflow);
+    expect(sourceText).toContain('install -m 755 deploy/predeployment-backup.sh "$DEPLOY_PATH/predeployment-backup.sh"');
+    expect(sourceText).toContain('install -m 755 deploy/bootstrap-backup.py "$DEPLOY_PATH/bootstrap-backup.py"');
   });
 });

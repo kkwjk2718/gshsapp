@@ -39,6 +39,12 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
+      - name: Exercise first-deployment backup boundary
+        run: |
+          npm run build:ops
+          python3 -m py_compile deploy/bootstrap-backup.py
+          bash -n deploy/predeployment-backup.sh deploy/predeployment-backup.test.sh
+          bash deploy/predeployment-backup.test.sh
 
   firewall-policy:
     runs-on: ubuntu-latest

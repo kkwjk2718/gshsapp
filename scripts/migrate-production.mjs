@@ -19,7 +19,12 @@ export function schemaFingerprint(db) {
       AND name <> '_prisma_migrations'
       AND tbl_name <> '_prisma_migrations'
     ORDER BY type, name
-  `).all().map(({ type, name, tableName, sql }) => ({ type, name, tableName, sql }));
+  `).all().map(({ type, name, tableName, sql }) => ({
+    type,
+    name,
+    tableName,
+    sql: typeof sql === "string" ? sql.replace(/\r\n/gu, "\n") : sql,
+  }));
 
   return createHash("sha256").update(JSON.stringify(schemaObjects)).digest("hex");
 }
