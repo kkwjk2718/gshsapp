@@ -10,9 +10,9 @@ export function TokenInput() {
 
   useEffect(() => {
     const fragmentToken = parseInviteTokenFragment(window.location.hash);
-    if (fragmentToken) setToken(fragmentToken);
     const cleanLocation = stripInviteTokenFromLocation(window.location.pathname, window.location.search);
     window.history.replaceState(null, "", cleanLocation);
+    if (fragmentToken) setToken(fragmentToken);
   }, []);
 
   function submitToken(event: FormEvent<HTMLFormElement>) {
