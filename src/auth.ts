@@ -13,6 +13,11 @@ import { getApplicationSecuritySecret, hashSecurityPrincipal } from '@/lib/secur
 import { isSensitiveClientAddressTrusted, parseTrustedProxyHops, resolveTrustedClientAddress } from '@/lib/security/client-address';
 import { isValidBcryptInput } from '@/lib/security/password-policy';
 import { hasActiveRosterMembership, isRosterGovernedRole } from '@/lib/student-membership';
+import { BoundedKeyedLock, BoundedKeyedLockError, securityPrincipalLockKey } from '@/lib/security/bounded-keyed-lock';
+import { BoundedAttemptAdmission } from '@/lib/security/attempt-admission';
+
+const loginVerificationLock = new BoundedKeyedLock();
+const loginNetworkAdmission = new BoundedAttemptAdmission({ maxAttempts: 200, windowMs: 10 * 60_000, maxKeys: 1_024 });
 
 async function verifyPassword(password: string, hash: string) {
   return await bcrypt.compare(password, hash);
@@ -60,38 +65,47 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           const networkKey = clientAddress === null
             ? null
             : hashSecurityPrincipal("login-network", clientAddress, securitySecret);
+          if (!loginNetworkAdmission.admit(networkKey)) throw new LoginTemporarilyLockedError();
 
-          if (loginAttemptLimiter.check(identifierKey, networkKey).locked || await isLoginTemporarilyLocked(userId)) {
-            if (blockedLoginLogSampler.shouldLog(identifierKey, networkKey)) {
-              await logAction("LOGIN_BLOCKED", { loginId: userId, reason: "rate-limit" }, undefined, { userId: null });
-            }
-            throw new LoginTemporarilyLockedError();
-          }
+          try {
+            return await loginVerificationLock.runExclusive(
+              [securityPrincipalLockKey("login", identifierKey)],
+              async () => {
+                if (loginAttemptLimiter.check(identifierKey, networkKey).locked || await isLoginTemporarilyLocked(userId)) {
+                  if (blockedLoginLogSampler.shouldLog(identifierKey, networkKey)) {
+                    await logAction("LOGIN_BLOCKED", { loginId: userId, reason: "rate-limit" }, undefined, { userId: null });
+                  }
+                  throw new LoginTemporarilyLockedError();
+                }
 
-          const user = await prisma.user.findUnique({ where: { userId } });
-          const verifiedUser = await verifyLoginCandidate(password, user, verifyPassword);
-
-          if (verifiedUser && isRosterGovernedRole(verifiedUser.role) && !(await hasActiveRosterMembership(prisma, verifiedUser))) {
-            loginAttemptLimiter.recordFailure(identifierKey, networkKey);
-            await logAction("LOGIN_FAILED", { loginId: userId, reason: "Inactive enrollment" }, undefined, { userId: verifiedUser.id });
-            return null;
-          }
-
-          if (verifiedUser) {
-            loginAttemptLimiter.clearIdentifier(identifierKey);
-            return {
-              id: verifiedUser.id,
-              name: verifiedUser.name,
-              email: verifiedUser.email,
-              role: verifiedUser.role,
-              studentId: verifiedUser.studentId,
-              gisu: verifiedUser.gisu,
-              sessionVersion: verifiedUser.sessionVersion,
-              mustChangePassword: verifiedUser.mustChangePassword,
-            };
-          } else {
-            loginAttemptLimiter.recordFailure(identifierKey, networkKey);
-            await logAction("LOGIN_FAILED", { loginId: userId, reason: "Invalid credentials" }, undefined, { userId: user?.id ?? null });
+                const user = await prisma.user.findUnique({ where: { userId } });
+                const verifiedUser = await verifyLoginCandidate(password, user, verifyPassword);
+                if (verifiedUser && isRosterGovernedRole(verifiedUser.role) && !(await hasActiveRosterMembership(prisma, verifiedUser))) {
+                  loginAttemptLimiter.recordFailure(identifierKey, networkKey);
+                  await logAction("LOGIN_FAILED", { loginId: userId, reason: "Inactive enrollment" }, undefined, { userId: verifiedUser.id });
+                  return null;
+                }
+                if (verifiedUser) {
+                  loginAttemptLimiter.clearIdentifier(identifierKey);
+                  return {
+                    id: verifiedUser.id,
+                    name: verifiedUser.name,
+                    email: verifiedUser.email,
+                    role: verifiedUser.role,
+                    studentId: verifiedUser.studentId,
+                    gisu: verifiedUser.gisu,
+                    sessionVersion: verifiedUser.sessionVersion,
+                    mustChangePassword: verifiedUser.mustChangePassword,
+                  };
+                }
+                loginAttemptLimiter.recordFailure(identifierKey, networkKey);
+                await logAction("LOGIN_FAILED", { loginId: userId, reason: "Invalid credentials" }, undefined, { userId: user?.id ?? null });
+                return null;
+              },
+            );
+          } catch (error) {
+            if (error instanceof BoundedKeyedLockError) throw new LoginTemporarilyLockedError();
+            throw error;
           }
         }
 

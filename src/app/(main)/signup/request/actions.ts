@@ -13,6 +13,8 @@ import { isSensitiveClientAddressTrusted, parseTrustedProxyHops, resolveTrustedC
 import { parsePortalInviteInput, validatePortalPasswordInput } from "@/lib/security/portal-input";
 import { prisma } from "@/lib/db";
 import { validatePortalRosterIdentity } from "@/lib/student-roster";
+import { BoundedKeyedLock, BoundedKeyedLockError, securityPrincipalLockKey } from "@/lib/security/bounded-keyed-lock";
+import { BoundedAttemptAdmission } from "@/lib/security/attempt-admission";
 
 export type PortalActionResult = {
   success?: string;
@@ -20,6 +22,8 @@ export type PortalActionResult = {
 };
 
 const portalUnlockLimiter = new PortalUnlockLimiter();
+const portalVerificationLock = new BoundedKeyedLock();
+const portalNetworkAdmission = new BoundedAttemptAdmission({ maxAttempts: 100, windowMs: 10 * 60_000, maxKeys: 1_024 });
 
 async function getPortalUnlockKeys() {
   const [rawClientKey, requestHeaders] = await Promise.all([getPortalClientKey(), headers()]);
@@ -57,12 +61,19 @@ export async function unlockTokenPortal(
 
   const unlockKeys = await getPortalUnlockKeys();
   if (!unlockKeys.trustedClient) return { error: "Unable to verify the portal network path." };
+  if (!portalNetworkAdmission.admit(unlockKeys.networkKey)) {
+    return { error: "Too many network attempts. Please wait before trying again." };
+  }
+  try {
+    return await portalVerificationLock.runExclusive(
+      [securityPrincipalLockKey("portal", unlockKeys.clientKey)],
+      async () => {
   const limiterDecision = portalUnlockLimiter.check(unlockKeys.clientKey, unlockKeys.networkKey);
   if (!limiterDecision.allowed) {
     return { error: "Too many failed attempts. Please wait before trying again." };
   }
 
-  const isMatch = await bcrypt.compare(password, settings.passwordHash);
+  const isMatch = await bcrypt.compare(password, settings.passwordHash!);
   if (!isMatch) {
     portalUnlockLimiter.recordFailure(unlockKeys.clientKey, unlockKeys.networkKey);
     await logAction("token_portal_password_failed", { provided: true });
@@ -78,6 +89,14 @@ export async function unlockTokenPortal(
   return {
     success: "포털 인증이 완료되었습니다.",
   };
+      },
+    );
+  } catch (error) {
+    if (error instanceof BoundedKeyedLockError) {
+      return { error: "Too many concurrent attempts. Please wait before trying again." };
+    }
+    throw error;
+  }
 }
 
 export async function requestSignupToken(
