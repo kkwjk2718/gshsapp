@@ -1,4 +1,4 @@
-FROM node:20-alpine AS base
+FROM node:24.19.0-alpine3.23@sha256:244cc2b53f46f9e876304391d17682b0ddae9ac33491f4857e25e35a36ba7995 AS base
 RUN apk add --no-cache libc6-compat openssl
 
 # Install dependencies only when needed
@@ -30,6 +30,7 @@ FROM base AS runner
 WORKDIR /app
 
 ARG APP_VERSION=dev
+ARG VCS_REF=unknown
 ENV NODE_ENV=production
 ENV APP_VERSION=$APP_VERSION
 # Uncomment the following line in case you want to disable telemetry during runtime.
@@ -53,9 +54,11 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
 COPY --from=builder --chown=nextjs:nodejs /app/scripts ./scripts
 
-# Install Prisma CLI in the runner image so we can run 'prisma db push'
-# We install it after copying standalone to ensure it's added to the existing node_modules
-RUN npm install prisma tsx && chown -R nextjs:nodejs /app/node_modules
+# The migration command is a separate one-shot Compose service. It receives only
+# the lockfile-resolved Prisma runtime and reviewed migration artifacts.
+COPY --from=deps --chown=nextjs:nodejs /app/node_modules/prisma ./node_modules/prisma
+COPY --from=deps --chown=nextjs:nodejs /app/node_modules/@prisma ./node_modules/@prisma
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules/.prisma ./node_modules/.prisma
 
 # Copy the entrypoint script
 COPY --chown=nextjs:nodejs docker-entrypoint.sh ./
@@ -74,4 +77,13 @@ ENV NODE_OPTIONS="--dns-result-order=ipv4first"
 # set hostname to localhost
 ENV HOSTNAME="0.0.0.0"
 
-CMD ["./docker-entrypoint.sh"]
+LABEL org.opencontainers.image.title="gshsapp" \
+      org.opencontainers.image.version="$APP_VERSION" \
+      org.opencontainers.image.revision="$VCS_REF" \
+      org.opencontainers.image.source="https://github.com/kkwjk2718/gshsapp"
+
+HEALTHCHECK --interval=15s --timeout=5s --start-period=30s --retries=4 \
+  CMD ["node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(async r=>{const b=await r.json();if(!r.ok||b.ok!==true)process.exit(1)}).catch(()=>process.exit(1))"]
+
+ENTRYPOINT ["./docker-entrypoint.sh"]
+CMD ["node", "server.js"]

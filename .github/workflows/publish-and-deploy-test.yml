@@ -13,7 +13,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  AUTH_SECRET: ci-auth-secret
+  AUTH_SECRET: ci-only-auth-secret-material-over-32-bytes
   AUTH_TRUST_HOST: "true"
   AUTH_URL: http://localhost:3000
   NEXTAUTH_URL: http://localhost:3000
@@ -30,10 +30,10 @@ jobs:
   quality:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
-          node-version: 20
+          node-version: 24.19.0
           cache: npm
       - run: npm ci
       - run: npm run lint
@@ -43,24 +43,29 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     needs: quality
+    outputs:
+      image_digest: ${{ steps.build.outputs.digest }}
     steps:
-      - uses: actions/checkout@v5
-      - uses: docker/setup-buildx-action@v3
-      - uses: docker/login-action@v3
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-      - uses: docker/build-push-action@v6
+      - id: build
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: .
           file: ./Dockerfile
           push: true
           build-args: |
             APP_VERSION=${{ env.IMAGE_TAG }}
+            VCS_REF=${{ github.sha }}
+          labels: |
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME }}/gshsapp:${{ env.IMAGE_TAG }}
-            ${{ secrets.DOCKERHUB_USERNAME }}/gshsapp:main
-            ${{ secrets.DOCKERHUB_USERNAME }}/gshsapp:latest
 
   deploy:
     runs-on:
@@ -73,7 +78,7 @@ jobs:
       name: test
       url: https://test.gshs.app
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - name: Sync deploy assets on test server
         shell: bash
         run: |
@@ -81,6 +86,7 @@ jobs:
           install -d "$DEPLOY_PATH" "$DEPLOY_PATH/data" "$DEPLOY_PATH/backup"
           install -m 644 deploy/compose.yml "$DEPLOY_PATH/compose.yml"
           install -m 755 deploy/deploy.sh "$DEPLOY_PATH/deploy.sh"
+          install -m 644 deploy/deploy-policy.sh "$DEPLOY_PATH/deploy-policy.sh"
           install -m 755 deploy/offsite-backup.sh "$DEPLOY_PATH/offsite-backup.sh"
           install -m 755 deploy/run-scheduled-backup.sh "$DEPLOY_PATH/run-scheduled-backup.sh"
           install -m 755 deploy/restore-drill.sh "$DEPLOY_PATH/restore-drill.sh"
@@ -90,15 +96,23 @@ jobs:
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
           IMAGE_TAG: ${{ env.IMAGE_TAG }}
+          IMAGE_DIGEST: ${{ needs.publish.outputs.image_digest }}
           BACKUP_MAX_AGE_HOURS: ${{ env.BACKUP_MAX_AGE_HOURS }}
+          HOST_BIND_IP: ${{ vars.HOST_BIND_IP }}
+          ALLOW_PUBLIC_BIND: ${{ vars.ALLOW_PUBLIC_BIND }}
+          REQUIRE_EXPLICIT_BIND: "true"
         run: |
           set -euo pipefail
           cd "$DEPLOY_PATH"
           export DOCKERHUB_USERNAME="$DOCKERHUB_USERNAME"
           export DOCKERHUB_TOKEN="$DOCKERHUB_TOKEN"
           export IMAGE_TAG="$IMAGE_TAG"
+          export IMAGE_DIGEST="$IMAGE_DIGEST"
           export APP_VERSION="$IMAGE_TAG"
           export BACKUP_MAX_AGE_HOURS="$BACKUP_MAX_AGE_HOURS"
+          export HOST_BIND_IP="$HOST_BIND_IP"
+          export ALLOW_PUBLIC_BIND="$ALLOW_PUBLIC_BIND"
+          export REQUIRE_EXPLICIT_BIND="$REQUIRE_EXPLICIT_BIND"
           export DOCKER_IMAGE="${DOCKERHUB_USERNAME}/gshsapp"
           ./deploy.sh
 
@@ -156,10 +170,10 @@ jobs:
       name: test
       url: ${{ env.E2E_BASE_URL }}
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
-          node-version: 20
+          node-version: 24.19.0
           cache: npm
       - run: npm ci
       - run: npx playwright install --with-deps chromium
@@ -205,7 +219,7 @@ jobs:
         run: npm run test:e2e
       - name: Upload Playwright report
         if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: playwright-report-test-${{ github.run_id }}
           path: |

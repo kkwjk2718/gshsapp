@@ -8,7 +8,7 @@ permissions:
   contents: read
 
 env:
-  AUTH_SECRET: ci-auth-secret
+  AUTH_SECRET: ci-only-auth-secret-material-over-32-bytes
   AUTH_TRUST_HOST: "true"
   AUTH_URL: http://localhost:3000
   NEXTAUTH_URL: http://localhost:3000
@@ -21,10 +21,10 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
-          node-version: 20
+          node-version: 24.19.0
           cache: npm
       - run: npm ci
       - run: npm run lint
@@ -32,10 +32,10 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
-          node-version: 20
+          node-version: 24.19.0
           cache: npm
       - run: npm ci
       - run: npm test
@@ -43,10 +43,10 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
-          node-version: 20
+          node-version: 24.19.0
           cache: npm
       - run: npm ci
       - run: npm run build

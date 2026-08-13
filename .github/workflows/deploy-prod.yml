@@ -4,12 +4,16 @@ on:
   workflow_dispatch:
     inputs:
       image_tag:
-        description: Immutable image tag to deploy (use sha-<commit>)
+        description: Exact image version (sha- followed by the 40-hex commit)
+        required: true
+        type: string
+      image_digest:
+        description: Exact published image digest (sha256:<64 hex>)
         required: true
         type: string
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: deploy-production
@@ -23,30 +27,83 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      image_tag: ${{ steps.validate.outputs.image_tag }}
+      image_digest: ${{ steps.validate.outputs.image_digest }}
+      source_sha: ${{ steps.validate.outputs.source_sha }}
+    steps:
+      - id: validate
+        shell: bash
+        env:
+          IMAGE_TAG: ${{ inputs.image_tag }}
+          IMAGE_DIGEST: ${{ inputs.image_digest }}
+        run: |
+          set -euo pipefail
+          [[ "$IMAGE_TAG" =~ ^sha-[0-9a-f]{40}$ ]] || { echo "image_tag must be sha-<40 lowercase hex>." >&2; exit 1; }
+          [[ "$IMAGE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "image_digest must be sha256:<64 lowercase hex>." >&2; exit 1; }
+          echo "image_tag=$IMAGE_TAG" >> "$GITHUB_OUTPUT"
+          echo "image_digest=$IMAGE_DIGEST" >> "$GITHUB_OUTPUT"
+          echo "source_sha=${IMAGE_TAG#sha-}" >> "$GITHUB_OUTPUT"
+
+  preflight:
+    runs-on: ubuntu-latest
+    needs: prepare
+    environment:
+      name: production
+    steps:
+      - name: Require operator security attestations
+        shell: bash
+        env:
+          SECURITY_ROTATION_COMPLETE: ${{ vars.SECURITY_ROTATION_COMPLETE }}
+          ORIGIN_FIREWALL_READY: ${{ vars.ORIGIN_FIREWALL_READY }}
+          OFFSITE_BACKUP_READY: ${{ vars.OFFSITE_BACKUP_READY }}
+        run: |
+          set -euo pipefail
+          for variable in SECURITY_ROTATION_COMPLETE ORIGIN_FIREWALL_READY OFFSITE_BACKUP_READY; do
+            [[ "${!variable:-}" == "true" ]] || { echo "$variable must be true in the protected production environment." >&2; exit 1; }
+          done
+      - name: Verify the candidate is healthy on preproduction
+        shell: bash
+        env:
+          EXPECTED_VERSION: ${{ needs.prepare.outputs.image_tag }}
+        run: |
+          set -euo pipefail
+          EXPECTED_VERSION="$EXPECTED_VERSION" python3 - <<'PY'
+          import json
+          import os
+          import urllib.request
+
+          request = urllib.request.Request(
+              "https://test.gshs.app/api/health",
+              headers={"User-Agent": "gshsapp-production-preflight"},
+          )
+          with urllib.request.urlopen(request, timeout=30) as response:
+              payload = json.loads(response.read(65537).decode("utf-8"))
+          if response.status != 200 or payload.get("ok") is not True:
+              raise SystemExit(f"Preproduction is unhealthy: {payload}")
+          if payload.get("version") != os.environ["EXPECTED_VERSION"]:
+              raise SystemExit(f"Preproduction is not running the candidate: {payload}")
+          PY
+
   deploy:
     runs-on:
       - self-hosted
       - Linux
       - X64
       - gshs-prod
+    needs:
+      - prepare
+      - preflight
     environment:
       name: production
       url: https://gshs.app
     steps:
-      - uses: actions/checkout@v5
-      - name: Validate image tag
-        shell: bash
-        env:
-          IMAGE_TAG: ${{ inputs.image_tag }}
-        run: |
-          set -euo pipefail
-          case "$IMAGE_TAG" in
-            sha-*) ;;
-            *)
-              echo "image_tag must use the immutable sha-<commit> format." >&2
-              exit 1
-              ;;
-          esac
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ needs.prepare.outputs.source_sha }}
+          persist-credentials: false
       - name: Sync deploy assets on production server
         shell: bash
         run: |
@@ -54,6 +111,7 @@ jobs:
           install -d "$DEPLOY_PATH" "$DEPLOY_PATH/data" "$DEPLOY_PATH/backup"
           install -m 644 deploy/compose.yml "$DEPLOY_PATH/compose.yml"
           install -m 755 deploy/deploy.sh "$DEPLOY_PATH/deploy.sh"
+          install -m 644 deploy/deploy-policy.sh "$DEPLOY_PATH/deploy-policy.sh"
           install -m 755 deploy/offsite-backup.sh "$DEPLOY_PATH/offsite-backup.sh"
           install -m 755 deploy/run-scheduled-backup.sh "$DEPLOY_PATH/run-scheduled-backup.sh"
           install -m 755 deploy/restore-drill.sh "$DEPLOY_PATH/restore-drill.sh"
@@ -62,16 +120,24 @@ jobs:
         env:
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-          IMAGE_TAG: ${{ inputs.image_tag }}
+          IMAGE_TAG: ${{ needs.prepare.outputs.image_tag }}
+          IMAGE_DIGEST: ${{ needs.prepare.outputs.image_digest }}
           BACKUP_MAX_AGE_HOURS: ${{ env.BACKUP_MAX_AGE_HOURS }}
+          HOST_BIND_IP: ${{ vars.HOST_BIND_IP }}
+          ALLOW_PUBLIC_BIND: ${{ vars.ALLOW_PUBLIC_BIND }}
+          REQUIRE_EXPLICIT_BIND: "true"
         run: |
           set -euo pipefail
           cd "$DEPLOY_PATH"
           export DOCKERHUB_USERNAME="$DOCKERHUB_USERNAME"
           export DOCKERHUB_TOKEN="$DOCKERHUB_TOKEN"
           export IMAGE_TAG="$IMAGE_TAG"
+          export IMAGE_DIGEST="$IMAGE_DIGEST"
           export APP_VERSION="$IMAGE_TAG"
           export BACKUP_MAX_AGE_HOURS="$BACKUP_MAX_AGE_HOURS"
+          export HOST_BIND_IP="$HOST_BIND_IP"
+          export ALLOW_PUBLIC_BIND="$ALLOW_PUBLIC_BIND"
+          export REQUIRE_EXPLICIT_BIND="$REQUIRE_EXPLICIT_BIND"
           export DOCKER_IMAGE="${DOCKERHUB_USERNAME}/gshsapp"
           ./deploy.sh
 
@@ -81,7 +147,9 @@ jobs:
       - Linux
       - X64
       - gshs-prod
-    needs: deploy
+    needs:
+      - prepare
+      - deploy
     outputs:
       health_version: ${{ steps.smoke.outputs.health_version }}
     steps:
@@ -89,7 +157,7 @@ jobs:
         name: Smoke check production deployment on server
         shell: bash
         env:
-          EXPECTED_VERSION: ${{ inputs.image_tag }}
+          EXPECTED_VERSION: ${{ needs.prepare.outputs.image_tag }}
         run: |
           set -euo pipefail
           health_version="$(
@@ -134,23 +202,27 @@ jobs:
   e2e:
     runs-on: ubuntu-latest
     needs:
+      - prepare
       - deploy
       - smoke
     environment:
       name: production
       url: ${{ env.APP_URL }}
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
-          node-version: 20
+          ref: ${{ needs.prepare.outputs.source_sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24.19.0
           cache: npm
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - name: Wait for production domain to serve deployed version
         shell: bash
         env:
-          EXPECTED_VERSION: ${{ inputs.image_tag }}
+          EXPECTED_VERSION: ${{ needs.prepare.outputs.image_tag }}
         run: |
           set -euo pipefail
           EXPECTED_VERSION="$EXPECTED_VERSION" E2E_BASE_URL="$E2E_BASE_URL" python3 - <<'PY'
@@ -189,7 +261,7 @@ jobs:
         run: npm run test:e2e:smoke
       - name: Upload Playwright report
         if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: playwright-report-production-${{ github.run_id }}
           path: |
@@ -201,6 +273,7 @@ jobs:
     runs-on: ubuntu-latest
     if: always()
     needs:
+      - prepare
       - deploy
       - smoke
       - e2e
@@ -211,7 +284,7 @@ jobs:
           DEPLOY_RESULT: ${{ needs.deploy.result }}
           SMOKE_RESULT: ${{ needs.smoke.result }}
           E2E_RESULT: ${{ needs.e2e.result }}
-          IMAGE_TAG: ${{ inputs.image_tag }}
+          IMAGE_TAG: ${{ needs.prepare.outputs.image_tag }}
           HEALTH_VERSION: ${{ needs.smoke.outputs.health_version }}
         run: |
           set -euo pipefail
@@ -232,13 +305,19 @@ jobs:
   release:
     runs-on: ubuntu-latest
     needs:
+      - prepare
       - deploy
       - smoke
       - e2e
       - report
     if: ${{ needs.deploy.result == 'success' && needs.smoke.result == 'success' && needs.e2e.result == 'success' && needs.report.result == 'success' }}
+    permissions:
+      contents: write
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ needs.prepare.outputs.source_sha }}
+          persist-credentials: false
       - id: package_version
         name: Read package version
         shell: bash
@@ -246,9 +325,9 @@ jobs:
           set -euo pipefail
           printf 'value=%s\n' "$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
       - name: Create or update GitHub Release
-        uses: actions/github-script@v8
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         env:
-          IMAGE_TAG: ${{ inputs.image_tag }}
+          IMAGE_TAG: ${{ needs.prepare.outputs.image_tag }}
           HEALTH_VERSION: ${{ needs.smoke.outputs.health_version }}
           PACKAGE_VERSION: ${{ steps.package_version.outputs.value }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}

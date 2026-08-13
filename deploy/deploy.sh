@@ -2,6 +2,8 @@
 set -Eeuo pipefail
 
 DEPLOY_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=deploy-policy.sh
+source "$DEPLOY_ROOT/deploy-policy.sh"
 PROJECT_NAME="${PROJECT_NAME:-gshsapp}"
 COMPOSE_FILE="${COMPOSE_FILE:-$DEPLOY_ROOT/compose.yml}"
 DEPLOY_ENV_FILE="${DEPLOY_ENV_FILE:-$DEPLOY_ROOT/.deploy.env}"
@@ -9,14 +11,20 @@ DATA_DIR="${DATA_DIR:-$DEPLOY_ROOT/data}"
 BACKUP_DIR="${BACKUP_DIR:-$DEPLOY_ROOT/backup}"
 DB_FILE="${DB_FILE:-$DATA_DIR/dev.db}"
 
+RAW_HOST_BIND_IP="${HOST_BIND_IP:-}"
 IMAGE_TAG="${IMAGE_TAG:?IMAGE_TAG is required}"
+IMAGE_DIGEST="${IMAGE_DIGEST:?IMAGE_DIGEST is required}"
 DOCKER_IMAGE="${DOCKER_IMAGE:-kkwjk2718git/gshsapp}"
 APP_VERSION="${APP_VERSION:-$IMAGE_TAG}"
-HOST_BIND_IP="${HOST_BIND_IP:-0.0.0.0}"
+HOST_BIND_IP="${HOST_BIND_IP:-127.0.0.1}"
 HOST_PORT="${HOST_PORT:-1234}"
 CONTAINER_NAME="${CONTAINER_NAME:-gshsapp-web}"
 BACKUP_MAX_AGE_HOURS="${BACKUP_MAX_AGE_HOURS:-24}"
-HEALTHCHECK_URL="${HEALTHCHECK_URL:-http://${HOST_BIND_IP}:${HOST_PORT}/api/health}"
+HEALTHCHECK_HOST="$HOST_BIND_IP"
+case "$HEALTHCHECK_HOST" in
+  0.0.0.0|::|"[::]") HEALTHCHECK_HOST=127.0.0.1 ;;
+esac
+HEALTHCHECK_URL="${HEALTHCHECK_URL:-http://${HEALTHCHECK_HOST}:${HOST_PORT}/api/health}"
 SMOKE_TIMEOUT_SECONDS="${SMOKE_TIMEOUT_SECONDS:-90}"
 SMOKE_INTERVAL_SECONDS="${SMOKE_INTERVAL_SECONDS:-3}"
 PYTHON_BIN="${PYTHON_BIN:-python3}"
@@ -37,8 +45,12 @@ compose() {
 }
 
 write_deploy_env() {
-  cat >"$DEPLOY_ENV_FILE" <<EOF
+  local temporary_env
+  temporary_env="$(mktemp "$DEPLOY_ROOT/.deploy.env.new.XXXXXX")"
+  chmod 600 "$temporary_env"
+  cat >"$temporary_env" <<EOF
 IMAGE_TAG=$IMAGE_TAG
+IMAGE_DIGEST=$IMAGE_DIGEST
 DOCKER_IMAGE=$DOCKER_IMAGE
 APP_VERSION=$APP_VERSION
 HOST_BIND_IP=$HOST_BIND_IP
@@ -46,6 +58,40 @@ HOST_PORT=$HOST_PORT
 CONTAINER_NAME=$CONTAINER_NAME
 BACKUP_MAX_AGE_HOURS=$BACKUP_MAX_AGE_HOURS
 EOF
+  mv -f "$temporary_env" "$DEPLOY_ENV_FILE"
+}
+
+read_deploy_env_value() {
+  local key="$1"
+  local file="$2"
+  sed -n "s/^${key}=//p" "$file" | tail -n 1
+}
+
+rollback_application() {
+  if [[ -z "${previous_env:-}" || ! -f "$previous_env" ]]; then
+    echo "No digest-pinned previous deployment is available for automatic application rollback." >&2
+    return 1
+  fi
+
+  local old_tag old_digest old_image old_version old_bind old_port old_container old_backup_age
+  old_tag="$(read_deploy_env_value IMAGE_TAG "$previous_env")"
+  old_digest="$(read_deploy_env_value IMAGE_DIGEST "$previous_env")"
+  old_image="$(read_deploy_env_value DOCKER_IMAGE "$previous_env")"
+  old_version="$(read_deploy_env_value APP_VERSION "$previous_env")"
+  old_bind="$(read_deploy_env_value HOST_BIND_IP "$previous_env")"
+  old_port="$(read_deploy_env_value HOST_PORT "$previous_env")"
+  old_container="$(read_deploy_env_value CONTAINER_NAME "$previous_env")"
+  old_backup_age="$(read_deploy_env_value BACKUP_MAX_AGE_HOURS "$previous_env")"
+
+  IMAGE_TAG="$old_tag" IMAGE_DIGEST="$old_digest" DOCKER_IMAGE="$old_image" APP_VERSION="$old_version" \
+  HOST_BIND_IP="$old_bind" HOST_PORT="$old_port" CONTAINER_NAME="$old_container" \
+  BACKUP_MAX_AGE_HOURS="$old_backup_age"
+  export IMAGE_TAG IMAGE_DIGEST DOCKER_IMAGE APP_VERSION HOST_BIND_IP HOST_PORT CONTAINER_NAME BACKUP_MAX_AGE_HOURS
+  validate_deploy_identity
+  validate_bind_policy
+  cp "$previous_env" "$DEPLOY_ENV_FILE"
+  compose pull web
+  compose up -d --remove-orphans --wait web
 }
 
 wait_for_health() {
@@ -81,6 +127,13 @@ PY
 require_command docker
 require_command curl
 require_command "$PYTHON_BIN"
+require_command flock
+validate_deploy_identity
+if [[ "${REQUIRE_EXPLICIT_BIND:-false}" == "true" && -z "$RAW_HOST_BIND_IP" ]]; then
+  echo "HOST_BIND_IP must be configured explicitly for this deployment environment." >&2
+  exit 1
+fi
+validate_bind_policy
 
 if ! docker compose version >/dev/null 2>&1; then
   echo "Docker Compose plugin is required." >&2
@@ -88,32 +141,85 @@ if ! docker compose version >/dev/null 2>&1; then
 fi
 
 mkdir -p "$DATA_DIR" "$BACKUP_DIR"
-write_deploy_env
+chmod 700 "$DATA_DIR" "$BACKUP_DIR"
+exec 9>"$DEPLOY_ROOT/.deploy.lock"
+if ! flock -n 9; then
+  echo "Another deployment or backup operation is already running." >&2
+  exit 1
+fi
+previous_env=""
+had_previous_env=false
+if [[ -f "$DEPLOY_ENV_FILE" ]]; then
+  had_previous_env=true
+  previous_env="$(mktemp "$DEPLOY_ROOT/.deploy.env.previous.XXXXXX")"
+  cp --preserve=mode "$DEPLOY_ENV_FILE" "$previous_env"
+fi
 
 if [[ -n "${DOCKERHUB_USERNAME:-}" && -n "${DOCKERHUB_TOKEN:-}" ]]; then
   echo "Logging into Docker Hub..."
   printf '%s' "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
 fi
 
-echo "Pulling image ${DOCKER_IMAGE}:${IMAGE_TAG}..."
-docker pull "${DOCKER_IMAGE}:${IMAGE_TAG}"
+image_ref="${DOCKER_IMAGE}@${IMAGE_DIGEST}"
+echo "Pulling immutable image ${image_ref}..."
+docker pull "$image_ref"
+
+pulled_digests="$(docker image inspect --format '{{join .RepoDigests "\n"}}' "$image_ref")"
+if ! grep -Fxq "${DOCKER_IMAGE}@${IMAGE_DIGEST}" <<<"$pulled_digests"; then
+  echo "Pulled image did not verify against IMAGE_DIGEST." >&2
+  exit 1
+fi
+image_revision="$(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' "$image_ref")"
+if [[ "$image_revision" != "${IMAGE_TAG#sha-}" ]]; then
+  echo "Image revision label does not match IMAGE_TAG." >&2
+  exit 1
+fi
 
 if [[ -f "$DB_FILE" ]]; then
   timestamp="$(date '+%Y%m%d-%H%M%S')"
   backup_file="$BACKUP_DIR/dev.db.${timestamp}.bak"
-  cp "$DB_FILE" "$backup_file"
+  backup_container="gshsapp-backup-$RANDOM-$$"
+  docker run --rm --name "$backup_container" \
+    --user 1001:1001 --read-only --cap-drop ALL --security-opt no-new-privileges:true \
+    --mount "type=bind,src=$DATA_DIR,dst=/app/data,readonly" \
+    --mount "type=bind,src=$BACKUP_DIR,dst=/app/backup" \
+    --tmpfs /tmp:rw,noexec,nosuid,nodev,size=16m,uid=1001,gid=1001 \
+    --entrypoint node "$image_ref" -e \
+    'const {DatabaseSync}=require("node:sqlite");const src=process.argv[1],dst=process.argv[2],q=String.fromCharCode(39);const db=new DatabaseSync(src,{readOnly:true});db.exec("VACUUM INTO "+q+dst.replaceAll(q,q+q)+q);db.close();' \
+    "/app/data/$(basename "$DB_FILE")" "/app/backup/$(basename "$backup_file")"
+  chmod 600 "$backup_file"
   echo "Created SQLite backup at $backup_file"
 fi
 
+write_deploy_env
+echo "Applying reviewed database migrations..."
+if ! compose run --rm --no-deps migrate; then
+  echo "Migration failed; the running application was not replaced." >&2
+  if [[ "$had_previous_env" == "true" ]]; then
+    cp "$previous_env" "$DEPLOY_ENV_FILE"
+  else
+    rm -f -- "$DEPLOY_ENV_FILE"
+  fi
+  exit 1
+fi
+
 echo "Starting deployment..."
-compose up -d --remove-orphans
+if ! compose up -d --remove-orphans --wait web; then
+  echo "Container startup failed; attempting application rollback." >&2
+  rollback_application || true
+  exit 1
+fi
 
 if ! wait_for_health; then
   echo "Health check failed for $HEALTHCHECK_URL" >&2
   compose ps || true
   compose logs --tail=200 || true
+  echo "Restoring last known-good application image (database is not auto-restored)..." >&2
+  rollback_application || true
   exit 1
 fi
+
+rm -f -- "$previous_env"
 
 echo "Deployment healthy. Current service status:"
 compose ps

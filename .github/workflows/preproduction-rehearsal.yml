@@ -4,7 +4,11 @@ on:
   workflow_dispatch:
     inputs:
       candidate_sha:
-        description: Commit SHA or immutable sha-<commit> image tag to rehearse on test
+        description: Exact 40-hex commit SHA to rehearse on test
+        required: true
+        type: string
+      image_digest:
+        description: Exact published image digest (sha256:<64 hex>)
         required: true
         type: string
 
@@ -27,26 +31,24 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       image_tag: ${{ steps.normalize.outputs.image_tag }}
+      image_digest: ${{ steps.normalize.outputs.image_digest }}
+      source_sha: ${{ steps.normalize.outputs.source_sha }}
     steps:
       - id: normalize
         shell: bash
         env:
           CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+          IMAGE_DIGEST: ${{ inputs.image_digest }}
         run: |
           set -euo pipefail
           candidate="$(echo "$CANDIDATE_SHA" | tr -d '[:space:]')"
-          if [[ -z "$candidate" ]]; then
-            echo "candidate_sha is required" >&2
-            exit 1
-          fi
-
-          if [[ "$candidate" == sha-* ]]; then
-            image_tag="$candidate"
-          else
-            image_tag="sha-$candidate"
-          fi
+          [[ "$candidate" =~ ^[0-9a-f]{40}$ ]] || { echo "candidate_sha must be exactly 40 lowercase hex." >&2; exit 1; }
+          [[ "$IMAGE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "image_digest must be sha256:<64 lowercase hex>." >&2; exit 1; }
+          image_tag="sha-$candidate"
 
           echo "image_tag=$image_tag" >> "$GITHUB_OUTPUT"
+          echo "image_digest=$IMAGE_DIGEST" >> "$GITHUB_OUTPUT"
+          echo "source_sha=$candidate" >> "$GITHUB_OUTPUT"
 
   deploy:
     runs-on:
@@ -59,7 +61,10 @@ jobs:
       name: test
       url: ${{ env.E2E_BASE_URL }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ needs.prepare.outputs.source_sha }}
+          persist-credentials: false
       - name: Sync deploy assets on test server
         shell: bash
         run: |
@@ -67,6 +72,7 @@ jobs:
           install -d "$DEPLOY_PATH" "$DEPLOY_PATH/data" "$DEPLOY_PATH/backup"
           install -m 644 deploy/compose.yml "$DEPLOY_PATH/compose.yml"
           install -m 755 deploy/deploy.sh "$DEPLOY_PATH/deploy.sh"
+          install -m 644 deploy/deploy-policy.sh "$DEPLOY_PATH/deploy-policy.sh"
           install -m 755 deploy/offsite-backup.sh "$DEPLOY_PATH/offsite-backup.sh"
           install -m 755 deploy/run-scheduled-backup.sh "$DEPLOY_PATH/run-scheduled-backup.sh"
           install -m 755 deploy/restore-drill.sh "$DEPLOY_PATH/restore-drill.sh"
@@ -76,15 +82,23 @@ jobs:
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
           IMAGE_TAG: ${{ needs.prepare.outputs.image_tag }}
+          IMAGE_DIGEST: ${{ needs.prepare.outputs.image_digest }}
           BACKUP_MAX_AGE_HOURS: ${{ env.BACKUP_MAX_AGE_HOURS }}
+          HOST_BIND_IP: ${{ vars.HOST_BIND_IP }}
+          ALLOW_PUBLIC_BIND: ${{ vars.ALLOW_PUBLIC_BIND }}
+          REQUIRE_EXPLICIT_BIND: "true"
         run: |
           set -euo pipefail
           cd "$DEPLOY_PATH"
           export DOCKERHUB_USERNAME="$DOCKERHUB_USERNAME"
           export DOCKERHUB_TOKEN="$DOCKERHUB_TOKEN"
           export IMAGE_TAG="$IMAGE_TAG"
+          export IMAGE_DIGEST="$IMAGE_DIGEST"
           export APP_VERSION="$IMAGE_TAG"
           export BACKUP_MAX_AGE_HOURS="$BACKUP_MAX_AGE_HOURS"
+          export HOST_BIND_IP="$HOST_BIND_IP"
+          export ALLOW_PUBLIC_BIND="$ALLOW_PUBLIC_BIND"
+          export REQUIRE_EXPLICIT_BIND="$REQUIRE_EXPLICIT_BIND"
           export DOCKER_IMAGE="${DOCKERHUB_USERNAME}/gshsapp"
           ./deploy.sh
 
@@ -156,10 +170,13 @@ jobs:
       name: test
       url: ${{ env.E2E_BASE_URL }}
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
-          node-version: 20
+          ref: ${{ needs.prepare.outputs.source_sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24.19.0
           cache: npm
       - run: npm ci
       - run: npx playwright install --with-deps chromium
@@ -205,7 +222,7 @@ jobs:
         run: npm run test:e2e
       - name: Upload Playwright report
         if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: playwright-report-preproduction-${{ github.run_id }}
           path: |
@@ -230,7 +247,10 @@ jobs:
       latest_backup_name: ${{ steps.parse.outputs.latest_backup_name }}
       restore_version: ${{ steps.parse.outputs.restore_version }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ needs.prepare.outputs.source_sha }}
+          persist-credentials: false
       - name: Sync deploy assets for restore drill
         shell: bash
         run: |
@@ -246,6 +266,7 @@ jobs:
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
           IMAGE_TAG: ${{ needs.prepare.outputs.image_tag }}
+          IMAGE_DIGEST: ${{ needs.prepare.outputs.image_digest }}
           RESTORE_DRILL_OUTPUT_FILE: ${{ runner.temp }}/restore-drill.env
           RESTORE_DRILL_PORT: ${{ env.RESTORE_DRILL_PORT }}
           BACKUP_MAX_AGE_HOURS: ${{ env.BACKUP_MAX_AGE_HOURS }}
@@ -257,6 +278,7 @@ jobs:
           export DOCKERHUB_USERNAME="$DOCKERHUB_USERNAME"
           export DOCKERHUB_TOKEN="$DOCKERHUB_TOKEN"
           export IMAGE_TAG="$IMAGE_TAG"
+          export IMAGE_DIGEST="$IMAGE_DIGEST"
           export APP_VERSION="$IMAGE_TAG"
           export DOCKER_IMAGE="${DOCKERHUB_USERNAME}/gshsapp"
           ./restore-drill.sh
