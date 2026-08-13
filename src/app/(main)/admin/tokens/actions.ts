@@ -165,6 +165,11 @@ export async function deleteToken(id: string) {
     if (!user?.id || user.role !== 'ADMIN') throw new Error("Unauthorized");
 
     await prisma.$transaction(async (tx) => {
+      await tx.studentRosterEntry.updateMany({
+        where: { claimedInviteTokenId: id, claimedUserId: null },
+        data: { claimedAt: null, claimedEmail: null, claimedInviteTokenId: null },
+      });
+      await tx.tokenDistributionLog.updateMany({ where: { inviteTokenId: id }, data: { inviteTokenId: null } });
       await tx.inviteToken.delete({ where: { id } });
       await writeAuditLog(tx, { actorId: user.id, action: "TOKEN_DELETED", target: { type: "INVITE_TOKEN", id } });
     });

@@ -10,7 +10,7 @@ import { MEMBER_SERVICE_SUSPENDED } from "@/lib/member-service-suspension";
 import { validatePassword } from "@/lib/security/password-policy";
 import { hashInviteSecret } from "@/lib/security/invite-token";
 import { validateSignupInviteIdentity } from "@/lib/security/signup-identity";
-import { parseTrustedProxyHops, resolveTrustedClientAddress } from "@/lib/security/client-address";
+import { isSensitiveClientAddressTrusted, parseTrustedProxyHops, resolveTrustedClientAddress } from "@/lib/security/client-address";
 import { getApplicationSecuritySecret, hashSecurityPrincipal } from "@/lib/security/principal-key";
 import { signupAttemptLimiter } from "@/lib/signup-rate-limit";
 
@@ -24,13 +24,15 @@ function genericInviteError() {
 
 async function getSignupAttemptKeys(userId: string) {
   const requestHeaders = await headers();
+  const trustedProxyHops = parseTrustedProxyHops(process.env.TRUSTED_PROXY_HOPS);
   const address = resolveTrustedClientAddress({
     forwardedFor: requestHeaders.get("x-forwarded-for"),
-  }, { trustedProxyHops: parseTrustedProxyHops(process.env.TRUSTED_PROXY_HOPS) });
+  }, { trustedProxyHops });
   const secret = getApplicationSecuritySecret();
   return {
     identifierKey: hashSecurityPrincipal("signup-identifier", userId.toLowerCase(), secret),
     networkKey: address === null ? null : hashSecurityPrincipal("signup-network", address, secret),
+    trustedClient: isSensitiveClientAddressTrusted(address, trustedProxyHops),
   };
 }
 
@@ -55,6 +57,7 @@ export async function signup(formData: FormData) {
   if (!passwordPolicy.ok) return { error: passwordPolicy.message };
 
   const attemptKeys = await getSignupAttemptKeys(userId);
+  if (!attemptKeys.trustedClient) return { error: "Unable to verify the signup network path." };
   if (signupAttemptLimiter.check(attemptKeys.identifierKey, attemptKeys.networkKey).locked) {
     return { error: "Too many signup attempts. Please wait before trying again." };
   }

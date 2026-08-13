@@ -14,6 +14,7 @@ import { writeAuditLog } from "@/lib/audit";
 import { generateTemporaryPassword } from "@/lib/security/temporary-password";
 import { assertUserImportBounds } from "@/lib/security/user-import-bounds";
 import { parseImportedUserRecord, type ImportedUserRecord } from "@/lib/security/user-import-record";
+import { validateAtomicUserImportPlan } from "@/lib/security/user-import-plan";
 
 export async function importUsersBackup(_: any, formData: FormData) {
     const sessionUser = await getCurrentUser();
@@ -54,8 +55,18 @@ export async function importUsersBackup(_: any, formData: FormData) {
 
         const users = Array.from(deduped.values());
         assertUserImportBounds(f.size, parsed.users.length, users.length);
-        const existing = await prisma.user.findMany({
-            where: { userId: { in: users.map((u) => u.userId) } },
+        const result = await prisma.$transaction(async (tx) => {
+        // Acquire SQLite's writer lease before the authorization snapshot so
+        // concurrent imports cannot both approve a conflicting final state.
+        const actorLease = await tx.user.updateMany({
+            where: {
+                id: sessionUser.id!, userId: sessionUser.userId!, role: "ADMIN",
+                sessionVersion: sessionUser.sessionVersion,
+            },
+            data: { sessionVersion: { increment: 0 } },
+        });
+        if (actorLease.count !== 1) throw new Error("IMPORT_ACTOR_SESSION");
+        const existing = await tx.user.findMany({
             select: {
                 userId: true,
                 id: true,
@@ -72,10 +83,14 @@ export async function importUsersBackup(_: any, formData: FormData) {
         });
         const existingMap = new Map(existing.map((u) => [u.userId, u]));
 
+        validateAtomicUserImportPlan(existing, users, {
+            id: sessionUser.id!, userId: sessionUser.userId!,
+        });
+
         let inserted = 0;
         let updated = 0;
         let skippedSame = 0;
-
+        let invalidDuringApply = 0;
         for (const u of users) {
             const payload = {
                 ...(u.passwordHash ? { passwordHash: u.passwordHash } : {}),
@@ -91,18 +106,16 @@ export async function importUsersBackup(_: any, formData: FormData) {
             const ex = existingMap.get(u.userId);
             if (!ex) {
                 if (!u.passwordHash) {
-                    invalidCount += 1;
+                    invalidDuringApply += 1;
                     continue;
                 }
                 const passwordHash = u.passwordHash;
-                await prisma.$transaction(async (tx) => {
                   const created = await tx.user.create({
                       data: { userId: u.userId, ...payload, passwordHash, mustChangePassword: true },
                   });
                   await writeAuditLog(tx, {
                     actorId: sessionUser.id!, action: "USER_IMPORTED", target: { type: "USER", id: created.id },
                   });
-                });
                 inserted += 1;
                 continue;
             }
@@ -123,7 +136,6 @@ export async function importUsersBackup(_: any, formData: FormData) {
             }
 
             // 2) 교집합(기존 userId 존재)은 새 데이터로 덮어씀
-            await prisma.$transaction(async (tx) => {
               await updateImportedUserSafely(ex, payload, {
                   findCurrent: (id) => tx.user.findUnique({
                       where: { id },
@@ -148,13 +160,14 @@ export async function importUsersBackup(_: any, formData: FormData) {
               await writeAuditLog(tx, {
                 actorId: sessionUser.id!, action: "USER_IMPORTED", target: { type: "USER", id: ex.id },
               });
-            });
             updated += 1;
         }
+        return { inserted, updated, skippedSame, invalidDuringApply };
+        });
 
         revalidatePath('/admin/users');
         return {
-            success: `반영 완료: 추가 ${inserted}건, 업데이트 ${updated}건, 동일 데이터 스킵 ${skippedSame}건, 무효 ${invalidCount}건`
+            success: `반영 완료: 추가 ${result.inserted}건, 업데이트 ${result.updated}건, 동일 데이터 스킵 ${result.skippedSame}건, 무효 ${invalidCount + result.invalidDuringApply}건`
         };
     } catch (e) {
         return { error: '복원 중 오류가 발생했습니다.' };

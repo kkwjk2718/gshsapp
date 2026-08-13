@@ -35,4 +35,14 @@ describe("deployment backup boundaries", () => {
     expect(drill).toContain('--group-add "$(id -g)"');
     expect(drill).not.toContain('--user "$(id -u):$(id -g)"');
   });
+
+  it("schedules bounded maintenance and backup on production as well as test", async () => {
+    const production = await source(".github/workflows/scheduled-backup-prod.yml");
+    const scheduled = await source("deploy/run-scheduled-backup.sh");
+    expect(production).toContain("gshs-prod");
+    expect(production).toContain("./run-scheduled-backup.sh");
+    expect(production).toContain("schedule:");
+    expect(scheduled).toContain(".deploy.lock");
+    expect(scheduled).toContain("flock -n 9");
+  });
 });

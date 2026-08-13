@@ -6,10 +6,11 @@ const mocks = vi.hoisted(() => ({
   getQuota: vi.fn(),
   reserve: vi.fn(),
   resolveStudentTargetGisu: vi.fn(),
+  tokenDelete: vi.fn(), rosterUpdate: vi.fn(), distributionUpdate: vi.fn(),
 }));
 vi.mock("@/lib/session", () => ({ getCurrentUser: mocks.getCurrentUser }));
 vi.mock("@/lib/db", () => ({ prisma: {
-  tokenBatch: { create: mocks.batchCreate }, inviteToken: { createMany: mocks.tokenCreateMany, create: mocks.tokenCreate, findMany: mocks.tokenFindMany }, tokenDistributionLog: { create: mocks.distributionCreate, findFirst: mocks.distributionFindFirst }, auditLog: { create: mocks.auditCreate },
+  tokenBatch: { create: mocks.batchCreate }, inviteToken: { createMany: mocks.tokenCreateMany, create: mocks.tokenCreate, findMany: mocks.tokenFindMany, delete: mocks.tokenDelete }, tokenDistributionLog: { create: mocks.distributionCreate, findFirst: mocks.distributionFindFirst, updateMany: mocks.distributionUpdate }, studentRosterEntry: { updateMany: mocks.rosterUpdate }, auditLog: { create: mocks.auditCreate },
   $transaction: mocks.transaction,
 } }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
@@ -38,10 +39,22 @@ describe("token mutation audit gate", () => {
     mocks.sendInvite.mockResolvedValue({ success: "sent" });
     mocks.getQuota.mockResolvedValue({ used: 0, remaining: 250, isLimitReached: false });
     mocks.resolveStudentTargetGisu.mockResolvedValue(40);
+    mocks.tokenDelete.mockResolvedValue({ id: "token" }); mocks.rosterUpdate.mockResolvedValue({ count: 1 }); mocks.distributionUpdate.mockResolvedValue({ count: 1 });
     mocks.reserve.mockResolvedValue({ distributionLogId: "distribution", inviteToken: { id: "token", token: "safe-token", tokenHash: "digest", targetRole: "STUDENT", targetGisu: 40 } });
     mocks.transaction.mockImplementation(async (callback: (tx: unknown) => unknown) => callback({
-      tokenBatch: { create: mocks.batchCreate }, inviteToken: { createMany: mocks.tokenCreateMany, create: mocks.tokenCreate, findMany: mocks.tokenFindMany }, tokenDistributionLog: { create: mocks.distributionCreate, findFirst: mocks.distributionFindFirst }, auditLog: { create: mocks.auditCreate },
+      tokenBatch: { create: mocks.batchCreate }, inviteToken: { createMany: mocks.tokenCreateMany, create: mocks.tokenCreate, findMany: mocks.tokenFindMany, delete: mocks.tokenDelete }, tokenDistributionLog: { create: mocks.distributionCreate, findFirst: mocks.distributionFindFirst, updateMany: mocks.distributionUpdate }, studentRosterEntry: { updateMany: mocks.rosterUpdate }, auditLog: { create: mocks.auditCreate },
     }));
+  });
+
+  it("releases an unconsumed portal roster claim before deleting its invite", async () => {
+    const { deleteToken } = await import("./actions");
+    await deleteToken("token");
+    expect(mocks.rosterUpdate).toHaveBeenCalledWith({
+      where: { claimedInviteTokenId: "token", claimedUserId: null },
+      data: { claimedAt: null, claimedEmail: null, claimedInviteTokenId: null },
+    });
+    expect(mocks.distributionUpdate).toHaveBeenCalledWith({ where: { inviteTokenId: "token" }, data: { inviteTokenId: null } });
+    expect(mocks.rosterUpdate.mock.invocationCallOrder[0]).toBeLessThan(mocks.tokenDelete.mock.invocationCallOrder[0]);
   });
 
   it("creates a batch and its audit event in one transaction", async () => {

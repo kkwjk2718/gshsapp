@@ -17,6 +17,47 @@ type LoginLimiterOptions = Readonly<{
   networkMaxKeys?: number;
 }>;
 
+type BlockedLogSamplerOptions = Readonly<{
+  now?: () => number;
+  windowMs?: number;
+  maxKeys?: number;
+}>;
+
+export function createBlockedLoginLogSampler(options: BlockedLogSamplerOptions = {}) {
+  const now = options.now ?? Date.now;
+  const windowMs = options.windowMs ?? 60_000;
+  const maxKeys = options.maxKeys ?? 2_048;
+  if (!Number.isInteger(windowMs) || windowMs <= 0 || !Number.isInteger(maxKeys) || maxKeys <= 0) {
+    throw new Error("Invalid blocked-login log sampling policy");
+  }
+  const expirations = new Map<string, number>();
+
+  return {
+    shouldLog(identifierKey: string, networkKey: string | null) {
+      const currentTime = now();
+      const principal = networkKey === null ? `identifier:${identifierKey}` : `network:${networkKey}`;
+      const expiration = expirations.get(principal);
+      if (expiration !== undefined && expiration > currentTime) return false;
+      for (const [key, expiresAt] of expirations) {
+        if (expiresAt <= currentTime) expirations.delete(key);
+      }
+      if (!expirations.has(principal) && expirations.size >= maxKeys) {
+        let earliestKey: string | null = null;
+        let earliestExpiration = Number.POSITIVE_INFINITY;
+        for (const [key, expiresAt] of expirations) {
+          if (expiresAt < earliestExpiration) {
+            earliestKey = key;
+            earliestExpiration = expiresAt;
+          }
+        }
+        if (earliestKey !== null) expirations.delete(earliestKey);
+      }
+      expirations.set(principal, currentTime + windowMs);
+      return true;
+    },
+  };
+}
+
 export function createLoginAttemptLimiter(options: LoginLimiterOptions = {}) {
   const windowMs = options.windowMs ?? LOGIN_FAILURE_WINDOW_MINUTES * 60_000;
   const identifiers = new BoundedFailureWindow({
@@ -53,6 +94,7 @@ export function createLoginAttemptLimiter(options: LoginLimiterOptions = {}) {
 }
 
 export const loginAttemptLimiter = createLoginAttemptLimiter();
+export const blockedLoginLogSampler = createBlockedLoginLogSampler();
 
 function escapeJsonStringValue(value: string) {
   return JSON.stringify(value).slice(1, -1);

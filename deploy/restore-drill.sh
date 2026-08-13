@@ -315,6 +315,9 @@ write_compose_env
 
 if [[ -n "${DOCKERHUB_USERNAME:-}" && -n "${DOCKERHUB_TOKEN:-}" ]]; then
   echo "Logging into Docker Hub..."
+  DOCKER_CONFIG="$TEMP_DIR/docker-config"
+  mkdir -m 700 "$DOCKER_CONFIG"
+  export DOCKER_CONFIG
   printf '%s' "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
 fi
 

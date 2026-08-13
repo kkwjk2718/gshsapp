@@ -7,6 +7,7 @@ export const REQUIRED_APPLICATION_TABLES = [
   "TokenBatch",
   "InviteToken",
   "TokenDistributionLog",
+  "StudentRosterEntry",
   "NoticeCategory",
   "Notice",
   "Schedule",

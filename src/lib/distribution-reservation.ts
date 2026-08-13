@@ -9,6 +9,8 @@ import { TOKEN_DISTRIBUTION_DAILY_LIMIT } from "@/lib/token-portal-config";
 import { enforceDistributionLogBounds, normalizeDistributionLogText } from "@/lib/distribution-log-store";
 import { enforceInviteTokenLifecycle } from "@/lib/invite-token-lifecycle";
 
+const PORTAL_RESEND_COOLDOWN_MS = 10 * 60_000;
+
 type ReservationDb = {
   $transaction<T>(callback: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T>;
 };
@@ -89,12 +91,47 @@ export async function reserveDistribution(db: ReservationDb, input: Input) {
     });
     if (used > TOKEN_DISTRIBUTION_DAILY_LIMIT) throw new DistributionReservationError("QUOTA");
 
+    let previousRosterInviteTokenId: string | null = null;
+    if (input.source === "PORTAL_AUTO") {
+      if (!normalizedStudentId || !normalizedName) throw new DistributionReservationError("DUPLICATE");
+      const rosterEntry = await tx.studentRosterEntry.findFirst({
+        where: {
+          studentId: normalizedStudentId,
+          name: normalizedName,
+          email: normalizedEmail,
+          active: true,
+          claimedUserId: null,
+        },
+        select: { claimedAt: true, claimedInviteTokenId: true },
+      });
+      if (!rosterEntry) throw new DistributionReservationError("DUPLICATE");
+      previousRosterInviteTokenId = rosterEntry.claimedInviteTokenId;
+      if (
+        previousRosterInviteTokenId &&
+        rosterEntry.claimedAt &&
+        rosterEntry.claimedAt.getTime() > now.getTime() - PORTAL_RESEND_COOLDOWN_MS
+      ) {
+        throw new DistributionReservationError("COOLDOWN");
+      }
+      if (previousRosterInviteTokenId) {
+        await tx.tokenDistributionLog.updateMany({
+          where: { inviteTokenId: previousRosterInviteTokenId },
+          data: { inviteTokenId: null },
+        });
+        const revoked = await tx.inviteToken.deleteMany({
+          where: { id: previousRosterInviteTokenId, isUsed: false, usedByUserId: null },
+        });
+        if (revoked.count !== 1) throw new DistributionReservationError("DUPLICATE");
+      }
+    }
+
     const inviteToken = await tx.inviteToken.create({
       data: {
         token: null,
         tokenHash: hashInviteSecret(token),
         boundEmail: normalizedEmail,
         boundStudentId: normalizedStudentId,
+        rosterClaimRequired: input.source === "PORTAL_AUTO",
         targetRole: input.target.targetRole,
         targetGisu: input.target.targetGisu ?? null,
         createdBy: input.createdBy,
@@ -103,6 +140,24 @@ export async function reserveDistribution(db: ReservationDb, input: Input) {
       },
       select: { id: true, targetRole: true, targetGisu: true },
     });
+    if (input.source === "PORTAL_AUTO") {
+      const rosterClaim = await tx.studentRosterEntry.updateMany({
+        where: {
+          studentId: normalizedStudentId!,
+          name: normalizedName!,
+          email: normalizedEmail,
+          active: true,
+          claimedUserId: null,
+          claimedInviteTokenId: previousRosterInviteTokenId,
+        },
+        data: {
+          claimedAt: now,
+          claimedEmail: normalizedEmail,
+          claimedInviteTokenId: inviteToken.id,
+        },
+      });
+      if (rosterClaim.count !== 1) throw new DistributionReservationError("DUPLICATE");
+    }
     await tx.tokenDistributionLog.update({ where: { id: pending.id }, data: { inviteTokenId: inviteToken.id } });
     if (input.actorId) {
       await writeAuditLog(tx, { actorId: input.actorId, action: "TOKEN_EMAIL_REQUESTED", target: { type: "TOKEN_DISTRIBUTION", id: pending.id } });

@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   preflight: vi.fn(), redeem: vi.fn(), hash: vi.fn(),
   limiterCheck: vi.fn(), recordAttempt: vi.fn(),
+  clientAddress: vi.fn(),
 }));
 vi.mock("bcryptjs", () => ({ default: { hash: mocks.hash } }));
 vi.mock("@/lib/member-service-suspension", () => ({ MEMBER_SERVICE_SUSPENDED: false }));
@@ -17,7 +18,8 @@ vi.mock("@/lib/security/principal-key", () => ({
 }));
 vi.mock("@/lib/security/client-address", () => ({
   parseTrustedProxyHops: () => 1,
-  resolveTrustedClientAddress: () => "192.0.2.10",
+  resolveTrustedClientAddress: mocks.clientAddress,
+  isSensitiveClientAddressTrusted: (address: string | null, hops: number) => hops === 0 || address !== null,
 }));
 vi.mock("next/headers", () => ({ headers: async () => new Headers({ "x-forwarded-for": "192.0.2.10" }) }));
 vi.mock("@/lib/invite-redemption", () => ({
@@ -44,6 +46,7 @@ describe("signup cost ordering", () => {
     mocks.hash.mockResolvedValue("hash");
     mocks.redeem.mockResolvedValue({});
     mocks.limiterCheck.mockReturnValue({ locked: false });
+    mocks.clientAddress.mockReturnValue("192.0.2.10");
   });
 
   it("does not run bcrypt for an invalid, expired, used, or identity-mismatched invite", async () => {
@@ -91,5 +94,13 @@ describe("signup cost ordering", () => {
     expect(mocks.preflight).not.toHaveBeenCalled();
     expect(mocks.hash).not.toHaveBeenCalled();
     expect(mocks.redeem).not.toHaveBeenCalled();
+  });
+
+  it("rejects a missing trusted proxy address before lookup or bcrypt", async () => {
+    mocks.clientAddress.mockReturnValueOnce(null);
+    const { signup } = await import("./actions");
+    await expect(signup(validForm())).resolves.toHaveProperty("error");
+    expect(mocks.preflight).not.toHaveBeenCalled();
+    expect(mocks.hash).not.toHaveBeenCalled();
   });
 });

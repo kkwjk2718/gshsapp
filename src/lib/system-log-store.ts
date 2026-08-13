@@ -144,23 +144,17 @@ async function readRetentionDays() {
 
 export async function appendBoundedSystemLog(input: SystemLogWrite): Promise<BoundedWriteResult> {
   const normalized = normalizeSystemLogWrite(input);
-  const write = async (data: SystemLogWrite, retentionDays: number) => {
-    await prisma.$transaction(async (tx) => {
-      await tx.systemLog.create({ data });
-      await enforceSystemLogBounds(tx, data.createdAt ?? new Date(), retentionDays);
-    });
-  };
+  const write = async (data: SystemLogWrite) => prisma.systemLog.create({ data });
   try {
-    const retentionDays = await readRetentionDays();
     try {
-      await write(normalized, retentionDays);
+      await write(normalized);
     } catch (error) {
       if ((error as { code?: string }).code !== "P2003" || !normalized.userId) throw error;
       await write({
         ...normalized,
         userId: null,
         details: serializeSystemLogDetails(normalized.details ? `${normalized.details} (Original UserID Invalid)` : "(Original UserID Invalid)"),
-      }, retentionDays);
+      });
     }
     return "STORED";
   } catch {

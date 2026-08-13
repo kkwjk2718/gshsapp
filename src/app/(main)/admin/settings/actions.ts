@@ -9,6 +9,7 @@ import { getCurrentUser } from "@/lib/session";
 import { SYSTEM_SETTING_KEYS, normalizeGoogleAnalyticsId } from "@/lib/system-settings";
 import { writeAuditLog } from "@/lib/audit";
 import { validatePassword } from "@/lib/security/password-policy";
+import { MAX_STUDENT_ROSTER_BYTES, parseStudentRosterCsv, planStudentRosterReplacement } from "@/lib/security/student-roster-import";
 
 export async function updateGradeMapping(formData: FormData) {
   const user = await getCurrentUser();
@@ -51,6 +52,65 @@ export type ActionResult = {
   value?: string | null;
   count?: number;
 };
+
+export async function replaceStudentRoster(
+  prevState: ActionResult,
+  formData: FormData,
+): Promise<ActionResult> {
+  const user = await getCurrentUser();
+  if (!user?.id || user.role !== "ADMIN") throw new Error("Unauthorized");
+  if (String(formData.get("confirmText") ?? "").trim() !== "REPLACE ROSTER") {
+    return { error: "Type REPLACE ROSTER to confirm the atomic roster replacement." };
+  }
+  const file = formData.get("file");
+  if (!(file instanceof File) || file.size < 1 || file.size > MAX_STUDENT_ROSTER_BYTES) {
+    return { error: "Choose a CSV roster no larger than 256 KiB." };
+  }
+
+  try {
+    const entries = parseStudentRosterCsv(await file.text());
+    await prisma.$transaction(async (tx) => {
+      const claimedEntries = await tx.studentRosterEntry.findMany({
+        where: {
+          OR: [
+            { claimedAt: { not: null } },
+            { claimedInviteTokenId: { not: null } },
+            { claimedUserId: { not: null } },
+          ],
+        },
+        select: { studentId: true, name: true, email: true },
+      });
+      const existingStudents = await tx.user.findMany({
+        where: { role: "STUDENT" },
+        select: { id: true, studentId: true, name: true, email: true },
+      });
+      const plan = planStudentRosterReplacement(entries, claimedEntries, existingStudents);
+      await tx.studentRosterEntry.deleteMany({
+        where: { claimedAt: null, claimedInviteTokenId: null, claimedUserId: null },
+      });
+      await tx.studentRosterEntry.updateMany({ data: { active: false } });
+      if (plan.reactivateStudentIds.length > 0) {
+        await tx.studentRosterEntry.updateMany({
+          where: { studentId: { in: plan.reactivateStudentIds } },
+          data: { active: true },
+        });
+      }
+      if (plan.createEntries.length > 0) {
+        await tx.studentRosterEntry.createMany({ data: plan.createEntries });
+      }
+      await writeAuditLog(tx, {
+        actorId: user.id,
+        action: "STUDENT_ROSTER_REPLACED",
+        target: { type: "STUDENT_ROSTER", id: `rows:${entries.length}` },
+      });
+    });
+    revalidatePath("/admin/settings");
+    revalidatePath("/signup/request");
+    return { success: `Student roster replaced atomically (${entries.length} active entries).`, count: entries.length };
+  } catch {
+    return { error: "The roster was rejected. Verify the CSV format, uniqueness, and claimed identities." };
+  }
+}
 
 export async function updateICalUrl(prevState: any, formData: FormData): Promise<ActionResult> {
   const user = await getCurrentUser();
@@ -149,7 +209,10 @@ export async function updateTokenPortalConfig(
     return { error: "異붽? ?덈궡 臾멸뎄??2000???댄븯濡??낅젰?댁＜?몄슂." };
   }
 
-  await prisma.$transaction(async (tx) => {
+  const updated = await prisma.$transaction(async (tx) => {
+    if (enabled && await tx.studentRosterEntry.count({ where: { active: true } }) < 1) {
+      return false;
+    }
     await tx.systemSetting.upsert({
       where: { key: SYSTEM_SETTING_KEYS.tokenPortalEnabled },
       update: { value: enabled ? "true" : "false" },
@@ -173,7 +236,10 @@ export async function updateTokenPortalConfig(
       action: "TOKEN_PORTAL_CONFIG_CHANGED",
       target: { type: "SYSTEM_SETTING", id: SYSTEM_SETTING_KEYS.tokenPortalEnabled },
     });
+    return true;
   });
+
+  if (!updated) return { error: "Import an active authoritative student roster before enabling the portal." };
 
   await logAction("token_portal_settings_updated", {
     enabled,

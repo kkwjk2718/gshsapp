@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   count: vi.fn(), setting: vi.fn(), send: vi.fn(), updateMany: vi.fn(), createLog: vi.fn(),
-  deleteToken: vi.fn(), transaction: vi.fn(), log: vi.fn(),
+  deleteToken: vi.fn(), transaction: vi.fn(), log: vi.fn(), releaseRoster: vi.fn(),
 }));
 vi.mock("@/lib/db", () => ({ prisma: {
   tokenDistributionLog: { count: mocks.count, updateMany: mocks.updateMany, create: mocks.createLog, findFirst: vi.fn() },
@@ -23,6 +23,7 @@ describe("reserved token email transitions", () => {
     mocks.deleteToken.mockResolvedValue({ id: "token" });
     mocks.transaction.mockImplementation(async (callback: (tx: unknown) => unknown) => callback({
       tokenDistributionLog: { updateMany: mocks.updateMany }, inviteToken: { delete: mocks.deleteToken },
+      studentRosterEntry: { updateMany: mocks.releaseRoster },
     }));
   });
 
@@ -49,5 +50,41 @@ describe("reserved token email transitions", () => {
     await expect(sendInviteTokenEmail(input)).rejects.toThrow("database unavailable");
     expect(mocks.updateMany).toHaveBeenCalledTimes(1);
     expect(mocks.updateMany).toHaveBeenCalledWith(expect.objectContaining({ where: { id: "distribution", status: "PENDING" }, data: expect.objectContaining({ status: "SENT" }) }));
+  });
+
+  it("releases the exact portal roster claim when the provider rejects delivery", async () => {
+    const portalInput = {
+      ...input,
+      source: "PORTAL_AUTO" as const,
+      target: { ...input.target, name: "Student", studentId: "1304" },
+    };
+    mocks.send.mockRejectedValue(new Error("provider unavailable"));
+    mocks.updateMany.mockResolvedValue({ count: 1 });
+    mocks.releaseRoster.mockResolvedValue({ count: 1 });
+    const { sendInviteTokenEmail } = await import("./token-distribution");
+
+    await expect(sendInviteTokenEmail(portalInput)).resolves.toHaveProperty("error");
+    expect(mocks.releaseRoster).toHaveBeenCalledWith({
+      where: { studentId: "1304", email: "student@example.com", claimedInviteTokenId: "token", claimedUserId: null },
+      data: { claimedAt: null, claimedEmail: null, claimedInviteTokenId: null },
+    });
+  });
+
+  it("releases the exact portal roster claim when a reserved send is quota-blocked", async () => {
+    const portalInput = {
+      ...input,
+      source: "PORTAL_AUTO" as const,
+      target: { ...input.target, name: "Student", studentId: "1304" },
+    };
+    mocks.count.mockResolvedValue(251);
+    mocks.updateMany.mockResolvedValue({ count: 1 });
+    mocks.releaseRoster.mockResolvedValue({ count: 1 });
+    const { sendInviteTokenEmail } = await import("./token-distribution");
+    await expect(sendInviteTokenEmail(portalInput)).resolves.toHaveProperty("error");
+    expect(mocks.send).not.toHaveBeenCalled();
+    expect(mocks.releaseRoster).toHaveBeenCalledWith({
+      where: { studentId: "1304", email: "student@example.com", claimedInviteTokenId: "token", claimedUserId: null },
+      data: { claimedAt: null, claimedEmail: null, claimedInviteTokenId: null },
+    });
   });
 });

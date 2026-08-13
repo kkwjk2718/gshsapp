@@ -9,6 +9,7 @@ import { RestoreUploadForm } from "./restore-upload-form";
 import { loadSettingsPageData } from "./settings-page-data";
 import { TokenPortalSettingsForm } from "./token-portal-settings-form";
 import { TokenPortalPasswordForm } from "./token-portal-password-form";
+import { StudentRosterImportForm } from "./student-roster-import-form";
 
 export const dynamic = "force-dynamic";
 
@@ -131,6 +132,10 @@ export default async function SettingsPage() {
             <TokenPortalPasswordForm hasPassword={tokenPortal.hasPassword} />
           </div>
         </div>
+        <StudentRosterImportForm
+          activeCount={tokenPortal.activeRosterCount}
+          claimedCount={tokenPortal.claimedRosterCount}
+        />
       </div>
 
       <div className="glass p-8 rounded-3xl space-y-6">

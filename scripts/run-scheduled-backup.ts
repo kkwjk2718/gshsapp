@@ -1,7 +1,12 @@
 import { createBackup, getLastBackupAt, getLatestBackup, maybeRunScheduledBackup, setLastBackupAt } from "../src/lib/backup";
 import { prisma } from "../src/lib/db";
+import { pruneAuditLogs, pruneSystemLogs } from "../src/lib/system-log-store";
+import { enforceInviteTokenLifecycle } from "../src/lib/invite-token-lifecycle";
 
 async function main() {
+  await pruneSystemLogs();
+  await pruneAuditLogs();
+  await prisma.$transaction((tx) => enforceInviteTokenLifecycle(tx));
   const before = await getLastBackupAt();
 
   if (process.argv.includes("--force")) {

@@ -11,29 +11,99 @@ HOST_BIND_IP=127.0.0.1
 validate_deploy_identity
 validate_bind_policy
 
-runtime_env="$(mktemp)"
-trap 'rm -f "$runtime_env"' EXIT
-printf '%s\n' 'TRUSTED_PROXY_HOPS=1' >"$runtime_env"
+runtime_env_root="$(mktemp -d)"
+chmod 700 "$runtime_env_root"
+runtime_env="$runtime_env_root/.env"
+touch "$runtime_env"
+chmod 600 "$runtime_env"
+runtime_env_test_mode=600
+stat() {
+  local target="${!#}"
+  if [[ "$target" == "$runtime_env" && "$*" == *"%a"* ]]; then
+    printf '%s\n' "$runtime_env_test_mode"
+    return 0
+  fi
+  command stat "$@"
+}
+RUNTIME_ENV_TRUST_ROOT="$runtime_env_root"
+export RUNTIME_ENV_TRUST_ROOT
+trap 'rm -rf -- "$runtime_env_root"' EXIT
+EXPECTED_APP_ORIGIN=https://gshs.app
+export EXPECTED_APP_ORIGIN
+valid_runtime_env() {
+  printf '%s\n' \
+    'TRUSTED_PROXY_HOPS=1' \
+    'AUTH_SECRET=production-test-secret-material-with-48-bytes-minimum' \
+    'AUTH_URL=https://gshs.app' \
+    'NEXTAUTH_URL=https://gshs.app' \
+    'NEXT_PUBLIC_APP_URL=https://gshs.app' \
+    'AUTH_TRUST_HOST=true'
+}
+valid_runtime_env >"$runtime_env"
 validate_runtime_env_file "$runtime_env"
 
-printf '%s\n' 'TRUSTED_PROXY_HOPS=0' >"$runtime_env"
+chmod 644 "$runtime_env"
+runtime_env_test_mode=644
+if validate_runtime_env_file "$runtime_env" >/dev/null 2>&1; then
+  echo "world-readable runtime secrets must be rejected" >&2
+  exit 1
+fi
+chmod 600 "$runtime_env"
+runtime_env_test_mode=600
+
+valid_runtime_env | sed 's/^TRUSTED_PROXY_HOPS=1$/TRUSTED_PROXY_HOPS=0/' >"$runtime_env"
 if validate_runtime_env_file "$runtime_env" >/dev/null 2>&1; then
   echo "zero trusted proxy hops must be rejected for production" >&2
   exit 1
 fi
 
-printf '%s\n' 'TRUSTED_PROXY_HOPS=1' 'TRUSTED_PROXY_HOPS=2' >"$runtime_env"
+{ valid_runtime_env; printf '%s\n' 'TRUSTED_PROXY_HOPS=2'; } >"$runtime_env"
 if validate_runtime_env_file "$runtime_env" >/dev/null 2>&1; then
   echo "duplicate trusted proxy settings must be rejected" >&2
   exit 1
 fi
 
+valid_runtime_env | sed 's/^AUTH_SECRET=.*$/AUTH_SECRET=replace-with-a-long-random-secret/' >"$runtime_env"
+if validate_runtime_env_file "$runtime_env" >/dev/null 2>&1; then
+  echo "known placeholder auth secrets must be rejected" >&2
+  exit 1
+fi
+
+valid_runtime_env | sed 's/^AUTH_SECRET=.*$/AUTH_SECRET=short/' >"$runtime_env"
+if validate_runtime_env_file "$runtime_env" >/dev/null 2>&1; then
+  echo "short auth secrets must be rejected" >&2
+  exit 1
+fi
+
+valid_runtime_env | sed 's#^NEXTAUTH_URL=.*$#NEXTAUTH_URL=https://test.gshs.app#' >"$runtime_env"
+if validate_runtime_env_file "$runtime_env" >/dev/null 2>&1; then
+  echo "cross-environment application origins must be rejected" >&2
+  exit 1
+fi
+
+valid_runtime_env | sed 's/^AUTH_TRUST_HOST=true$/AUTH_TRUST_HOST=false/' >"$runtime_env"
+if validate_runtime_env_file "$runtime_env" >/dev/null 2>&1; then
+  echo "production AUTH_TRUST_HOST must be true" >&2
+  exit 1
+fi
+
+{ valid_runtime_env; printf '%s\n' 'AUTH_TRUST_HOST=false'; } >"$runtime_env"
+if validate_runtime_env_file "$runtime_env" >/dev/null 2>&1; then
+  echo "duplicate production AUTH_TRUST_HOST values must be rejected" >&2
+  exit 1
+fi
+
 entrypoint="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/docker-entrypoint.sh"
-if TRUSTED_PROXY_HOPS=0 "$entrypoint" node server.js >/dev/null 2>"$runtime_env"; then
+if TRUSTED_PROXY_HOPS=0 AUTH_SECRET=production-test-secret-material-with-48-bytes-minimum "$entrypoint" node server.js >/dev/null 2>"$runtime_env"; then
   echo "production web startup must reject zero trusted proxy hops" >&2
   exit 1
 fi
 grep -q "must be explicitly set to 1, 2, or 3" "$runtime_env"
+if TRUSTED_PROXY_HOPS=1 AUTH_SECRET=replace-with-a-long-random-secret "$entrypoint" node server.js >/dev/null 2>"$runtime_env"; then
+  echo "production web startup must reject placeholder auth secrets" >&2
+  exit 1
+fi
+grep -q "AUTH_SECRET must contain" "$runtime_env"
 TRUSTED_PROXY_HOPS=1 "$entrypoint" /usr/bin/true
 
 IMAGE_TAG=sha-short

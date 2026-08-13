@@ -1,0 +1,30 @@
+name: Scheduled Backup Production
+
+on:
+  schedule:
+    - cron: "47 * * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: scheduled-backup-production
+  cancel-in-progress: false
+
+env:
+  DEPLOY_PATH: /opt/gshsapp
+
+jobs:
+  backup-and-maintain:
+    runs-on:
+      - self-hosted
+      - Linux
+      - X64
+      - gshs-prod
+    steps:
+      - name: Run bounded log maintenance and scheduled backup
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$DEPLOY_PATH"
+          ./run-scheduled-backup.sh

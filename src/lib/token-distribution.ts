@@ -240,6 +240,17 @@ async function enforceDailyQuota({
         data: { status: "BLOCKED", inviteTokenId: null, errorMessage: "Daily send limit reached." },
       });
       if (transition.count !== 1) throw new Error("Distribution reservation is no longer pending");
+      if (source === "PORTAL_AUTO" && target.studentId) {
+        await tx.studentRosterEntry.updateMany({
+          where: {
+            studentId: target.studentId,
+            email: target.email.trim().toLowerCase(),
+            claimedInviteTokenId: reservation.inviteToken.id,
+            claimedUserId: null,
+          },
+          data: { claimedAt: null, claimedEmail: null, claimedInviteTokenId: null },
+        });
+      }
       await tx.inviteToken.delete({ where: { id: reservation.inviteToken.id } });
     });
   } else await createDistributionLog({
@@ -413,6 +424,17 @@ export async function sendInviteTokenEmail(input: SendDistributionEmailInput): P
         });
         if (transition.count !== 1) throw new Error("Distribution reservation is no longer pending");
         await tx.inviteToken.delete({ where: { id: inviteToken.id } });
+        if (input.source === "PORTAL_AUTO" && input.target.studentId) {
+          await tx.studentRosterEntry.updateMany({
+            where: {
+              studentId: input.target.studentId,
+              email: input.target.email.trim().toLowerCase(),
+              claimedInviteTokenId: inviteToken.id,
+              claimedUserId: null,
+            },
+            data: { claimedAt: null, claimedEmail: null, claimedInviteTokenId: null },
+          });
+        }
       });
     } else await createDistributionLog({
       source: input.source,

@@ -13,6 +13,7 @@ BACKUP_DIR="${BACKUP_DIR:-$DEPLOY_ROOT/backup}"
 DB_FILE="${DB_FILE:-$DATA_DIR/dev.db}"
 
 RAW_HOST_BIND_IP="${HOST_BIND_IP:-}"
+EXPECTED_APP_ORIGIN="${EXPECTED_APP_ORIGIN:?EXPECTED_APP_ORIGIN is required}"
 IMAGE_TAG="${IMAGE_TAG:?IMAGE_TAG is required}"
 IMAGE_DIGEST="${IMAGE_DIGEST:?IMAGE_DIGEST is required}"
 DOCKER_IMAGE="${DOCKER_IMAGE:-kkwjk2718git/gshsapp}"
@@ -29,6 +30,15 @@ HEALTHCHECK_URL="${HEALTHCHECK_URL:-http://${HEALTHCHECK_HOST}:${HOST_PORT}/api/
 SMOKE_TIMEOUT_SECONDS="${SMOKE_TIMEOUT_SECONDS:-90}"
 SMOKE_INTERVAL_SECONDS="${SMOKE_INTERVAL_SECONDS:-3}"
 PYTHON_BIN="${PYTHON_BIN:-python3}"
+TEMP_DOCKER_CONFIG=""
+
+cleanup_deploy_secrets() {
+  if [[ -n "$TEMP_DOCKER_CONFIG" && "$TEMP_DOCKER_CONFIG" == "$DEPLOY_ROOT"/.docker-config.* &&
+        -d "$TEMP_DOCKER_CONFIG" && ! -L "$TEMP_DOCKER_CONFIG" ]]; then
+    rm -rf -- "$TEMP_DOCKER_CONFIG"
+  fi
+}
+trap cleanup_deploy_secrets EXIT
 
 require_command() {
   if ! command -v "$1" >/dev/null 2>&1; then
@@ -159,6 +169,10 @@ require_command docker
 require_command curl
 require_command "$PYTHON_BIN"
 require_command flock
+require_command stat
+require_command id
+RUNTIME_ENV_TRUST_ROOT="$DEPLOY_ROOT"
+export RUNTIME_ENV_TRUST_ROOT
 validate_runtime_env_file "$APP_ENV_FILE"
 validate_deploy_identity
 if [[ "${REQUIRE_EXPLICIT_BIND:-false}" == "true" && -z "$RAW_HOST_BIND_IP" ]]; then
@@ -189,6 +203,10 @@ fi
 
 if [[ -n "${DOCKERHUB_USERNAME:-}" && -n "${DOCKERHUB_TOKEN:-}" ]]; then
   echo "Logging into Docker Hub..."
+  TEMP_DOCKER_CONFIG="$(mktemp -d "$DEPLOY_ROOT/.docker-config.XXXXXX")"
+  chmod 700 "$TEMP_DOCKER_CONFIG"
+  DOCKER_CONFIG="$TEMP_DOCKER_CONFIG"
+  export DOCKER_CONFIG
   printf '%s' "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
 fi
 

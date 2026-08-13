@@ -47,6 +47,8 @@ jobs:
       - name: Validate host firewall policy scripts
         run: |
           bash -n deploy/host-hardening.sh deploy/host-hardening.test.sh
+          bash -n deploy/deploy-policy.sh deploy/deploy-policy.test.sh docker-entrypoint.sh
+          bash deploy/deploy-policy.test.sh
           python3 -m unittest deploy/validate_ufw_rules_test.py
           bash deploy/host-hardening.test.sh
 

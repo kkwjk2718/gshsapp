@@ -5,12 +5,12 @@ import { authConfig } from './auth.config';
 import { z } from 'zod';
 import { prisma } from '@/lib/db';
 import { logAction } from '@/lib/logger';
-import { isLoginTemporarilyLocked, loginAttemptLimiter } from '@/lib/login-rate-limit';
+import { blockedLoginLogSampler, isLoginTemporarilyLocked, loginAttemptLimiter } from '@/lib/login-rate-limit';
 import { MEMBER_SERVICE_SUSPENDED } from '@/lib/member-service-suspension';
 import bcrypt from 'bcryptjs';
 import { verifyLoginCandidate } from '@/lib/security/login-verification';
 import { getApplicationSecuritySecret, hashSecurityPrincipal } from '@/lib/security/principal-key';
-import { parseTrustedProxyHops, resolveTrustedClientAddress } from '@/lib/security/client-address';
+import { isSensitiveClientAddressTrusted, parseTrustedProxyHops, resolveTrustedClientAddress } from '@/lib/security/client-address';
 import { isValidBcryptInput } from '@/lib/security/password-policy';
 
 async function verifyPassword(password: string, hash: string) {
@@ -51,15 +51,19 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           const userId = parsedCredentials.data.userId.trim();
           const securitySecret = getApplicationSecuritySecret();
           const identifierKey = hashSecurityPrincipal("login-id", userId.normalize("NFKC").toLocaleLowerCase("en-US"), securitySecret);
+          const trustedProxyHops = parseTrustedProxyHops(process.env.TRUSTED_PROXY_HOPS);
           const clientAddress = resolveTrustedClientAddress({
             forwardedFor: request.headers.get("x-forwarded-for"),
-          }, { trustedProxyHops: parseTrustedProxyHops(process.env.TRUSTED_PROXY_HOPS) });
+          }, { trustedProxyHops });
+          if (!isSensitiveClientAddressTrusted(clientAddress, trustedProxyHops)) return null;
           const networkKey = clientAddress === null
             ? null
             : hashSecurityPrincipal("login-network", clientAddress, securitySecret);
 
           if (loginAttemptLimiter.check(identifierKey, networkKey).locked || await isLoginTemporarilyLocked(userId)) {
-            await logAction("LOGIN_BLOCKED", { loginId: userId, reason: "rate-limit" }, undefined, { userId: null });
+            if (blockedLoginLogSampler.shouldLog(identifierKey, networkKey)) {
+              await logAction("LOGIN_BLOCKED", { loginId: userId, reason: "rate-limit" }, undefined, { userId: null });
+            }
             throw new LoginTemporarilyLockedError();
           }
 

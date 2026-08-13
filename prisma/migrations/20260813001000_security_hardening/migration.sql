@@ -32,6 +32,7 @@ CREATE TABLE "new_InviteToken" (
     "tokenHash" TEXT,
     "boundEmail" TEXT,
     "boundStudentId" TEXT,
+    "rosterClaimRequired" BOOLEAN NOT NULL DEFAULT false,
     "targetRole" TEXT NOT NULL,
     "targetGisu" INTEGER,
     "isUsed" BOOLEAN NOT NULL DEFAULT false,
@@ -64,6 +65,26 @@ INSERT INTO "new_AuditLog" ("action", "actorId", "createdAt", "id", "ipAddress",
 SELECT "action", "actorId", "createdAt", "id", "ipAddress", "targetId", "targetType" FROM "AuditLog";
 DROP TABLE "AuditLog";
 ALTER TABLE "new_AuditLog" RENAME TO "AuditLog";
+
+CREATE INDEX "SystemLog_createdAt_idx" ON "SystemLog"("createdAt");
+CREATE INDEX "SystemLog_action_createdAt_idx" ON "SystemLog"("action", "createdAt");
+
+CREATE TABLE "StudentRosterEntry" (
+    "studentId" TEXT NOT NULL PRIMARY KEY,
+    "name" TEXT NOT NULL,
+    "email" TEXT NOT NULL,
+    "active" BOOLEAN NOT NULL DEFAULT true,
+    "claimedAt" DATETIME,
+    "claimedEmail" TEXT,
+    "claimedInviteTokenId" TEXT,
+    "claimedUserId" TEXT,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE UNIQUE INDEX "StudentRosterEntry_email_key" ON "StudentRosterEntry"("email");
+CREATE UNIQUE INDEX "StudentRosterEntry_claimedInviteTokenId_key" ON "StudentRosterEntry"("claimedInviteTokenId");
+CREATE UNIQUE INDEX "StudentRosterEntry_claimedUserId_key" ON "StudentRosterEntry"("claimedUserId");
+CREATE INDEX "StudentRosterEntry_active_claimedAt_idx" ON "StudentRosterEntry"("active", "claimedAt");
 
 PRAGMA foreign_keys=ON;
 PRAGMA defer_foreign_keys=OFF;

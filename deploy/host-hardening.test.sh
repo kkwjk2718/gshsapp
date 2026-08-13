@@ -119,6 +119,68 @@ ALLOW_NON_RFC1918_INTERNAL="false"
 dry_run_output="$(main --dry-run)"
 [[ "$dry_run_output" == *"Dry run only."* ]]
 
+ssh_home="$temporary_directory/ssh-home"
+mkdir -p "$ssh_home/.ssh"
+chmod 700 "$ssh_home" "$ssh_home/.ssh"
+printf '%s\n' 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAITestFixtureOnly deployer' >"$ssh_home/.ssh/authorized_keys"
+chmod 600 "$ssh_home/.ssh/authorized_keys"
+account_uid="$(stat -c '%u' "$ssh_home")"
+ssh-keygen() {
+  printf '%s\n' '256 SHA256:abcdefghijklmnopqrstuvwxyz1234567890AB deployer (ED25519)'
+}
+login_shell="$(command -v bash)"
+SSH_LOGIN_SHELLS_FILE="$temporary_directory/shells"
+printf '%s\n' "$login_shell" >"$SSH_LOGIN_SHELLS_FILE"
+authorized_keys_test_mode=600
+stat() {
+  local target="${!#}"
+  if [[ "$target" == "$ssh_home/.ssh/authorized_keys" && "$*" == *"%a"* ]]; then
+    printf '%s\n' "$authorized_keys_test_mode"
+    return 0
+  fi
+  command stat "$@"
+}
+validate_ssh_admin_access "deployer:x:$account_uid:$account_uid::$ssh_home:$login_shell" 'SHA256:abcdefghijklmnopqrstuvwxyz1234567890AB'
+chmod 666 "$ssh_home/.ssh/authorized_keys"
+authorized_keys_test_mode=666
+if validate_ssh_admin_access "deployer:x:$account_uid:$account_uid::$ssh_home:$login_shell" 'SHA256:abcdefghijklmnopqrstuvwxyz1234567890AB' >/dev/null 2>&1; then
+  echo "StrictModes-incompatible authorized_keys permissions must be rejected." >&2
+  exit 1
+fi
+chmod 600 "$ssh_home/.ssh/authorized_keys"
+authorized_keys_test_mode=600
+if validate_ssh_admin_access "deployer:x:$account_uid:$account_uid::$ssh_home:$login_shell" 'SHA256:wrongfingerprintabcdefghijklmnopqrstuvwxyz' >/dev/null 2>&1; then
+  echo "An unreviewed SSH key fingerprint must be rejected." >&2
+  exit 1
+fi
+if validate_ssh_admin_access "deployer:x:$account_uid:$account_uid::$ssh_home:/usr/sbin/nologin" 'SHA256:abcdefghijklmnopqrstuvwxyz1234567890AB' >/dev/null 2>&1; then
+  echo "A nologin SSH administrator shell must be rejected." >&2
+  exit 1
+fi
+
+hostname() { printf '%s\n' 'gshs-origin.internal'; }
+sshd() {
+  if [[ "$1" == "-T" ]]; then
+    printf '%s\n' \
+      'passwordauthentication no' \
+      'kbdinteractiveauthentication no' \
+      'pubkeyauthentication yes' \
+      'permitrootlogin no' \
+      'allowusers deployer' \
+      'authorizedkeysfile .ssh/authorized_keys'
+    return 0
+  fi
+  [[ "$*" == "-t" ]]
+}
+verify_effective_sshd_policy "$ssh_home" '10.20.0.1'
+sshd() {
+  [[ "$1" == "-T" ]] && printf '%s\n' 'passwordauthentication no' 'kbdinteractiveauthentication no' 'pubkeyauthentication no' 'permitrootlogin no' 'allowusers deployer' 'authorizedkeysfile .ssh/authorized_keys'
+}
+if verify_effective_sshd_policy "$ssh_home" '10.20.0.1' >/dev/null 2>&1; then
+  echo "An ineffective PubkeyAuthentication override must be rejected." >&2
+  exit 1
+fi
+
 temporary_sshd_fixture="$temporary_directory/sshd-policy.tmp"
 installed_sshd_fixture="$temporary_directory/99-gshsapp-hardening.conf"
 mktemp() {
@@ -137,5 +199,28 @@ install_sshd_policy "$installed_sshd_fixture"
   exit 1
 }
 grep -Fxq "AllowUsers $SSH_ADMIN_USER" "$installed_sshd_fixture"
+
+printf '%s\n' "previous policy" >"$installed_sshd_fixture"
+sshd() {
+  return 1
+}
+if install_sshd_policy "$installed_sshd_fixture" >/dev/null 2>&1; then
+  echo "Expected an invalid candidate SSH policy to fail." >&2
+  exit 1
+fi
+grep -Fxq "previous policy" "$installed_sshd_fixture" || {
+  echo "Existing SSH policy was not restored after validation failure." >&2
+  exit 1
+}
+
+rm -f "$installed_sshd_fixture"
+if install_sshd_policy "$installed_sshd_fixture" >/dev/null 2>&1; then
+  echo "Expected a new invalid SSH policy to fail." >&2
+  exit 1
+fi
+[[ ! -e "$installed_sshd_fixture" ]] || {
+  echo "New invalid SSH policy was left installed after validation failure." >&2
+  exit 1
+}
 
 echo "host-hardening UFW regression test passed"

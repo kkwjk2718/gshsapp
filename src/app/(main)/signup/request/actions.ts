@@ -9,8 +9,10 @@ import { MEMBER_SERVICE_SUSPENDED } from "@/lib/member-service-suspension";
 import { getApplicationSecuritySecret, hashSecurityPrincipal } from "@/lib/security/principal-key";
 import { PortalUnlockLimiter } from "@/lib/security/portal-unlock-limit";
 import { headers } from "next/headers";
-import { parseTrustedProxyHops, resolveTrustedClientAddress } from "@/lib/security/client-address";
+import { isSensitiveClientAddressTrusted, parseTrustedProxyHops, resolveTrustedClientAddress } from "@/lib/security/client-address";
 import { parsePortalInviteInput, validatePortalPasswordInput } from "@/lib/security/portal-input";
+import { prisma } from "@/lib/db";
+import { validatePortalRosterIdentity } from "@/lib/student-roster";
 
 export type PortalActionResult = {
   success?: string;
@@ -22,12 +24,14 @@ const portalUnlockLimiter = new PortalUnlockLimiter();
 async function getPortalUnlockKeys() {
   const [rawClientKey, requestHeaders] = await Promise.all([getPortalClientKey(), headers()]);
   const secret = getApplicationSecuritySecret();
+  const trustedProxyHops = parseTrustedProxyHops(process.env.TRUSTED_PROXY_HOPS);
   const address = resolveTrustedClientAddress({ forwardedFor: requestHeaders.get("x-forwarded-for") }, {
-    trustedProxyHops: parseTrustedProxyHops(process.env.TRUSTED_PROXY_HOPS),
+    trustedProxyHops,
   });
   return {
     clientKey: hashSecurityPrincipal("portal-client", rawClientKey, secret),
     networkKey: address === null ? null : hashSecurityPrincipal("portal-network", address, secret),
+    trustedClient: isSensitiveClientAddressTrusted(address, trustedProxyHops),
   };
 }
 
@@ -52,6 +56,7 @@ export async function unlockTokenPortal(
   }
 
   const unlockKeys = await getPortalUnlockKeys();
+  if (!unlockKeys.trustedClient) return { error: "Unable to verify the portal network path." };
   const limiterDecision = portalUnlockLimiter.check(unlockKeys.clientKey, unlockKeys.networkKey);
   if (!limiterDecision.allowed) {
     return { error: "Too many failed attempts. Please wait before trying again." };
@@ -96,6 +101,10 @@ export async function requestSignupToken(
   const hasSession = await hasValidPortalSession(settings.sessionVersion);
   if (!hasSession) {
     return { error: "포털 인증이 만료되었습니다. 다시 비밀번호를 입력해주세요." };
+  }
+
+  if (!(await validatePortalRosterIdentity(prisma, input))) {
+    return { error: "The supplied student identity is not eligible for self-service enrollment." };
   }
 
   return sendPortalStudentInvite(input);

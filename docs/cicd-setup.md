@@ -33,6 +33,7 @@
 - [`.github/workflows/deploy-prod.yml`](../.github/workflows/deploy-prod.yml)
 - [`.github/workflows/production-health-monitor.yml`](../.github/workflows/production-health-monitor.yml)
 - [`.github/workflows/scheduled-backup-test.yml`](../.github/workflows/scheduled-backup-test.yml)
+- [`.github/workflows/scheduled-backup-prod.yml`](../.github/workflows/scheduled-backup-prod.yml)
 
 ## 3. Docker Hub 준비
 
@@ -204,6 +205,8 @@ runner가 필요한 이유:
 4. 서버 `.env` 누락 여부
 5. 서버 `docker compose logs`
 6. `/api/health` 응답
+
+운영 `.env`는 `install -o <deploy-user> -g <deploy-user> -m 600`으로 설치하고, `AUTH_SECRET` 회전은 모든 기존 세션을 폐기한다는 점을 반영해 유지보수 창에서 수행합니다. 학생 자가가입을 켜기 전에는 `/admin/settings`에서 학교가 통제하는 `studentId,name,email` CSV 명부를 원자적으로 가져오고 기존 중복 학번을 먼저 해소합니다.
 
 ## 13. 관련 문서
 

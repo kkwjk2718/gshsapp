@@ -14,6 +14,10 @@ import {
   normalizePersonalEventInput,
 } from "@/lib/personal-event";
 import { isCanonicalUuid } from "@/lib/security/public-input";
+import { headers } from "next/headers";
+import { isSensitiveClientAddressTrusted, parseTrustedProxyHops, resolveTrustedClientAddress } from "@/lib/security/client-address";
+import { getApplicationSecuritySecret, hashSecurityPrincipal } from "@/lib/security/principal-key";
+import { passwordChangeLimiter } from "@/lib/security/password-change-limit";
 
 export async function createDDay(formData: FormData) {
   const user = await getCurrentUser();
@@ -92,18 +96,30 @@ export async function changePassword(formData: FormData) {
         return { error: "모든 필드를 입력해주세요." };
     }
     if (!isValidBcryptInput(currentPassword)) return { error: "Please check the current password." };
+    if (newPassword !== confirmPassword) {
+        return { error: "새 비밀번호가 일치하지 않습니다." };
+    }
+    const passwordPolicy = validatePassword(newPassword);
+    if (!passwordPolicy.ok) return { error: passwordPolicy.message };
+
+    const requestHeaders = await headers();
+    const trustedProxyHops = parseTrustedProxyHops(process.env.TRUSTED_PROXY_HOPS);
+    const address = resolveTrustedClientAddress({ forwardedFor: requestHeaders.get("x-forwarded-for") }, { trustedProxyHops });
+    if (!isSensitiveClientAddressTrusted(address, trustedProxyHops)) {
+      return { error: "Unable to verify the password-change network path." };
+    }
+    const securitySecret = getApplicationSecuritySecret();
+    const userKey = hashSecurityPrincipal("password-change-user", user.id, securitySecret);
+    const networkKey = address === null ? null : hashSecurityPrincipal("password-change-network", address, securitySecret);
+    if (passwordChangeLimiter.check(userKey, networkKey).locked) {
+      return { error: "Too many password attempts. Please wait before trying again." };
+    }
+    passwordChangeLimiter.recordFailure(userKey, networkKey);
 
     const isValid = await bcrypt.compare(currentPassword, dbUser.passwordHash);
     if (!isValid) {
         return { error: "현재 비밀번호가 일치하지 않습니다." };
     }
-
-    if (newPassword !== confirmPassword) {
-        return { error: "새 비밀번호가 일치하지 않습니다." };
-    }
-
-    const passwordPolicy = validatePassword(newPassword);
-    if (!passwordPolicy.ok) return { error: passwordPolicy.message };
 
     const newPasswordHash = await bcrypt.hash(newPassword, 10);
 
@@ -122,6 +138,7 @@ export async function changePassword(formData: FormData) {
       }
       throw error;
     }
+    passwordChangeLimiter.clearUser(userKey);
     await signOut({ redirectTo: "/login" });
     return { success: "비밀번호가 성공적으로 변경되었습니다." };
 }

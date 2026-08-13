@@ -60,4 +60,17 @@ describe("login failure persistence boundary", () => {
     expect(limiter.recordFailure("id-b", null)).toMatchObject({ locked: false });
     expect(limiter.check("id-c", null)).toMatchObject({ locked: false });
   });
+
+  it("samples blocked-request logging once per principal and window", async () => {
+    const { createBlockedLoginLogSampler } = await import("./login-rate-limit");
+    let now = 0;
+    const sampler = createBlockedLoginLogSampler({ now: () => now, windowMs: 60_000, maxKeys: 2 });
+
+    expect(sampler.shouldLog("id-a", "network-a")).toBe(true);
+    expect(sampler.shouldLog("id-b", "network-a")).toBe(false);
+    expect(sampler.shouldLog("id-a", null)).toBe(true);
+    expect(sampler.shouldLog("id-a", null)).toBe(false);
+    now = 60_000;
+    expect(sampler.shouldLog("id-b", "network-a")).toBe(true);
+  });
 });

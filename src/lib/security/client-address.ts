@@ -31,3 +31,7 @@ export function resolveTrustedClientAddress(
   if (entries.length > MAX_FORWARDED_FOR_ENTRIES || entries.length < hops) return null;
   return normalizeIpAddress(entries[entries.length - hops]);
 }
+
+export function isSensitiveClientAddressTrusted(address: string | null, trustedProxyHops: number): boolean {
+  return trustedProxyHops === 0 || address !== null;
+}

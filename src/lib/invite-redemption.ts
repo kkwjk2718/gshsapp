@@ -8,6 +8,7 @@ type InviteSnapshot = Readonly<{
   targetGisu: number | null;
   boundEmail: string | null;
   boundStudentId: string | null;
+  rosterClaimRequired: boolean;
 }>;
 type InviteRedemptionDb = {
   $transaction<T>(callback: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T>;
@@ -63,7 +64,7 @@ export async function preflightInviteRedemption(db: InvitePreflightDb, input: In
       usedByUserId: null,
       createdAt: { gt: cutoff },
     },
-    select: { id: true, targetRole: true, targetGisu: true, boundEmail: true, boundStudentId: true },
+    select: { id: true, targetRole: true, targetGisu: true, boundEmail: true, boundStudentId: true, rosterClaimRequired: true },
   });
   if (!invite) throw new InviteRedemptionError("INVALID");
   validateInviteIdentity(invite, input);
@@ -80,7 +81,7 @@ export async function redeemInvite(db: InviteRedemptionDb, input: RedeemInviteIn
           ...(input.legacyToken ? [{ token: input.legacyToken }] : []),
         ],
       },
-      select: { id: true, targetRole: true, targetGisu: true, boundEmail: true, boundStudentId: true },
+      select: { id: true, targetRole: true, targetGisu: true, boundEmail: true, boundStudentId: true, rosterClaimRequired: true },
     });
     if (!invite) throw new InviteRedemptionError("INVALID");
 
@@ -102,6 +103,26 @@ export async function redeemInvite(db: InviteRedemptionDb, input: RedeemInviteIn
       role: invite.targetRole,
       gisu: invite.targetGisu,
     } });
+    if (invite.rosterClaimRequired) {
+      if (invite.targetRole !== "STUDENT" || !invite.boundStudentId || !invite.boundEmail) {
+        throw new InviteRedemptionError("INVALID");
+      }
+      const rosterClaim = await tx.studentRosterEntry.updateMany({
+        where: {
+          studentId: invite.boundStudentId,
+          email: invite.boundEmail,
+          claimedInviteTokenId: invite.id,
+          claimedUserId: null,
+        },
+        data: {
+          claimedUserId: user.id,
+          claimedInviteTokenId: null,
+          claimedAt: input.now,
+          claimedEmail: invite.boundEmail,
+        },
+      });
+      if (rosterClaim.count !== 1) throw new InviteRedemptionError("INVALID");
+    }
     await tx.inviteToken.update({
       where: { id: invite.id },
       data: { usedByUserId: user.id },

@@ -16,6 +16,10 @@ function createDb(options: { duplicate?: boolean; quota?: number } = {}) {
       count: vi.fn(async () => { sequence.push("quota"); return options.quota ?? 1; }),
       update: vi.fn(async () => { sequence.push("attach"); return { id: "log" }; }),
     },
+    studentRosterEntry: {
+      findFirst: vi.fn(async () => { sequence.push("roster-read"); return { claimedAt: null, claimedInviteTokenId: null }; }),
+      updateMany: vi.fn(async () => { sequence.push("roster-claim"); return { count: 1 }; }),
+    },
     inviteToken: {
       create: vi.fn(async () => { sequence.push("token"); return { id: "token" }; }),
       findMany: vi.fn(async () => { sequence.push("invite-prune"); return []; }),
@@ -37,7 +41,7 @@ describe("atomic invite distribution reservation", () => {
     const { db, tx, sequence } = createDb();
     const result = await reserveDistribution(db as never, input);
 
-    expect(sequence).toEqual(["pending", "cooldown", "quota", "token", "attach", "invite-prune"]);
+    expect(sequence).toEqual(["pending", "cooldown", "quota", "roster-read", "token", "roster-claim", "attach", "invite-prune"]);
     expect(result.inviteToken.token).toMatch(/^[A-Za-z0-9_-]{43}$/);
     expect(tx.inviteToken.create).toHaveBeenCalledWith({
       data: expect.objectContaining({ token: null, tokenHash: expect.stringMatching(/^[A-Za-z0-9_-]{43}$/), boundEmail: "student@example.com", boundStudentId: "1304" }),
@@ -49,6 +53,10 @@ describe("atomic invite distribution reservation", () => {
     expect(tx.tokenDistributionLog.count).toHaveBeenCalledWith({
       where: expect.objectContaining({ status: { in: ["PENDING", "SENT", "FAILED"] } }),
     });
+    expect(tx.studentRosterEntry.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ studentId: "1304", active: true, claimedUserId: null, claimedInviteTokenId: null }),
+      data: expect.objectContaining({ claimedInviteTokenId: "token" }),
+    }));
   });
 
   it("rolls back before token creation for cooldown or quota denial", async () => {

@@ -4,7 +4,10 @@ import { InviteRedemptionError, preflightInviteRedemption, redeemInvite } from "
 
 function createDb(options: { claimCount?: number; createError?: Error } = {}) {
   const sequence: string[] = [];
-  const invite: { id: string; targetRole: string; targetGisu: number | null; boundEmail: string | null; boundStudentId: string | null } = { id: "invite-1", targetRole: "STUDENT", targetGisu: 40, boundEmail: null, boundStudentId: null };
+  const invite: {
+    id: string; targetRole: string; targetGisu: number | null; boundEmail: string | null;
+    boundStudentId: string | null; rosterClaimRequired: boolean;
+  } = { id: "invite-1", targetRole: "STUDENT", targetGisu: 40, boundEmail: null, boundStudentId: null, rosterClaimRequired: false };
   const tx = {
     inviteToken: {
       findFirst: vi.fn(async () => { sequence.push("lookup"); return invite; }),
@@ -18,6 +21,9 @@ function createDb(options: { claimCount?: number; createError?: Error } = {}) {
         return { id: "user-1" };
       }),
     },
+    studentRosterEntry: {
+      updateMany: vi.fn(async () => { sequence.push("complete-roster"); return { count: 1 }; }),
+    },
   };
   const db = { $transaction: vi.fn(async (callback: (value: typeof tx) => unknown) => callback(tx)) };
   return { db, tx, sequence };
@@ -27,7 +33,7 @@ describe("atomic invite redemption", () => {
   it("cheaply rejects inactive or mismatched invites before password hashing can begin", async () => {
     const findFirst = vi.fn().mockResolvedValue({
       id: "invite-1", targetRole: "STUDENT", targetGisu: 40,
-      boundEmail: "student@example.com", boundStudentId: "1304",
+      boundEmail: "student@example.com", boundStudentId: "1304", rosterClaimRequired: true,
     });
     const validateInvite = vi.fn();
     const now = new Date("2026-08-13T00:00:00.000Z");
@@ -40,7 +46,7 @@ describe("atomic invite redemption", () => {
         OR: [{ tokenHash: "digest" }], isUsed: false, usedByUserId: null,
         createdAt: { gt: new Date("2026-08-06T00:00:00.000Z") },
       },
-      select: { id: true, targetRole: true, targetGisu: true, boundEmail: true, boundStudentId: true },
+      select: { id: true, targetRole: true, targetGisu: true, boundEmail: true, boundStudentId: true, rosterClaimRequired: true },
     });
     expect(validateInvite).toHaveBeenCalledOnce();
 
@@ -94,7 +100,7 @@ describe("atomic invite redemption", () => {
     });
     expect(tx.inviteToken.findFirst).toHaveBeenCalledWith({
       where: { OR: [{ tokenHash: "sha256-digest" }, { token: "legacy-value" }] },
-      select: { id: true, targetRole: true, targetGisu: true, boundEmail: true, boundStudentId: true },
+      select: { id: true, targetRole: true, targetGisu: true, boundEmail: true, boundStudentId: true, rosterClaimRequired: true },
     });
   });
 
@@ -102,7 +108,7 @@ describe("atomic invite redemption", () => {
     const { db, tx } = createDb();
     tx.inviteToken.findFirst.mockResolvedValueOnce({
       id: "invite-1", targetRole: "STUDENT", targetGisu: 40,
-      boundEmail: "intended@example.com", boundStudentId: "1304",
+      boundEmail: "intended@example.com", boundStudentId: "1304", rosterClaimRequired: true,
     });
     await expect(redeemInvite(db as never, {
       presentedSecret: "secret", tokenHash: "digest", legacyToken: null,
@@ -114,6 +120,26 @@ describe("atomic invite redemption", () => {
     expect(tx.user.create).not.toHaveBeenCalled();
   });
 
+  it("atomically marks a roster identity consumed after account creation", async () => {
+    const { db, tx, sequence } = createDb();
+    tx.inviteToken.findFirst.mockResolvedValueOnce({
+      id: "invite-1", targetRole: "STUDENT", targetGisu: 40,
+      boundEmail: "student@example.com", boundStudentId: "1304", rosterClaimRequired: true,
+    });
+    await redeemInvite(db as never, {
+      presentedSecret: "secret", tokenHash: "digest", legacyToken: null,
+      now: new Date("2026-08-13T00:00:00.000Z"),
+      claimedIdentity: { email: "student@example.com", studentId: "1304" },
+      validateInvite: () => undefined,
+      userData: { userId: "student", passwordHash: "hash", name: "Student" },
+    });
+    expect(sequence).toEqual(["claim", "create-user", "complete-roster", "associate"]);
+    expect(tx.studentRosterEntry.updateMany).toHaveBeenCalledWith({
+      where: { studentId: "1304", email: "student@example.com", claimedInviteTokenId: "invite-1", claimedUserId: null },
+      data: { claimedUserId: "user-1", claimedInviteTokenId: null, claimedAt: new Date("2026-08-13T00:00:00.000Z"), claimedEmail: "student@example.com" },
+    });
+  });
+
   it("keeps generic batch invites unbound", async () => {
     const { db } = createDb();
     await expect(redeemInvite(db as never, {
@@ -122,6 +148,21 @@ describe("atomic invite redemption", () => {
       validateInvite: () => undefined,
       userData: { userId: "student", passwordHash: "hash", name: "Student" },
     })).resolves.toEqual({ userId: "user-1", inviteTokenId: "invite-1" });
+  });
+
+  it("allows a bound manual student invite without a portal roster claim", async () => {
+    const { db, tx } = createDb();
+    tx.inviteToken.findFirst.mockResolvedValueOnce({
+      id: "invite-1", targetRole: "STUDENT", targetGisu: 40,
+      boundEmail: "student@example.com", boundStudentId: "1304", rosterClaimRequired: false,
+    });
+    await expect(redeemInvite(db as never, {
+      presentedSecret: "secret", tokenHash: "digest", legacyToken: null, now: new Date(),
+      claimedIdentity: { email: "student@example.com", studentId: "1304" },
+      validateInvite: () => undefined,
+      userData: { userId: "student", passwordHash: "hash", name: "Student" },
+    })).resolves.toMatchObject({ userId: "user-1" });
+    expect(tx.studentRosterEntry.updateMany).not.toHaveBeenCalled();
   });
 
   it("does not convert validation or account uniqueness failures into retryable claims", async () => {

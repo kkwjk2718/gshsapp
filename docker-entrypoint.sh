@@ -15,6 +15,16 @@ if [ "${1:-}" = "node" ] && [ "${2:-}" = "server.js" ]; then
       exit 1
       ;;
   esac
+  case "${AUTH_SECRET:-}" in
+    ""|change-me|changeme|secret|development|*replace-with*|*replace_with*|*placeholder*|*example*)
+      echo "AUTH_SECRET must contain at least 32 characters of non-placeholder secret material before production startup." >&2
+      exit 1
+      ;;
+  esac
+  if [ "${#AUTH_SECRET}" -lt 32 ]; then
+    echo "AUTH_SECRET must contain at least 32 characters of non-placeholder secret material before production startup." >&2
+    exit 1
+  fi
 fi
 
 exec "$@"

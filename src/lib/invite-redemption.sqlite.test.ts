@@ -50,6 +50,7 @@ function provisionDatabase() {
       "tokenHash" TEXT,
       "boundEmail" TEXT,
       "boundStudentId" TEXT,
+      "rosterClaimRequired" INTEGER NOT NULL DEFAULT 0,
       "targetRole" TEXT NOT NULL,
       "targetGisu" INTEGER,
       "isUsed" INTEGER NOT NULL DEFAULT 0,
@@ -61,6 +62,18 @@ function provisionDatabase() {
     CREATE UNIQUE INDEX "InviteToken_token_key" ON "InviteToken"("token");
     CREATE UNIQUE INDEX "InviteToken_tokenHash_key" ON "InviteToken"("tokenHash");
     CREATE UNIQUE INDEX "InviteToken_usedByUserId_key" ON "InviteToken"("usedByUserId");
+    CREATE TABLE "StudentRosterEntry" (
+      "studentId" TEXT NOT NULL PRIMARY KEY,
+      "name" TEXT NOT NULL,
+      "email" TEXT NOT NULL,
+      "active" INTEGER NOT NULL DEFAULT 1,
+      "claimedAt" DATETIME,
+      "claimedEmail" TEXT,
+      "claimedInviteTokenId" TEXT,
+      "claimedUserId" TEXT,
+      "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
   `);
   database.close();
   return `file:${filename.replace(/\\/g, "/")}`;

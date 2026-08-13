@@ -19,7 +19,7 @@ describe("reviewed production migrations", () => {
     db.exec(readFileSync(securityPath, "utf8"));
 
     expect(columns(db, "User")).toEqual(expect.arrayContaining(["sessionVersion", "mustChangePassword"]));
-    expect(columns(db, "InviteToken")).toEqual(expect.arrayContaining(["tokenHash", "boundEmail", "boundStudentId"]));
+    expect(columns(db, "InviteToken")).toEqual(expect.arrayContaining(["tokenHash", "boundEmail", "boundStudentId", "rosterClaimRequired"]));
     expect((db.prepare("PRAGMA foreign_key_check").all())).toEqual([]);
     db.close();
   });

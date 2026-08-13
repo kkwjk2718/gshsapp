@@ -4,7 +4,7 @@ const INVITE_TTL_MS = 7 * 86_400_000;
 const DELETE_BATCH = 1_000;
 const MAX_DELETE_PER_RUN = 5_000;
 
-type InviteLifecycleDb = Pick<Prisma.TransactionClient, "inviteToken" | "tokenDistributionLog">;
+type InviteLifecycleDb = Pick<Prisma.TransactionClient, "inviteToken" | "tokenDistributionLog" | "studentRosterEntry">;
 
 export async function enforceInviteTokenLifecycle(db: InviteLifecycleDb, now = new Date()): Promise<number> {
   const cutoff = new Date(now.getTime() - INVITE_TTL_MS);
@@ -16,6 +16,14 @@ export async function enforceInviteTokenLifecycle(db: InviteLifecycleDb, now = n
     });
     if (expired.length === 0) break;
     const ids = expired.map(({ id }) => id);
+    await db.studentRosterEntry.updateMany({
+      where: { claimedInviteTokenId: { in: ids }, claimedUserId: null },
+      data: {
+        claimedAt: null,
+        claimedEmail: null,
+        claimedInviteTokenId: null,
+      },
+    });
     await db.tokenDistributionLog.updateMany({ where: { inviteTokenId: { in: ids } }, data: { inviteTokenId: null } });
     const result = await db.inviteToken.deleteMany({ where: { id: { in: ids } } });
     if (result.count === 0) break;

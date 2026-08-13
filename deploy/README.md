@@ -96,7 +96,7 @@ DATABASE_URL=file:/app/data/dev.db
 BACKUP_DIR=/app/data/backup
 RESTORE_ROOT=/app/data/restore
 WEATHER_CACHE_PATH=/app/data/weather-cache.json
-AUTH_SECRET=replace-me
+AUTH_SECRET=<openssl-rand-base64-48-output>
 TRUSTED_PROXY_HOPS=1
 AUTH_TRUST_HOST=true
 AUTH_URL=https://test.gshs.app
@@ -106,6 +106,7 @@ NEXT_PUBLIC_NEIS_API_KEY=
 ```
 
 운영 서버에서는 URL 세 값을 `https://gshs.app`으로 변경합니다.
+`.env`는 root 또는 전용 deploy 계정 소유의 일반 파일로 `0600` 권한을 사용해야 하며 `/opt/gshsapp` 아래 경로 구성 요소도 group/other 쓰기를 허용하면 안 됩니다. 배포 스크립트가 이를 사전에 검증합니다.
 
 ## GitHub Secrets / Environments
 
@@ -129,6 +130,7 @@ Runner labels:
 - 별도 프록시 호스트를 쓰는 경우 [`host-hardening.sh`](./host-hardening.sh)와 [인프라 보안 런북](../docs/infrastructure-security-runbook.md)을 먼저 적용합니다. 기존 UFW 관리 규칙이 없거나 의도한 SSH/프록시 규칙 두 개와 정확히 일치하지 않으면 스크립트가 변경 전에 중단되며, 규칙을 자동 초기화하거나 일괄 삭제하지 않습니다.
 - `backup/` 디렉터리는 삭제하지 않습니다.
 - `.env`는 서버에서 직접 관리하며 저장소에는 올리지 않습니다.
+- private registry 자격증명이 필요한 경우에도 배포/복원 스크립트는 `0700` 임시 `DOCKER_CONFIG`만 사용하고 종료 시 삭제합니다. publish 권한 토큰을 runner의 기본 `~/.docker/config.json`에 남기지 않습니다.
 - SQLite를 사용하므로 대규모 변경 전에는 백업 상태를 먼저 확인합니다.
 
 ## 복원 리허설
@@ -175,6 +177,7 @@ OFFSITE_TARGET=backup-user@backup-host:/srv/backups/gshsapp/ ./offsite-backup.sh
 워크플로우:
 
 - [`.github/workflows/scheduled-backup-test.yml`](../.github/workflows/scheduled-backup-test.yml)
+- [`.github/workflows/scheduled-backup-prod.yml`](../.github/workflows/scheduled-backup-prod.yml): 운영에서 매시간 로그 보존/상한 정리와 정기 백업을 직렬 실행합니다.
 
 수동 실행 예시:
 

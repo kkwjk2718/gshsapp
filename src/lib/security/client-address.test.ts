@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { parseTrustedProxyHops, resolveTrustedClientAddress } from "./client-address";
+import { isSensitiveClientAddressTrusted, parseTrustedProxyHops, resolveTrustedClientAddress } from "./client-address";
 
 describe("trusted client address", () => {
   it("defaults to zero hops and ignores spoofed forwarding data", () => {
@@ -25,5 +25,11 @@ describe("trusted client address", () => {
     ["1,2,3,4,5,6,7,8,9", 1], ["198.51.100.4", 2],
   ])("rejects invalid chain %j", (forwardedFor, trustedProxyHops) => {
     expect(resolveTrustedClientAddress({ forwardedFor }, { trustedProxyHops })).toBeNull();
+  });
+
+  it("fails sensitive flows closed when a configured proxy chain yields no client address", () => {
+    expect(isSensitiveClientAddressTrusted(null, 1)).toBe(false);
+    expect(isSensitiveClientAddressTrusted(null, 0)).toBe(true);
+    expect(isSensitiveClientAddressTrusted("203.0.113.1", 1)).toBe(true);
   });
 });
