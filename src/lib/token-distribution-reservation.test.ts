@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { sendInviteTokenEmail } from "./token-distribution";
 
 const mocks = vi.hoisted(() => ({
   count: vi.fn(), setting: vi.fn(), send: vi.fn(), updateMany: vi.fn(), createLog: vi.fn(),
@@ -29,14 +30,12 @@ describe("reserved token email transitions", () => {
 
   it("transitions the exact pending reservation to SENT", async () => {
     mocks.send.mockResolvedValue({ messageId: "message" }); mocks.updateMany.mockResolvedValue({ count: 1 });
-    const { sendInviteTokenEmail } = await import("./token-distribution");
     expect(await sendInviteTokenEmail(input)).toMatchObject({ success: expect.any(String), quotaUsed: 1 });
     expect(mocks.updateMany).toHaveBeenCalledWith({ where: { id: "distribution", status: "PENDING" }, data: expect.objectContaining({ status: "SENT", inviteTokenId: "token", brevoMessageId: "message" }) });
   });
 
   it("transitions the exact pending reservation to FAILED with bounded details", async () => {
     mocks.send.mockRejectedValue(new Error("x".repeat(2_000))); mocks.updateMany.mockResolvedValue({ count: 1 });
-    const { sendInviteTokenEmail } = await import("./token-distribution");
     expect(await sendInviteTokenEmail(input)).toHaveProperty("error");
     expect(mocks.transaction).toHaveBeenCalledOnce();
     expect(mocks.updateMany).toHaveBeenCalledWith({ where: { id: "distribution", status: "PENDING" }, data: expect.objectContaining({ status: "FAILED", inviteTokenId: null, errorMessage: expect.any(String) }) });
@@ -50,7 +49,6 @@ describe("reserved token email transitions", () => {
 
   it("leaves the reservation PENDING when delivery succeeds but the SENT transition fails", async () => {
     mocks.send.mockResolvedValue({ messageId: "accepted" }); mocks.updateMany.mockRejectedValue(new Error("database unavailable"));
-    const { sendInviteTokenEmail } = await import("./token-distribution");
     await expect(sendInviteTokenEmail(input)).rejects.toThrow("database unavailable");
     expect(mocks.updateMany).toHaveBeenCalledTimes(1);
     expect(mocks.updateMany).toHaveBeenCalledWith(expect.objectContaining({ where: { id: "distribution", status: "PENDING" }, data: expect.objectContaining({ status: "SENT" }) }));
@@ -65,7 +63,6 @@ describe("reserved token email transitions", () => {
     mocks.send.mockRejectedValue(new Error("provider unavailable"));
     mocks.updateMany.mockResolvedValue({ count: 1 });
     mocks.releaseRoster.mockResolvedValue({ count: 1 });
-    const { sendInviteTokenEmail } = await import("./token-distribution");
 
     await expect(sendInviteTokenEmail(portalInput)).resolves.toHaveProperty("error");
     expect(mocks.releaseRoster).toHaveBeenCalledWith({
@@ -78,7 +75,6 @@ describe("reserved token email transitions", () => {
     mocks.count.mockResolvedValue(251);
     mocks.updateMany.mockResolvedValue({ count: 1 });
     mocks.releaseRoster.mockResolvedValue({ count: 1 });
-    const { sendInviteTokenEmail } = await import("./token-distribution");
     await expect(sendInviteTokenEmail(input)).resolves.toHaveProperty("error");
     expect(mocks.send).not.toHaveBeenCalled();
     expect(mocks.releaseRoster).toHaveBeenCalledWith({
