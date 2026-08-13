@@ -399,9 +399,12 @@ def _findmnt_column(offsite_dir: pathlib.Path, column: str) -> str:
         output = result.stdout.decode("ascii", "strict")
     except UnicodeDecodeError as error:
         raise ConfigError("offsite mount identity is not ASCII") from error
-    if not output.endswith("\n") or output.count("\n") != 1 or "\r" in output or "\x00" in output:
+    if not output.endswith("\n") or "\r" in output or "\x00" in output:
         raise ConfigError("offsite mount identity output is not canonical")
-    return output[:-1]
+    lines = output[:-1].split("\n")
+    if not lines or len(set(lines)) != 1:
+        raise ConfigError("stacked offsite mount identities do not agree")
+    return lines[0]
 
 
 def verify_mounted_offsite(

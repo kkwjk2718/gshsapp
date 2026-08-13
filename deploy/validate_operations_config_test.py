@@ -177,6 +177,20 @@ class OperationsConfigTests(unittest.TestCase):
             backup_device=1,
         )
 
+    def test_findmnt_accepts_only_consistent_stacked_bind_identity(self) -> None:
+        output = b"tmpfs\ntmpfs\n"
+
+        def run(command: list[str], **_kwargs: object) -> subprocess.CompletedProcess[bytes]:
+            return subprocess.CompletedProcess(command, 0, stdout=output, stderr=b"")
+
+        with mock.patch.object(CONFIG.subprocess, "run", run):
+            self.assertEqual(CONFIG._findmnt_column(pathlib.Path("/mnt/immutable/gshsapp"), "SOURCE"), "tmpfs")
+
+        output = b"tmpfs\n/dev/attacker\n"
+        with mock.patch.object(CONFIG.subprocess, "run", run):
+            with self.assertRaises(CONFIG.ConfigError):
+                CONFIG._findmnt_column(pathlib.Path("/mnt/immutable/gshsapp"), "SOURCE")
+
     def test_shape_only_receipt_freshness_api_is_not_exposed(self) -> None:
         source = MODULE_PATH.read_text(encoding="utf-8")
         self.assertFalse(hasattr(CONFIG, "backup_needed"))
