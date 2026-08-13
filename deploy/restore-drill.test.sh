@@ -74,6 +74,23 @@ set -Eeuo pipefail
 # numeric container identity, while the fake container runs as this test user.
 exit 0
 FAKE
+{
+  printf '#!/usr/bin/env bash\nset -Eeuo pipefail\n'
+  printf 'REAL_RM=%q\n' "$(command -v rm)"
+  printf 'TEST_ROOT_VALUE=%q\n' "$TEST_ROOT"
+  cat <<'FAKE'
+# Model root's ability to remove the exact test-owned 0400/0500 restore tree
+# while retaining the production script's path validation and cleanup logic.
+for target in "$@"; do
+  case "$target" in
+    "$TEST_ROOT_VALUE"|"$TEST_ROOT_VALUE"/*)
+      [[ ! -e "$target" && ! -L "$target" ]] || chmod -R u+rwX -- "$target" 2>/dev/null || :
+      ;;
+  esac
+done
+exec "$REAL_RM" "$@"
+FAKE
+} >"$FAKE_BIN/rm"
 cat >"$FAKE_BIN/findmnt" <<'FAKE'
 #!/usr/bin/env bash
 set -Eeuo pipefail
@@ -304,7 +321,7 @@ esac
 exit 91
 FAKE
 } >"$FAKE_BIN/docker"
-chmod 700 "$FAKE_BIN/mktemp" "$FAKE_BIN/timeout" "$FAKE_BIN/chown" "$FAKE_BIN/findmnt" "$FAKE_BIN/mount" "$FAKE_BIN/umount" "$FAKE_BIN/sync" "$FAKE_BIN/flock" "$FAKE_BIN/id" "$FAKE_BIN/install" "$FAKE_BIN/stat" "$FAKE_BIN/python" "$FAKE_BIN/docker"
+chmod 700 "$FAKE_BIN/mktemp" "$FAKE_BIN/timeout" "$FAKE_BIN/chown" "$FAKE_BIN/rm" "$FAKE_BIN/findmnt" "$FAKE_BIN/mount" "$FAKE_BIN/umount" "$FAKE_BIN/sync" "$FAKE_BIN/flock" "$FAKE_BIN/id" "$FAKE_BIN/install" "$FAKE_BIN/stat" "$FAKE_BIN/python" "$FAKE_BIN/docker"
 
 PORT_FILE="$TEST_ROOT/http-port"
 AUTH_PROBE_LOG="$TEST_ROOT/auth-probe.log"
