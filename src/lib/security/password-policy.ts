@@ -12,6 +12,11 @@ const COMMON_PASSWORDS = new Set([
   "letmein123456",
 ]);
 
+export function isValidBcryptInput(value: unknown): value is string {
+  return typeof value === "string" && value.length > 0 && !value.includes("\0") &&
+    new TextEncoder().encode(value).byteLength <= 72;
+}
+
 export function validatePassword(password: string): PasswordPolicyResult {
   if (password.includes("\0")) {
     return { ok: false, code: "NUL", message: "비밀번호에는 NUL 문자를 사용할 수 없습니다." };

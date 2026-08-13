@@ -56,7 +56,7 @@ export async function getTodayDistributionUsage() {
   const { start, end } = getKstDayRange();
   return prisma.tokenDistributionLog.count({
     where: {
-      status: { in: ["PENDING", "SENT"] },
+      status: { in: ["PENDING", "SENT", "FAILED"] },
       createdAt: {
         gte: start,
         lt: end,
@@ -87,7 +87,7 @@ function escapeHtml(value: string) {
     .replaceAll("'", "&#39;");
 }
 
-function buildInviteEmail({
+export function buildInviteEmail({
   name,
   token,
   guidance,
@@ -96,7 +96,7 @@ function buildInviteEmail({
   token: string;
   guidance: string;
 }) {
-  const signupUrl = `${getAppBaseUrl()}/signup?token=${encodeURIComponent(token)}`;
+  const signupUrl = `${getAppBaseUrl()}/signup#token=${encodeURIComponent(token)}`;
   const greeting = name ? `${name}님` : "안녕하세요";
   const safeGreeting = escapeHtml(greeting);
   const safeToken = escapeHtml(token);
@@ -388,7 +388,7 @@ export async function sendInviteTokenEmail(input: SendDistributionEmailInput): P
     return {
       success: `${input.target.email}로 초대 메일을 발송했습니다.`,
       reusedToken: false,
-      quotaUsed: quota.used + 1,
+      quotaUsed: input.reservation ? quota.used : quota.used + 1,
     };
   } catch (error) {
     if (providerAccepted) throw error;
@@ -406,11 +406,14 @@ export async function sendInviteTokenEmail(input: SendDistributionEmailInput): P
     const errorMessage = [...rawError.replace(/[\u0000-\u001f\u007f-\u009f\ufeff]/gu, " ")].slice(0, 512).join("");
 
     if (input.reservation) {
-      const transition = await prisma.tokenDistributionLog.updateMany({
-        where: { id: input.reservation.distributionLogId, status: "PENDING" },
-        data: { status: "FAILED", inviteTokenId: inviteToken.id, brevoMessageId: null, errorMessage },
+      await prisma.$transaction(async (tx) => {
+        const transition = await tx.tokenDistributionLog.updateMany({
+          where: { id: input.reservation!.distributionLogId, status: "PENDING" },
+          data: { status: "FAILED", inviteTokenId: null, brevoMessageId: null, errorMessage },
+        });
+        if (transition.count !== 1) throw new Error("Distribution reservation is no longer pending");
+        await tx.inviteToken.delete({ where: { id: inviteToken.id } });
       });
-      if (transition.count !== 1) throw new Error("Distribution reservation is no longer pending");
     } else await createDistributionLog({
       source: input.source,
       recipientEmail: input.target.email,
@@ -433,7 +436,7 @@ export async function sendInviteTokenEmail(input: SendDistributionEmailInput): P
 
     return {
       error: "메일 발송에 실패했습니다. 잠시 후 다시 시도해주세요.",
-      quotaUsed: quota.used,
+      quotaUsed: input.reservation ? quota.used : quota.used + 1,
     };
   }
 }

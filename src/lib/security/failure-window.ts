@@ -9,7 +9,7 @@ export type FailureDecision = Readonly<{
   locked: boolean;
   failures: number;
   retryAfterMs: number;
-  reason: "OK" | "LOCKED" | "CAPACITY";
+  reason: "OK" | "LOCKED";
 }>;
 
 type FailureState = {
@@ -43,14 +43,23 @@ export class BoundedFailureWindow {
     return state.failureTimes.length > 0 ? state : null;
   }
 
+  #evictLeastRecentlyUsed(): void {
+    let oldestKey: string | null = null;
+    let oldestSeen = Number.POSITIVE_INFINITY;
+    for (const [key, state] of this.#states) {
+      if (state.lastSeenAt < oldestSeen) {
+        oldestKey = key;
+        oldestSeen = state.lastSeenAt;
+      }
+    }
+    if (oldestKey !== null) this.#states.delete(oldestKey);
+  }
+
   check(key: string): FailureDecision {
     const now = this.#now();
     const state = this.#states.get(key);
     if (!state) {
       this.prune();
-      if (this.#states.size >= this.#policy.maxKeys) {
-        return { locked: true, failures: 0, retryAfterMs: this.#policy.idleTtlMs, reason: "CAPACITY" };
-      }
       return { locked: false, failures: 0, retryAfterMs: 0, reason: "OK" };
     }
     const normalized = this.#normalize(state, now);
@@ -59,6 +68,7 @@ export class BoundedFailureWindow {
       return { locked: false, failures: 0, retryAfterMs: 0, reason: "OK" };
     }
     if (normalized.lockedUntil > now) {
+      normalized.lastSeenAt = now;
       return {
         locked: true,
         failures: normalized.failureTimes.length,
@@ -66,6 +76,7 @@ export class BoundedFailureWindow {
         reason: "LOCKED",
       };
     }
+    normalized.lastSeenAt = now;
     return { locked: false, failures: normalized.failureTimes.length, retryAfterMs: 0, reason: "OK" };
   }
 
@@ -76,9 +87,7 @@ export class BoundedFailureWindow {
 
     if (!existing) {
       this.prune();
-      if (this.#states.size >= this.#policy.maxKeys) {
-        return { locked: true, failures: 0, retryAfterMs: this.#policy.idleTtlMs, reason: "CAPACITY" };
-      }
+      if (this.#states.size >= this.#policy.maxKeys) this.#evictLeastRecentlyUsed();
     }
 
     const state = existing ?? { failureTimes: [], lockedUntil: 0, lastSeenAt: now };

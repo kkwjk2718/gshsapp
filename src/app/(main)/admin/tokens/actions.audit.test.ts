@@ -2,18 +2,23 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   getCurrentUser: vi.fn(), transaction: vi.fn(), batchCreate: vi.fn(), tokenCreateMany: vi.fn(), auditCreate: vi.fn(),
-  distributionCreate: vi.fn(), distributionFindFirst: vi.fn(), tokenCreate: vi.fn(), sendInvite: vi.fn(),
+  distributionCreate: vi.fn(), distributionFindFirst: vi.fn(), tokenCreate: vi.fn(), tokenFindMany: vi.fn(), sendInvite: vi.fn(),
   getQuota: vi.fn(),
   reserve: vi.fn(),
+  resolveStudentTargetGisu: vi.fn(),
 }));
 vi.mock("@/lib/session", () => ({ getCurrentUser: mocks.getCurrentUser }));
 vi.mock("@/lib/db", () => ({ prisma: {
-  tokenBatch: { create: mocks.batchCreate }, inviteToken: { createMany: mocks.tokenCreateMany, create: mocks.tokenCreate }, tokenDistributionLog: { create: mocks.distributionCreate, findFirst: mocks.distributionFindFirst }, auditLog: { create: mocks.auditCreate },
+  tokenBatch: { create: mocks.batchCreate }, inviteToken: { createMany: mocks.tokenCreateMany, create: mocks.tokenCreate, findMany: mocks.tokenFindMany }, tokenDistributionLog: { create: mocks.distributionCreate, findFirst: mocks.distributionFindFirst }, auditLog: { create: mocks.auditCreate },
   $transaction: mocks.transaction,
 } }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("next/navigation", () => ({ redirect: vi.fn() }));
-vi.mock("@/lib/token-distribution", () => ({ sendInviteTokenEmail: mocks.sendInvite, getDistributionQuotaSummary: mocks.getQuota }));
+vi.mock("@/lib/token-distribution", () => ({
+  sendInviteTokenEmail: mocks.sendInvite,
+  getDistributionQuotaSummary: mocks.getQuota,
+  resolveStudentTargetGisu: mocks.resolveStudentTargetGisu,
+}));
 vi.mock("@/lib/distribution-reservation", () => ({
   reserveDistribution: mocks.reserve,
   DistributionReservationError: class DistributionReservationError extends Error { constructor(public code: string) { super(code); } },
@@ -29,11 +34,13 @@ describe("token mutation audit gate", () => {
     mocks.distributionCreate.mockResolvedValue({ id: "distribution" });
     mocks.distributionFindFirst.mockResolvedValue(null);
     mocks.tokenCreate.mockResolvedValue({ id: "token", token: null, tokenHash: "digest", targetRole: "STUDENT", targetGisu: 40 });
+    mocks.tokenFindMany.mockResolvedValue([]);
     mocks.sendInvite.mockResolvedValue({ success: "sent" });
     mocks.getQuota.mockResolvedValue({ used: 0, remaining: 250, isLimitReached: false });
+    mocks.resolveStudentTargetGisu.mockResolvedValue(40);
     mocks.reserve.mockResolvedValue({ distributionLogId: "distribution", inviteToken: { id: "token", token: "safe-token", tokenHash: "digest", targetRole: "STUDENT", targetGisu: 40 } });
     mocks.transaction.mockImplementation(async (callback: (tx: unknown) => unknown) => callback({
-      tokenBatch: { create: mocks.batchCreate }, inviteToken: { createMany: mocks.tokenCreateMany, create: mocks.tokenCreate }, tokenDistributionLog: { create: mocks.distributionCreate, findFirst: mocks.distributionFindFirst }, auditLog: { create: mocks.auditCreate },
+      tokenBatch: { create: mocks.batchCreate }, inviteToken: { createMany: mocks.tokenCreateMany, create: mocks.tokenCreate, findMany: mocks.tokenFindMany }, tokenDistributionLog: { create: mocks.distributionCreate, findFirst: mocks.distributionFindFirst }, auditLog: { create: mocks.auditCreate },
     }));
   });
 
@@ -52,17 +59,17 @@ describe("token mutation audit gate", () => {
   it("persists a targeted pending audit before invoking the email provider flow", async () => {
     const { sendTokenByEmail } = await import("./actions");
     const form = new FormData();
-    form.set("email", "student@example.com"); form.set("targetRole", "STUDENT"); form.set("targetGisu", "40");
+    form.set("email", "student@example.com"); form.set("targetRole", "STUDENT"); form.set("targetGisu", "40"); form.set("studentId", "1304");
     expect(await sendTokenByEmail({}, form)).toHaveProperty("success");
     expect(mocks.sendInvite).toHaveBeenCalledWith(expect.objectContaining({ reservation: expect.objectContaining({ distributionLogId: "distribution" }) }));
-    expect(mocks.reserve).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ actorId: "admin", target: expect.objectContaining({ email: "student@example.com" }) }));
+    expect(mocks.reserve).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ actorId: "admin", target: expect.objectContaining({ email: "student@example.com", studentId: "1304" }) }));
     expect(mocks.reserve.mock.invocationCallOrder[0]).toBeLessThan(mocks.sendInvite.mock.invocationCallOrder[0]);
   });
 
   it("does not send when the reservation/audit transaction fails", async () => {
     mocks.reserve.mockRejectedValueOnce(new Error("audit unavailable"));
     const { sendTokenByEmail } = await import("./actions");
-    const form = new FormData(); form.set("email", "student@example.com"); form.set("targetRole", "STUDENT"); form.set("targetGisu", "40");
+    const form = new FormData(); form.set("email", "student@example.com"); form.set("targetRole", "STUDENT"); form.set("targetGisu", "40"); form.set("studentId", "1304");
     await expect(sendTokenByEmail({}, form)).rejects.toThrow("audit unavailable");
     expect(mocks.sendInvite).not.toHaveBeenCalled();
   });
@@ -80,7 +87,7 @@ describe("token mutation audit gate", () => {
     const { DistributionReservationError } = await import("@/lib/distribution-reservation");
     mocks.reserve.mockRejectedValueOnce(new DistributionReservationError("DUPLICATE"));
     const { sendTokenByEmail } = await import("./actions");
-    const form = new FormData(); form.set("email", "student@example.com"); form.set("targetRole", "STUDENT"); form.set("targetGisu", "40");
+    const form = new FormData(); form.set("email", "student@example.com"); form.set("targetRole", "STUDENT"); form.set("targetGisu", "40"); form.set("studentId", "1304");
     expect(await sendTokenByEmail({}, form)).toHaveProperty("error");
     expect(mocks.sendInvite).not.toHaveBeenCalled();
   });
@@ -89,11 +96,35 @@ describe("token mutation audit gate", () => {
     const { DistributionReservationError } = await import("@/lib/distribution-reservation");
     mocks.reserve.mockRejectedValue(new DistributionReservationError("QUOTA"));
     const { sendTokenByEmail } = await import("./actions");
-    const form = new FormData(); form.set("email", "student@example.com"); form.set("targetRole", "STUDENT"); form.set("targetGisu", "40");
+    const form = new FormData(); form.set("email", "student@example.com"); form.set("targetRole", "STUDENT"); form.set("targetGisu", "40"); form.set("studentId", "1304");
     expect(await sendTokenByEmail({}, form)).toHaveProperty("error");
     expect(await sendTokenByEmail({}, form)).toHaveProperty("error");
     expect(mocks.tokenCreate).not.toHaveBeenCalled();
     expect(mocks.sendInvite).not.toHaveBeenCalled();
+  });
+
+  it("requires a valid student ID whose grade mapping matches the selected cohort", async () => {
+    const { sendTokenByEmail } = await import("./actions");
+    for (const studentId of ["", "9999", "1304-extra"]) {
+      const form = new FormData();
+      form.set("email", "student@example.com"); form.set("targetRole", "STUDENT");
+      form.set("targetGisu", "40"); form.set("studentId", studentId);
+      await expect(sendTokenByEmail({}, form)).resolves.toHaveProperty("error");
+    }
+    mocks.resolveStudentTargetGisu.mockResolvedValueOnce(41);
+    const mismatch = new FormData();
+    mismatch.set("email", "student@example.com"); mismatch.set("targetRole", "STUDENT");
+    mismatch.set("targetGisu", "40"); mismatch.set("studentId", "1304");
+    await expect(sendTokenByEmail({}, mismatch)).resolves.toHaveProperty("error");
+    expect(mocks.reserve).not.toHaveBeenCalled();
+  });
+
+  it("rejects student-only identity metadata for non-student invitations", async () => {
+    const { sendTokenByEmail } = await import("./actions");
+    const form = new FormData();
+    form.set("email", "teacher@example.com"); form.set("targetRole", "TEACHER"); form.set("studentId", "1304");
+    await expect(sendTokenByEmail({}, form)).resolves.toHaveProperty("error");
+    expect(mocks.reserve).not.toHaveBeenCalled();
   });
 
   it("rejects partially parsed numeric fields and oversized recipient addresses", async () => {

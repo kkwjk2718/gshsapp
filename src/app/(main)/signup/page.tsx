@@ -1,7 +1,5 @@
 import type { Metadata } from "next";
-import { SignupForm } from "./signup-form";
 import Link from "next/link";
-import { Ticket } from "lucide-react";
 import { TokenInput } from "./token-input";
 import { MemberFeaturesDisabledPanel } from "@/components/member-features-disabled-panel";
 import { MEMBER_SERVICE_SUSPENDED } from "@/lib/member-service-suspension";
@@ -13,10 +11,7 @@ export const metadata: Metadata = {
   alternates: { canonical: "/signup" },
 };
 
-export default async function SignupPage({ searchParams }: { searchParams: Promise<{ token?: string }> }) {
-  const { token: searchToken } = await searchParams;
-  const token = searchToken || "";
-
+export default function SignupPage() {
   if (MEMBER_SERVICE_SUSPENDED) {
     return (
       <div className="min-h-[100dvh] flex items-center justify-center p-4" style={{ backgroundColor: "var(--background)" }}>
@@ -35,17 +30,7 @@ export default async function SignupPage({ searchParams }: { searchParams: Promi
           <p className="mt-2" style={{ color: "var(--muted)" }}>회원가입</p>
         </div>
 
-        {token ? (
-          <>
-            <div className="flex items-center gap-2 p-3 mb-4 rounded-xl" style={{ backgroundColor: "var(--surface-2)", color: "var(--accent)" }}>
-              <Ticket className="w-5 h-5" />
-              <span className="font-mono text-sm font-bold">{token}</span>
-            </div>
-            <SignupForm token={token} />
-          </>
-        ) : (
-          <TokenInput />
-        )}
+        <TokenInput />
 
         <div className="mt-6 text-center text-sm" style={{ color: "var(--muted)" }}>
           이미 계정이 있으신가요? <Link href="/login" className="hover:underline" style={{ color: "var(--accent)" }}>로그인</Link>

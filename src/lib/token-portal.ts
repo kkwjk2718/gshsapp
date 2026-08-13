@@ -13,8 +13,8 @@ import {
   getPortalCooldownRemainingSeconds,
   setPortalCooldownCookie,
 } from "@/lib/token-portal-session";
-import { isValidStudentId } from "@/lib/student-id";
 import { getTokenPortalSettings, publicTokenPortalSettings } from "@/lib/system-settings";
+import { parsePortalInviteInput } from "@/lib/security/portal-input";
 
 export async function getPublicPortalState() {
   const settings = await getTokenPortalSettings();
@@ -28,12 +28,12 @@ export async function sendPortalStudentInvite({ name, studentId, email }: {
   studentId: string;
   email: string;
 }) {
+  const input = parsePortalInviteInput({ name, studentId, email });
+  if (!input) return { error: "Please check the name, student ID, and email address." };
+  const { name: normalizedName, email: normalizedEmail, studentId: normalizedStudentId } = input;
   const portalState = await getPublicPortalState();
   const rawClientKey = await getPortalClientKey();
   const clientKey = hashSecurityPrincipal("portal-client", rawClientKey, getApplicationSecuritySecret());
-  const normalizedName = name.trim().normalize("NFC");
-  const normalizedEmail = email.trim().toLowerCase();
-  const normalizedStudentId = studentId.trim();
 
   if (!portalState.settings.enabled) {
     await recordBlockedTokenDistribution({
@@ -43,12 +43,6 @@ export async function sendPortalStudentInvite({ name, studentId, email }: {
     });
     await logAction("token_portal_blocked", { reason: "disabled" });
     return { error: "The token distribution portal is disabled." };
-  }
-
-  if (!normalizedName || [...normalizedName].length > 80 || new TextEncoder().encode(normalizedName).byteLength > 240 ||
-      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(normalizedEmail) || normalizedEmail.length > 254 ||
-      !isValidStudentId(normalizedStudentId)) {
-    return { error: "Please check the name, student ID, and email address." };
   }
 
   const targetGisu = await resolveStudentTargetGisu(normalizedStudentId);

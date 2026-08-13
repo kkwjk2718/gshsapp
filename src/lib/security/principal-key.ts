@@ -22,6 +22,6 @@ export function hashSecurityPrincipal(namespace: string, value: string, secret: 
     .digest("base64url");
 }
 
-export function networkPrincipal(address: string | null | undefined, fallbackKey: string): string {
-  return address ?? `unknown:${fallbackKey}`;
+export function networkPrincipal(address: string | null | undefined): string {
+  return address ?? "unknown";
 }

@@ -35,4 +35,20 @@ describe("login failure persistence boundary", () => {
     now = 10_000;
     expect(limiter.check("id-a", "net-a")).toMatchObject({ locked: false });
   });
+
+  it("keeps the identifier threshold strict while allowing a school NAT a higher network threshold", async () => {
+    const { createLoginAttemptLimiter } = await import("./login-rate-limit");
+    const limiter = createLoginAttemptLimiter({
+      identifierMaxFailures: 2,
+      networkMaxFailures: 4,
+      windowMs: 10_000,
+    });
+
+    expect(limiter.recordFailure("id-a", "school-nat")).toMatchObject({ locked: false });
+    expect(limiter.recordFailure("id-b", "school-nat")).toMatchObject({ locked: false });
+    expect(limiter.check("id-c", "school-nat")).toMatchObject({ locked: false });
+    expect(limiter.recordFailure("id-a", "school-nat")).toMatchObject({ locked: true });
+    expect(limiter.check("id-c", "school-nat")).toMatchObject({ locked: false });
+    expect(limiter.recordFailure("id-c", "school-nat")).toMatchObject({ locked: true });
+  });
 });

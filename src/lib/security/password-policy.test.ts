@@ -1,7 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { validatePassword } from "./password-policy";
+import { isValidBcryptInput, validatePassword } from "./password-policy";
 
 describe("validatePassword", () => {
+  it("bounds every bcrypt input by UTF-8 bytes rather than JavaScript characters", () => {
+    expect(isValidBcryptInput("a".repeat(72))).toBe(true);
+    expect(isValidBcryptInput("가".repeat(24))).toBe(true);
+    expect(isValidBcryptInput("가".repeat(25))).toBe(false);
+    expect(isValidBcryptInput("valid\0suffix")).toBe(false);
+    expect(isValidBcryptInput(new File([], "password"))).toBe(false);
+  });
+
   it("accepts a non-common password with 12 Unicode code points", () => {
     expect(validatePassword("강한암호문구입니다!12")).toEqual({ ok: true });
   });

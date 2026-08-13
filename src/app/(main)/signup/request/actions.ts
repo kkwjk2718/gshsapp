@@ -10,15 +10,12 @@ import { getApplicationSecuritySecret, hashSecurityPrincipal, networkPrincipal }
 import { PortalUnlockLimiter } from "@/lib/security/portal-unlock-limit";
 import { headers } from "next/headers";
 import { parseTrustedProxyHops, resolveTrustedClientAddress } from "@/lib/security/client-address";
+import { parsePortalInviteInput, validatePortalPasswordInput } from "@/lib/security/portal-input";
 
 export type PortalActionResult = {
   success?: string;
   error?: string;
 };
-
-function isValidEmail(email: string) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-}
 
 const portalUnlockLimiter = new PortalUnlockLimiter();
 
@@ -30,7 +27,7 @@ async function getPortalUnlockKeys() {
   });
   return {
     clientKey: hashSecurityPrincipal("portal-client", rawClientKey, secret),
-    networkKey: hashSecurityPrincipal("portal-network", networkPrincipal(address, rawClientKey), secret),
+    networkKey: hashSecurityPrincipal("portal-network", networkPrincipal(address), secret),
   };
 }
 
@@ -41,6 +38,9 @@ export async function unlockTokenPortal(
   if (MEMBER_SERVICE_SUSPENDED) {
     return { error: "현재 회원 기능이 일시적으로 비활성화되어 있습니다." };
   }
+
+  const password = validatePortalPasswordInput(formData.get("password"));
+  if (!password) return { error: "Please enter a valid portal password." };
 
   const settings = await getTokenPortalSettings();
   if (!settings.enabled) {
@@ -55,11 +55,6 @@ export async function unlockTokenPortal(
   const limiterDecision = portalUnlockLimiter.check(unlockKeys.clientKey, unlockKeys.networkKey);
   if (!limiterDecision.allowed) {
     return { error: "Too many failed attempts. Please wait before trying again." };
-  }
-
-  const password = (formData.get("password") as string | null)?.trim() || "";
-  if (!password) {
-    return { error: "포털 비밀번호를 입력해주세요." };
   }
 
   const isMatch = await bcrypt.compare(password, settings.passwordHash);
@@ -88,6 +83,11 @@ export async function requestSignupToken(
     return { error: "현재 회원 기능이 일시적으로 비활성화되어 있습니다." };
   }
 
+  const input = parsePortalInviteInput({
+    name: formData.get("name"), studentId: formData.get("studentId"), email: formData.get("email"),
+  });
+  if (!input) return { error: "Please check the name, student ID, and email address." };
+
   const settings = await getTokenPortalSettings();
   if (!settings.enabled) {
     return { error: "현재 토큰 배부 포털이 비활성화되어 있습니다." };
@@ -98,21 +98,5 @@ export async function requestSignupToken(
     return { error: "포털 인증이 만료되었습니다. 다시 비밀번호를 입력해주세요." };
   }
 
-  const name = (formData.get("name") as string | null)?.trim() || "";
-  const studentId = (formData.get("studentId") as string | null)?.trim() || "";
-  const email = (formData.get("email") as string | null)?.trim().toLowerCase() || "";
-
-  if (!name || !studentId || !email) {
-    return { error: "이름, 학번, 이메일을 모두 입력해주세요." };
-  }
-
-  if (!isValidEmail(email)) {
-    return { error: "이메일 주소 형식이 올바르지 않습니다." };
-  }
-
-  return sendPortalStudentInvite({
-    name,
-    studentId,
-    email,
-  });
+  return sendPortalStudentInvite(input);
 }

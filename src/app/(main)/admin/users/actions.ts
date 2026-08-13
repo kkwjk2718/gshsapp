@@ -13,6 +13,7 @@ import { buildTemporaryPasswordCredentialUpdate, buildRoleCredentialUpdate, upda
 import { writeAuditLog } from "@/lib/audit";
 import { generateTemporaryPassword } from "@/lib/security/temporary-password";
 import { assertUserImportBounds } from "@/lib/security/user-import-bounds";
+import { parseImportedUserRecord, type ImportedUserRecord } from "@/lib/security/user-import-record";
 
 export async function importUsersBackup(_: any, formData: FormData) {
     const sessionUser = await getCurrentUser();
@@ -40,20 +41,21 @@ export async function importUsersBackup(_: any, formData: FormData) {
         assertUserImportBounds(f.size, parsed.users.length);
 
         // 1) 파일 내부 중복 제거 (userId 기준)
-        const deduped = new Map<string, any>();
+        const deduped = new Map<string, ImportedUserRecord>();
         let invalidCount = 0;
-        for (const u of parsed.users) {
-            if (!u?.userId || !u?.name || !u?.role || (parsed.version === 1 && !u?.passwordHash)) {
+        for (const rawUser of parsed.users) {
+            const imported = parseImportedUserRecord(rawUser, parsed.version);
+            if (!imported) {
                 invalidCount += 1;
                 continue;
             }
-            deduped.set(String(u.userId), u); // 같은 userId가 여러 번 있으면 마지막 항목으로 덮어씀
+            deduped.set(imported.userId, imported);
         }
 
         const users = Array.from(deduped.values());
         assertUserImportBounds(f.size, parsed.users.length, users.length);
         const existing = await prisma.user.findMany({
-            where: { userId: { in: users.map((u) => String(u.userId)) } },
+            where: { userId: { in: users.map((u) => u.userId) } },
             select: {
                 userId: true,
                 id: true,
@@ -76,25 +78,26 @@ export async function importUsersBackup(_: any, formData: FormData) {
 
         for (const u of users) {
             const payload = {
-                ...(typeof u.passwordHash === "string" ? { passwordHash: u.passwordHash } : {}),
+                ...(u.passwordHash ? { passwordHash: u.passwordHash } : {}),
                 name: u.name,
                 email: u.email ?? null,
                 role: u.role,
                 studentId: u.studentId ?? null,
                 gisu: u.gisu ?? null,
-                banExpiresAt: u.banExpiresAt ? new Date(u.banExpiresAt) : null,
-                isOnboarded: !!u.isOnboarded,
+                banExpiresAt: u.banExpiresAt,
+                isOnboarded: u.isOnboarded,
             };
 
             const ex = existingMap.get(u.userId);
             if (!ex) {
-                if (typeof u.passwordHash !== "string") {
+                if (!u.passwordHash) {
                     invalidCount += 1;
                     continue;
                 }
+                const passwordHash = u.passwordHash;
                 await prisma.$transaction(async (tx) => {
                   const created = await tx.user.create({
-                      data: { userId: u.userId, ...payload, passwordHash: u.passwordHash, mustChangePassword: true },
+                      data: { userId: u.userId, ...payload, passwordHash, mustChangePassword: true },
                   });
                   await writeAuditLog(tx, {
                     actorId: sessionUser.id!, action: "USER_IMPORTED", target: { type: "USER", id: created.id },
@@ -608,7 +611,7 @@ export async function deleteUserAccount(formData: FormData): Promise<DeleteUserR
                     personalEvents: personalEventCount,
                     notifications: notificationCount,
                     errorReports: errorReportCount,
-                    auditLogs: auditLogCount,
+                    auditLogsPreserved: auditLogCount,
                     systemLogsDetached: systemLogCount,
                 },
             };

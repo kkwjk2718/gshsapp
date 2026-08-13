@@ -11,6 +11,7 @@ import bcrypt from 'bcryptjs';
 import { verifyLoginCandidate } from '@/lib/security/login-verification';
 import { getApplicationSecuritySecret, hashSecurityPrincipal, networkPrincipal } from '@/lib/security/principal-key';
 import { parseTrustedProxyHops, resolveTrustedClientAddress } from '@/lib/security/client-address';
+import { isValidBcryptInput } from '@/lib/security/password-policy';
 
 async function verifyPassword(password: string, hash: string) {
   return await bcrypt.compare(password, hash);
@@ -41,7 +42,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const parsedCredentials = z
           .object({
             userId: z.string().trim().min(1).max(128),
-            password: z.string().min(1).max(72),
+            password: z.string().min(1).max(72).refine(isValidBcryptInput),
           })
           .safeParse(credentials);
 
@@ -53,7 +54,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           const clientAddress = resolveTrustedClientAddress({
             forwardedFor: request.headers.get("x-forwarded-for"),
           }, { trustedProxyHops: parseTrustedProxyHops(process.env.TRUSTED_PROXY_HOPS) });
-          const networkKey = hashSecurityPrincipal("login-network", networkPrincipal(clientAddress, identifierKey), securitySecret);
+          const networkKey = hashSecurityPrincipal("login-network", networkPrincipal(clientAddress), securitySecret);
 
           if (loginAttemptLimiter.check(identifierKey, networkKey).locked || await isLoginTemporarilyLocked(userId)) {
             await logAction("LOGIN_BLOCKED", { loginId: userId, reason: "rate-limit" }, undefined, { userId: null });

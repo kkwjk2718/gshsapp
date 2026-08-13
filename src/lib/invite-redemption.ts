@@ -12,6 +12,7 @@ type InviteSnapshot = Readonly<{
 type InviteRedemptionDb = {
   $transaction<T>(callback: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T>;
 };
+type InvitePreflightDb = Pick<Prisma.TransactionClient, "inviteToken">;
 
 export type InviteRedemptionErrorCode = "INVALID" | "INVALID_ROLE_DATA" | "INVALID_OR_USED_OR_EXPIRED";
 
@@ -32,6 +33,43 @@ type RedeemInviteInput = Readonly<{
   userData: Omit<Prisma.UserCreateInput, "role" | "gisu">;
 }>;
 
+type InvitePreflightInput = Readonly<{
+  tokenHash: string;
+  legacyToken: string | null;
+  now: Date;
+  claimedIdentity?: Readonly<{ email: string; studentId: string | null }>;
+  validateInvite: (invite: InviteSnapshot) => void;
+}>;
+
+function validateInviteIdentity(invite: InviteSnapshot, input: Pick<InvitePreflightInput, "claimedIdentity" | "validateInvite">) {
+  const claimedEmail = input.claimedIdentity?.email.trim().toLowerCase() ?? null;
+  const claimedStudentId = input.claimedIdentity?.studentId?.trim() || null;
+  if ((invite.boundEmail && invite.boundEmail !== claimedEmail) ||
+      (invite.boundStudentId && invite.boundStudentId !== claimedStudentId)) {
+    throw new InviteRedemptionError("INVALID");
+  }
+  input.validateInvite(invite);
+}
+
+export async function preflightInviteRedemption(db: InvitePreflightDb, input: InvitePreflightInput): Promise<InviteSnapshot> {
+  const cutoff = new Date(input.now.getTime() - 7 * 86_400_000);
+  const invite = await db.inviteToken.findFirst({
+    where: {
+      OR: [
+        { tokenHash: input.tokenHash },
+        ...(input.legacyToken ? [{ token: input.legacyToken }] : []),
+      ],
+      isUsed: false,
+      usedByUserId: null,
+      createdAt: { gt: cutoff },
+    },
+    select: { id: true, targetRole: true, targetGisu: true, boundEmail: true, boundStudentId: true },
+  });
+  if (!invite) throw new InviteRedemptionError("INVALID");
+  validateInviteIdentity(invite, input);
+  return invite;
+}
+
 export async function redeemInvite(db: InviteRedemptionDb, input: RedeemInviteInput) {
   const cutoff = new Date(input.now.getTime() - 7 * 86_400_000);
   return withSqliteWriteRetry(() => db.$transaction(async (tx) => {
@@ -46,14 +84,7 @@ export async function redeemInvite(db: InviteRedemptionDb, input: RedeemInviteIn
     });
     if (!invite) throw new InviteRedemptionError("INVALID");
 
-    const claimedEmail = input.claimedIdentity?.email.trim().toLowerCase() ?? null;
-    const claimedStudentId = input.claimedIdentity?.studentId?.trim() || null;
-    if ((invite.boundEmail && invite.boundEmail !== claimedEmail) ||
-        (invite.boundStudentId && invite.boundStudentId !== claimedStudentId)) {
-      throw new InviteRedemptionError("INVALID");
-    }
-
-    input.validateInvite(invite);
+    validateInviteIdentity(invite, input);
 
     const claim = await tx.inviteToken.updateMany({
       where: {

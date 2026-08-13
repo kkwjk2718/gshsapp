@@ -20,9 +20,9 @@ describe("keyed security principals", () => {
     expect(network).not.toBe(login);
   });
 
-  it("scopes an unavailable network address to a caller-specific fallback", () => {
-    expect(networkPrincipal("192.0.2.10", "client-a")).toBe("192.0.2.10");
-    expect(networkPrincipal(null, "client-a")).toBe("unknown:client-a");
-    expect(networkPrincipal(undefined, "client-b")).not.toBe(networkPrincipal(undefined, "client-a"));
+  it("uses one shared principal when the trusted client address is unavailable", () => {
+    expect(networkPrincipal("192.0.2.10")).toBe("192.0.2.10");
+    expect(networkPrincipal(null)).toBe("unknown");
+    expect(networkPrincipal(undefined)).toBe("unknown");
   });
 });

@@ -1,12 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  getCurrentUser: vi.fn(), transaction: vi.fn(), userFind: vi.fn(), userDelete: vi.fn(), auditDeleteMany: vi.fn(), auditCreate: vi.fn(),
+  getCurrentUser: vi.fn(), transaction: vi.fn(), userFind: vi.fn(), userDelete: vi.fn(), auditDeleteMany: vi.fn(), auditCreate: vi.fn(), logAction: vi.fn(),
 }));
 vi.mock("@/lib/session", () => ({ getCurrentUser: mocks.getCurrentUser }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/lib/notifications", () => ({ createNotification: vi.fn() }));
-vi.mock("@/lib/logger", () => ({ logAction: vi.fn() }));
+vi.mock("@/lib/logger", () => ({ logAction: mocks.logAction }));
 vi.mock("@/lib/grade-utils", () => ({ getGradeMapping: vi.fn() }));
 
 function countDelegate() { return { count: vi.fn().mockResolvedValue(0), deleteMany: vi.fn(), updateMany: vi.fn() }; }
@@ -31,5 +31,9 @@ describe("user deletion audit preservation", () => {
     await expect(deleteUserAccount(form)).resolves.toHaveProperty("success");
     expect(mocks.userDelete).toHaveBeenCalled();
     expect(mocks.auditDeleteMany).not.toHaveBeenCalled();
+    expect(mocks.logAction).toHaveBeenCalledWith("user_deleted", expect.objectContaining({
+      deletedCounts: expect.objectContaining({ auditLogsPreserved: 1 }),
+    }));
+    expect(mocks.logAction.mock.calls.at(-1)?.[1].deletedCounts).not.toHaveProperty("auditLogs");
   });
 });

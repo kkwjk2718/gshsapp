@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { InviteRedemptionError, redeemInvite } from "./invite-redemption";
+import { InviteRedemptionError, preflightInviteRedemption, redeemInvite } from "./invite-redemption";
 
 function createDb(options: { claimCount?: number; createError?: Error } = {}) {
   const sequence: string[] = [];
@@ -24,6 +24,32 @@ function createDb(options: { claimCount?: number; createError?: Error } = {}) {
 }
 
 describe("atomic invite redemption", () => {
+  it("cheaply rejects inactive or mismatched invites before password hashing can begin", async () => {
+    const findFirst = vi.fn().mockResolvedValue({
+      id: "invite-1", targetRole: "STUDENT", targetGisu: 40,
+      boundEmail: "student@example.com", boundStudentId: "1304",
+    });
+    const validateInvite = vi.fn();
+    const now = new Date("2026-08-13T00:00:00.000Z");
+    await expect(preflightInviteRedemption({ inviteToken: { findFirst } } as never, {
+      tokenHash: "digest", legacyToken: null, now,
+      claimedIdentity: { email: "student@example.com", studentId: "1304" }, validateInvite,
+    })).resolves.toMatchObject({ id: "invite-1" });
+    expect(findFirst).toHaveBeenCalledWith({
+      where: {
+        OR: [{ tokenHash: "digest" }], isUsed: false, usedByUserId: null,
+        createdAt: { gt: new Date("2026-08-06T00:00:00.000Z") },
+      },
+      select: { id: true, targetRole: true, targetGisu: true, boundEmail: true, boundStudentId: true },
+    });
+    expect(validateInvite).toHaveBeenCalledOnce();
+
+    findFirst.mockResolvedValueOnce(null);
+    await expect(preflightInviteRedemption({ inviteToken: { findFirst } } as never, {
+      tokenHash: "invalid", legacyToken: null, now, validateInvite,
+    })).rejects.toMatchObject({ code: "INVALID" });
+  });
+
   it("claims conditionally before creating and associating the account", async () => {
     const { db, tx, sequence } = createDb();
     const result = await redeemInvite(db as never, {

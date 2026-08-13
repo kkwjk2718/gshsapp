@@ -22,18 +22,22 @@ describe("bounded failure lockouts", () => {
     expect(limiter.check("user")).toMatchObject({ locked: false, failures: 0 });
   });
 
-  it("bounds keys, fails closed at capacity, and admits new keys after pruning", () => {
+  it("bounds keys with LRU eviction without globally locking new principals", () => {
     let now = 0;
     const limiter = new BoundedFailureWindow(policy, () => now);
     limiter.recordFailure("a");
     limiter.recordFailure("b");
+    now = 1;
+    expect(limiter.check("a")).toMatchObject({ locked: false, failures: 1 });
 
-    expect(limiter.recordFailure("c")).toMatchObject({ locked: true, reason: "CAPACITY" });
+    expect(limiter.recordFailure("c")).toMatchObject({ locked: false, failures: 1, reason: "OK" });
     expect(limiter.size).toBe(2);
+    expect(limiter.check("a")).toMatchObject({ locked: false, failures: 1 });
+    expect(limiter.check("b")).toMatchObject({ locked: false, failures: 0 });
 
     now = 20_000;
     expect(limiter.recordFailure("c")).toMatchObject({ locked: false, failures: 1 });
-    expect(limiter.size).toBe(1);
+    expect(limiter.size).toBeLessThanOrEqual(2);
   });
 
   it("clears one principal after successful verification", () => {

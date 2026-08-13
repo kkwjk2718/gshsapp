@@ -16,7 +16,11 @@ function createDb(options: { duplicate?: boolean; quota?: number } = {}) {
       count: vi.fn(async () => { sequence.push("quota"); return options.quota ?? 1; }),
       update: vi.fn(async () => { sequence.push("attach"); return { id: "log" }; }),
     },
-    inviteToken: { create: vi.fn(async () => { sequence.push("token"); return { id: "token" }; }) },
+    inviteToken: {
+      create: vi.fn(async () => { sequence.push("token"); return { id: "token" }; }),
+      findMany: vi.fn(async () => { sequence.push("invite-prune"); return []; }),
+      deleteMany: vi.fn(),
+    },
     auditLog: { create: vi.fn(async () => { sequence.push("audit"); return { id: "audit" }; }) },
   };
   return { db: { $transaction: vi.fn((callback) => callback(tx)) }, tx, sequence };
@@ -33,11 +37,17 @@ describe("atomic invite distribution reservation", () => {
     const { db, tx, sequence } = createDb();
     const result = await reserveDistribution(db as never, input);
 
-    expect(sequence).toEqual(["pending", "cooldown", "quota", "token", "attach"]);
+    expect(sequence).toEqual(["pending", "cooldown", "quota", "token", "attach", "invite-prune"]);
     expect(result.inviteToken.token).toMatch(/^[A-Za-z0-9_-]{43}$/);
     expect(tx.inviteToken.create).toHaveBeenCalledWith({
       data: expect.objectContaining({ token: null, tokenHash: expect.stringMatching(/^[A-Za-z0-9_-]{43}$/), boundEmail: "student@example.com", boundStudentId: "1304" }),
       select: { id: true, targetRole: true, targetGisu: true },
+    });
+    expect(tx.tokenDistributionLog.findFirst).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ status: { in: ["PENDING", "SENT", "FAILED"] } }),
+    }));
+    expect(tx.tokenDistributionLog.count).toHaveBeenCalledWith({
+      where: expect.objectContaining({ status: { in: ["PENDING", "SENT", "FAILED"] } }),
     });
   });
 
@@ -54,6 +64,6 @@ describe("atomic invite distribution reservation", () => {
     await reserveDistribution(db as never, {
       ...input, source: "ADMIN_MANUAL", createdBy: "admin", clientKey: null, actorId: "admin",
     });
-    expect(sequence).toEqual(["pending", "cooldown", "quota", "token", "attach", "audit"]);
+    expect(sequence).toEqual(["pending", "cooldown", "quota", "token", "attach", "audit", "invite-prune"]);
   });
 });

@@ -4,11 +4,13 @@ import { prisma } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { getCurrentUser } from "@/lib/session";
 import { redirect } from "next/navigation";
-import { sendInviteTokenEmail } from "@/lib/token-distribution";
+import { resolveStudentTargetGisu, sendInviteTokenEmail } from "@/lib/token-distribution";
 import { writeAuditLog } from "@/lib/audit";
 import { generateInviteSecret, hashInviteSecret } from "@/lib/security/invite-token";
 import { DistributionReservationError, reserveDistribution } from "@/lib/distribution-reservation";
 import { serializeTokenCsv } from "@/lib/token-csv";
+import { isValidStudentId } from "@/lib/student-id";
+import { enforceInviteTokenLifecycle } from "@/lib/invite-token-lifecycle";
 
 function parseBoundedInteger(raw: string, minimum: number, maximum: number): number | null {
   if (!/^\d+$/u.test(raw)) return null;
@@ -66,6 +68,7 @@ export async function createTokens(formData: FormData) {
       action: "TOKEN_BATCH_CREATED",
       target: { type: "TOKEN_BATCH", id: batch.id },
     });
+    await enforceInviteTokenLifecycle(tx);
   });
 
   revalidatePath("/admin/tokens");
@@ -94,6 +97,7 @@ export async function sendTokenByEmail(
   const targetRole = (formData.get("targetRole") as string | null)?.trim() || "";
   const targetGisuValue = (formData.get("targetGisu") as string | null)?.trim() || "";
   const targetGisu = targetGisuValue ? parseBoundedInteger(targetGisuValue, 1, 200) : null;
+  const studentId = String(formData.get("studentId") ?? "").trim();
 
   if (!email) {
     return { error: "이메일 주소를 입력해주세요." };
@@ -112,11 +116,21 @@ export async function sendTokenByEmail(
     return { error: "학생용 토큰은 기수를 함께 입력해주세요." };
   }
 
+  if (targetRole === "STUDENT") {
+    if (!isValidStudentId(studentId)) return { error: "A valid four-digit student ID is required." };
+    const mappedGisu = await resolveStudentTargetGisu(studentId);
+    if (mappedGisu === null || mappedGisu !== targetGisu) {
+      return { error: "The student ID grade does not match the selected cohort." };
+    }
+  } else if (studentId || targetGisuValue) {
+    return { error: "Student ID and cohort metadata are only allowed for student invitations." };
+  }
+
   let reservation;
   try {
     reservation = await reserveDistribution(prisma, {
       source: "ADMIN_MANUAL", createdBy: user.id, actorId: user.id, clientKey: null,
-      target: { email, targetRole, targetGisu: targetRole === "STUDENT" ? targetGisu : null },
+      target: { email, studentId: targetRole === "STUDENT" ? studentId : null, targetRole, targetGisu: targetRole === "STUDENT" ? targetGisu : null },
     });
   } catch (error) {
     if (error instanceof DistributionReservationError) {
@@ -130,6 +144,7 @@ export async function sendTokenByEmail(
     createdBy: user.id,
     target: {
       email,
+      studentId: targetRole === "STUDENT" ? studentId : null,
       targetRole,
       targetGisu: targetRole === "STUDENT" ? targetGisu : null,
     },

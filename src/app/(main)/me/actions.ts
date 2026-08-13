@@ -6,7 +6,7 @@ import { revalidatePath } from "next/cache";
 import bcrypt from "bcryptjs";
 import { signOut } from "@/auth";
 import { buildPasswordCredentialUpdate } from "@/lib/security/user-auth-mutations";
-import { validatePassword } from "@/lib/security/password-policy";
+import { isValidBcryptInput, validatePassword } from "@/lib/security/password-policy";
 import { validateSelfProfileInput } from "@/lib/security/profile-input";
 import { writeAuditLog } from "@/lib/audit";
 import {
@@ -78,18 +78,20 @@ export async function changePassword(formData: FormData) {
     if (!user || !user.id) return { error: "Unauthorized" };
 
     const dbUser = await prisma.user.findUnique({
-        where: { id: user.id }
+        where: { id: user.id },
+        select: { id: true, passwordHash: true, sessionVersion: true },
     });
 
     if (!dbUser) return { error: "User not found" };
 
-    const currentPassword = formData.get("currentPassword") as string;
-    const newPassword = formData.get("newPassword") as string;
-    const confirmPassword = formData.get("confirmPassword") as string;
+    const currentPassword = String(formData.get("currentPassword") ?? "");
+    const newPassword = String(formData.get("newPassword") ?? "");
+    const confirmPassword = String(formData.get("confirmPassword") ?? "");
 
     if (!currentPassword || !newPassword || !confirmPassword) {
         return { error: "모든 필드를 입력해주세요." };
     }
+    if (!isValidBcryptInput(currentPassword)) return { error: "Please check the current password." };
 
     const isValid = await bcrypt.compare(currentPassword, dbUser.passwordHash);
     if (!isValid) {
@@ -105,11 +107,21 @@ export async function changePassword(formData: FormData) {
 
     const newPasswordHash = await bcrypt.hash(newPassword, 10);
 
-    await prisma.$transaction(async (tx) => {
-      await tx.user.update({ where: { id: user.id }, data: buildPasswordCredentialUpdate(newPasswordHash) });
-      await writeAuditLog(tx, { actorId: user.id, action: "USER_PASSWORD_CHANGED", target: { type: "USER", id: user.id } });
-    });
-
+    try {
+      await prisma.$transaction(async (tx) => {
+        const updated = await tx.user.updateMany({
+          where: { id: user.id, passwordHash: dbUser.passwordHash, sessionVersion: dbUser.sessionVersion },
+          data: buildPasswordCredentialUpdate(newPasswordHash),
+        });
+        if (updated.count !== 1) throw new Error("PASSWORD_STATE_CHANGED");
+        await writeAuditLog(tx, { actorId: user.id, action: "USER_PASSWORD_CHANGED", target: { type: "USER", id: user.id } });
+      });
+    } catch (error) {
+      if (error instanceof Error && error.message === "PASSWORD_STATE_CHANGED") {
+        return { error: "The password changed during this request. Please sign in again." };
+      }
+      throw error;
+    }
     await signOut({ redirectTo: "/login" });
     return { success: "비밀번호가 성공적으로 변경되었습니다." };
 }

@@ -15,9 +15,19 @@ describe("portal unlock limiter", () => {
     expect(limiter.check("client-a", "network-a")).toMatchObject({ allowed: true });
   });
 
-  it("bounds both keyed registries and fails closed for rotating identities", () => {
+  it("bounds both keyed registries without a global capacity lock", () => {
     const limiter = new PortalUnlockLimiter({ maxKeys: 1, maxFailures: 3, windowMs: 60_000 });
     limiter.recordFailure("client-a", "network-a");
-    expect(limiter.check("client-b", "network-b")).toMatchObject({ allowed: false, dimension: "CAPACITY" });
+    expect(limiter.recordFailure("client-b", "network-b")).toMatchObject({ allowed: true, dimension: "NONE" });
+  });
+
+  it("uses a higher defaultable network threshold than the client threshold", () => {
+    const limiter = new PortalUnlockLimiter({ clientMaxFailures: 2, networkMaxFailures: 4, windowMs: 60_000 });
+    limiter.recordFailure("a", "school");
+    limiter.recordFailure("b", "school");
+    expect(limiter.check("c", "school")).toMatchObject({ allowed: true });
+    expect(limiter.recordFailure("a", "school")).toMatchObject({ allowed: false, dimension: "CLIENT" });
+    expect(limiter.check("c", "school")).toMatchObject({ allowed: true });
+    expect(limiter.recordFailure("c", "school")).toMatchObject({ allowed: false, dimension: "NETWORK" });
   });
 });

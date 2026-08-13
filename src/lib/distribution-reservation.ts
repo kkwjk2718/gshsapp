@@ -7,6 +7,7 @@ import { generateInviteSecret, hashInviteSecret } from "@/lib/security/invite-to
 import { withSqliteWriteRetry } from "@/lib/security/sqlite-retry";
 import { TOKEN_DISTRIBUTION_DAILY_LIMIT } from "@/lib/token-portal-config";
 import { enforceDistributionLogBounds, normalizeDistributionLogText } from "@/lib/distribution-log-store";
+import { enforceInviteTokenLifecycle } from "@/lib/invite-token-lifecycle";
 
 type ReservationDb = {
   $transaction<T>(callback: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T>;
@@ -72,19 +73,19 @@ export async function reserveDistribution(db: ReservationDb, input: Input) {
       where: input.source === "PORTAL_AUTO"
         ? {
             id: { not: pending.id }, clientKey: normalizedClientKey ?? "",
-            status: { in: ["PENDING", "SENT"] }, createdAt: { gte: new Date(now.getTime() - 60_000) },
+            status: { in: ["PENDING", "SENT", "FAILED"] }, createdAt: { gte: new Date(now.getTime() - 60_000) },
           }
         : {
             id: { not: pending.id }, source: "ADMIN_MANUAL", recipientEmail: normalizedEmail,
             targetRole: input.target.targetRole, targetGisu: input.target.targetGisu ?? null,
-            status: { in: ["PENDING", "SENT"] }, createdAt: { gte: new Date(now.getTime() - 10 * 60_000) },
+            status: { in: ["PENDING", "SENT", "FAILED"] }, createdAt: { gte: new Date(now.getTime() - 10 * 60_000) },
           },
       select: { id: true },
     });
     if (duplicate) throw new DistributionReservationError(input.source === "PORTAL_AUTO" ? "COOLDOWN" : "DUPLICATE");
 
     const used = await tx.tokenDistributionLog.count({
-      where: { status: { in: ["PENDING", "SENT"] }, createdAt: { gte: start, lt: end } },
+      where: { status: { in: ["PENDING", "SENT", "FAILED"] }, createdAt: { gte: start, lt: end } },
     });
     if (used > TOKEN_DISTRIBUTION_DAILY_LIMIT) throw new DistributionReservationError("QUOTA");
 
@@ -107,6 +108,7 @@ export async function reserveDistribution(db: ReservationDb, input: Input) {
       await writeAuditLog(tx, { actorId: input.actorId, action: "TOKEN_EMAIL_REQUESTED", target: { type: "TOKEN_DISTRIBUTION", id: pending.id } });
     }
     await enforceDistributionLogBounds(tx, now);
+    await enforceInviteTokenLifecycle(tx, now);
     return { distributionLogId: pending.id, inviteToken: { ...inviteToken, token } };
   }));
 }

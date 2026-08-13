@@ -63,14 +63,15 @@ Route group 기준:
 
 - `src/lib/public-content.ts`: 공개 데이터 조회 및 캐시
 - `src/lib/distribution-reservation.ts`: SQLite writer lock 아래 `PENDING` 예약, 쿨다운, 일일 한도, 토큰 해시 저장을 원자적으로 처리
-- `src/lib/invite-redemption.ts`: 수신자 결합 검증과 조건부 1회 claim 이후 계정 생성
-- `src/lib/token-distribution.ts`: 예약된 토큰의 메일 발송과 fail-closed provider 상태 전이
+- `src/lib/invite-redemption.ts`: bcrypt 전에 활성·수신자 결합을 저비용 사전 검증하고 조건부 1회 claim 이후 계정 생성
+- `src/lib/token-distribution.ts`: 예약된 토큰의 fragment 링크 메일 발송, 실패 시 토큰 분리·삭제, 실패를 포함한 발송 한도 상태 전이
+- `src/lib/invite-token-lifecycle.ts`: 7일이 지난 초대 레코드와 legacy 평문 토큰을 배부 로그에서 분리한 뒤 제한된 배치로 삭제
 - `src/lib/brevo.ts`: Brevo 메일 연동
 - `src/lib/backup.ts`: 백업 경로와 파일 처리
 - `src/auth.config.ts`: Edge 호환 route UX guard와 JWT/session claim 전달(DB 접근 금지)
 - `src/lib/current-user.ts`: Node 런타임의 DB 기반 현재 사용자·관리자 인가
 - `src/lib/system-log-store.ts`: `SystemLog` 정규화, 1~90일 보관, 공개/전체 행 상한과 oldest-first pruning
-- 클라이언트 주소 경계: 로깅·공개 텔레메트리·요청 제한은 `TRUSTED_PROXY_HOPS`만 사용한다. 기본값 `0`은 `X-Forwarded-For`를 무시하고 공유 unknown 버킷을 사용하며, 설정값은 오른쪽부터 신뢰할 프록시 홉 수 `0..3`만 허용한다.
+- 클라이언트 주소 경계: 로깅·공개 텔레메트리·요청 제한은 `TRUSTED_PROXY_HOPS`만 사용한다. 기본값 `0`은 `X-Forwarded-For`를 무시하고 공유 unknown 버킷을 사용하며, 설정값은 오른쪽부터 신뢰할 프록시 홉 수 `0..3`만 허용한다. 로그인/회원가입/포털 제한기는 계정·클라이언트 임계값보다 공유 학교 NAT의 네트워크 임계값을 높게 두고 key 상한 도달 시 전역 차단 대신 LRU 항목을 교체한다. 회원가입 제한과 초대 사전 조회는 bcrypt보다 먼저 실행된다.
 - `src/lib/audit.ts`: 공개 텔레메트리와 분리된 폐쇄형 관리자 감사 이벤트 기록
 - `InviteToken.token`은 7일 legacy 호환을 위한 nullable 필드이고 신규 발급은 `tokenHash`만 저장한다. 원문은 DB에서 복구하지 않는다.
 - `AuditLog.actorId`는 사용자 삭제 뒤에도 감사 행을 보존하기 위해 nullable `ON DELETE SET NULL` 관계를 사용한다.

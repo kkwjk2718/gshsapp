@@ -34,7 +34,7 @@ export function ManualSendForm() {
         />
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid gap-4 sm:grid-cols-3">
         <div className="space-y-2">
           <label className="text-sm font-bold text-slate-800 dark:text-slate-100">권한</label>
           <select
@@ -51,11 +51,27 @@ export function ManualSendForm() {
         </div>
 
         <div className="space-y-2">
+          <label className="text-sm font-bold text-slate-800 dark:text-slate-100">학번</label>
+          <input
+            name="studentId"
+            inputMode="numeric"
+            minLength={4}
+            maxLength={4}
+            required={targetRole === "STUDENT"}
+            disabled={targetRole !== "STUDENT"}
+            placeholder={targetRole === "STUDENT" ? "예: 1304" : "학생 전용"}
+            className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900"
+          />
+        </div>
+
+        <div className="space-y-2">
           <label className="text-sm font-bold text-slate-800 dark:text-slate-100">기수</label>
           <input
             name="targetGisu"
             type="number"
             min={1}
+            max={200}
+            required={targetRole === "STUDENT"}
             disabled={targetRole !== "STUDENT"}
             placeholder={targetRole === "STUDENT" ? "예: 42" : "학생 전용"}
             className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900"

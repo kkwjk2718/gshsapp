@@ -4,24 +4,33 @@ import { BoundedFailureWindow } from "@/lib/security/failure-window";
 
 export const LOGIN_FAILURE_WINDOW_MINUTES = 10;
 export const MAX_LOGIN_FAILURES_PER_WINDOW = 5;
+export const MAX_LOGIN_NETWORK_FAILURES_PER_WINDOW = 200;
 
 type LoginLimiterOptions = Readonly<{
   now?: () => number;
   maxFailures?: number;
+  identifierMaxFailures?: number;
+  networkMaxFailures?: number;
   windowMs?: number;
   maxKeys?: number;
+  identifierMaxKeys?: number;
+  networkMaxKeys?: number;
 }>;
 
 export function createLoginAttemptLimiter(options: LoginLimiterOptions = {}) {
   const windowMs = options.windowMs ?? LOGIN_FAILURE_WINDOW_MINUTES * 60_000;
-  const policy = {
-    maxFailures: options.maxFailures ?? MAX_LOGIN_FAILURES_PER_WINDOW,
+  const identifiers = new BoundedFailureWindow({
+    maxFailures: options.identifierMaxFailures ?? options.maxFailures ?? MAX_LOGIN_FAILURES_PER_WINDOW,
     windowMs,
     idleTtlMs: windowMs,
-    maxKeys: options.maxKeys ?? 4_096,
-  };
-  const identifiers = new BoundedFailureWindow(policy, options.now);
-  const networks = new BoundedFailureWindow(policy, options.now);
+    maxKeys: options.identifierMaxKeys ?? options.maxKeys ?? 4_096,
+  }, options.now);
+  const networks = new BoundedFailureWindow({
+    maxFailures: options.networkMaxFailures ?? options.maxFailures ?? MAX_LOGIN_NETWORK_FAILURES_PER_WINDOW,
+    windowMs,
+    idleTtlMs: windowMs,
+    maxKeys: options.networkMaxKeys ?? options.maxKeys ?? 1_024,
+  }, options.now);
 
   return {
     check(identifierKey: string, networkKey: string) {
