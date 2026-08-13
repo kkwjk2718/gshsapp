@@ -163,20 +163,25 @@ if endpoint == f"repos/{REPOSITORY}/git/ref/heads/main":
     print(json.dumps({"object": {"sha": sha}}))
 elif endpoint == f"repos/{REPOSITORY}/branches/main/protection":
     last_push = mode != "weak-last-push"
-    bypass_users = [{"login": "unreviewed-bypass"}] if mode == "bypass-principal" else []
+    reviews = {
+        "required_approving_review_count": 1,
+        "dismiss_stale_reviews": True,
+        "require_code_owner_reviews": True,
+        "require_last_push_approval": last_push,
+    }
+    if mode == "bypass-principal":
+        reviews["bypass_pull_request_allowances"] = {
+            "users": [{"login": "unreviewed-bypass"}],
+            "teams": [],
+            "apps": [],
+        }
     print(json.dumps({
         "required_status_checks": {
             "strict": True,
             "contexts": ["lint", "test", "firewall-policy", "build", "gitleaks"],
             "checks": [],
         },
-        "required_pull_request_reviews": {
-            "required_approving_review_count": 1,
-            "dismiss_stale_reviews": True,
-            "require_code_owner_reviews": True,
-            "require_last_push_approval": last_push,
-            "bypass_pull_request_allowances": {"users": bypass_users, "teams": [], "apps": []},
-        },
+        "required_pull_request_reviews": reviews,
         "enforce_admins": {"enabled": True},
         "required_conversation_resolution": {"enabled": True},
         "allow_force_pushes": {"enabled": False},
