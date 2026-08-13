@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
+trap 'printf "offsite mount pin test failed at line %s\n" "$LINENO" >&2' ERR
 
 SCRIPT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 HELPER="$SCRIPT_ROOT/pin-offsite-operation.sh"
