@@ -9,6 +9,7 @@ await build({
   entryPoints: {
     "run-scheduled-backup": path.resolve("scripts", "run-scheduled-backup.ts"),
     "validate-backup": path.resolve("scripts", "validate-backup.ts"),
+    "bootstrap-student-roster": path.resolve("scripts", "bootstrap-student-roster.ts"),
   },
   outdir: outputDirectory,
   outExtension: { ".js": ".mjs" },

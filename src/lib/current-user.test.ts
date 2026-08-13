@@ -14,7 +14,7 @@ vi.mock("@/lib/member-service-suspension", () => ({ MEMBER_SERVICE_SUSPENDED: fa
 describe("database-backed current user authorization", () => {
   beforeEach(() => {
     vi.resetAllMocks();
-    rosterFindFirstMock.mockResolvedValue({ id: "roster" });
+    rosterFindFirstMock.mockResolvedValue({ name: "Student", email: "student@example.com", studentId: "1304", gisu: 42 });
   });
 
   it.each([undefined, null, "1", 1.5, Number.NaN])(
@@ -37,7 +37,7 @@ describe("database-backed current user authorization", () => {
   });
 
   it("returns the current database user for an exact version match", async () => {
-    const dbUser = { id: "user-1", role: "STUDENT", sessionVersion: 3 };
+    const dbUser = { id: "user-1", name: "Student", email: "student@example.com", studentId: "1304", gisu: 42, role: "STUDENT", sessionVersion: 3 };
     authMock.mockResolvedValue({ user: { id: "user-1", role: "ADMIN", sessionVersion: 3 } });
     findUniqueMock.mockResolvedValue(dbUser);
     const { getCurrentUser } = await import("./current-user");
@@ -47,12 +47,12 @@ describe("database-backed current user authorization", () => {
 
   it("rejects roster-governed accounts omitted from the active academic generation", async () => {
     authMock.mockResolvedValue({ user: { id: "user-1", sessionVersion: 3 } });
-    findUniqueMock.mockResolvedValue({ id: "user-1", role: "STUDENT", sessionVersion: 3 });
+    findUniqueMock.mockResolvedValue({ id: "user-1", name: "Student", email: "student@example.com", studentId: "1304", gisu: 42, role: "STUDENT", sessionVersion: 3 });
     rosterFindFirstMock.mockResolvedValue(null);
     const { getCurrentUser } = await import("./current-user");
 
     await expect(getCurrentUser()).resolves.toBeNull();
-    expect(rosterFindFirstMock).toHaveBeenCalledWith({ where: { claimedUserId: "user-1", active: true }, select: { id: true } });
+    expect(rosterFindFirstMock).toHaveBeenCalledWith({ where: { claimedUserId: "user-1", active: true }, select: { name: true, email: true, studentId: true, gisu: true } });
   });
 
   it("does not apply student enrollment state to staff roles", async () => {
@@ -67,14 +67,14 @@ describe("database-backed current user authorization", () => {
 
   it("denies admin access when a JWT says ADMIN but the database says STUDENT", async () => {
     authMock.mockResolvedValue({ user: { id: "user-1", role: "ADMIN", sessionVersion: 3 } });
-    findUniqueMock.mockResolvedValue({ id: "user-1", role: "STUDENT", sessionVersion: 3 });
+    findUniqueMock.mockResolvedValue({ id: "user-1", name: "Student", email: "student@example.com", studentId: "1304", gisu: 42, role: "STUDENT", sessionVersion: 3 });
     const { requireAdmin } = await import("./current-user");
 
     await expect(requireAdmin()).rejects.toThrow("Forbidden");
   });
 
   it("denies normal protected access during forced rotation but permits the password-change surface", async () => {
-    const dbUser = { id: "user-1", role: "STUDENT", sessionVersion: 3, mustChangePassword: true };
+    const dbUser = { id: "user-1", name: "Student", email: "student@example.com", studentId: "1304", gisu: 42, role: "STUDENT", sessionVersion: 3, mustChangePassword: true };
     authMock.mockResolvedValue({ user: { id: "user-1", sessionVersion: 3, mustChangePassword: true } });
     findUniqueMock.mockResolvedValue(dbUser);
     const { getCurrentUser } = await import("./current-user");

@@ -39,7 +39,7 @@ export async function getCurrentUser(options: Readonly<{ allowPasswordChangeRequ
   });
 
   if (!user || user.sessionVersion !== sessionVersion) return null;
-  if (isRosterGovernedRole(user.role) && !(await hasActiveRosterMembership(prisma, user.id))) return null;
+  if (isRosterGovernedRole(user.role) && !(await hasActiveRosterMembership(prisma, user))) return null;
   if (user.mustChangePassword && !options.allowPasswordChangeRequired) return null;
   return user;
 }

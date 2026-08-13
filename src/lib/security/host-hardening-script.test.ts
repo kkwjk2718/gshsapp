@@ -7,7 +7,7 @@ const script = readFileSync(join(process.cwd(), "deploy", "host-hardening.sh"), 
 
 describe("host hardening operator boundary", () => {
   it("is a dry-run by default and requires explicit topology before apply", () => {
-    expect(script).toContain('MODE="${1:---dry-run}"');
+    expect(script).toContain('local mode="${1:---dry-run}"');
     for (const required of ["PROXY_SOURCE_CIDR", "SSH_SOURCE_CIDR", "SSH_ADMIN_USER", "HOST_BIND_IP"]) {
       expect(script).toContain(`${required}:?`);
     }

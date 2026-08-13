@@ -34,6 +34,9 @@ describe("deployment backup boundaries", () => {
     expect(drill).toContain("--migrate-reviewed-input");
     expect(drill).toContain('--group-add "$(id -g)"');
     expect(drill).not.toContain('--user "$(id -u):$(id -g)"');
+    expect(drill).toContain('payload.get("memberServiceSuspended")');
+    expect(drill).toContain("verify_suspended_admin_denial");
+    expect(drill).toContain("verify_admin_login");
   });
 
   it("schedules bounded maintenance and backup on production as well as test", async () => {

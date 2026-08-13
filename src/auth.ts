@@ -71,7 +71,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           const user = await prisma.user.findUnique({ where: { userId } });
           const verifiedUser = await verifyLoginCandidate(password, user, verifyPassword);
 
-          if (verifiedUser && isRosterGovernedRole(verifiedUser.role) && !(await hasActiveRosterMembership(prisma, verifiedUser.id))) {
+          if (verifiedUser && isRosterGovernedRole(verifiedUser.role) && !(await hasActiveRosterMembership(prisma, verifiedUser))) {
             loginAttemptLimiter.recordFailure(identifierKey, networkKey);
             await logAction("LOGIN_FAILED", { loginId: userId, reason: "Inactive enrollment" }, undefined, { userId: verifiedUser.id });
             return null;

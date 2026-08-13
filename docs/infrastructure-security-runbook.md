@@ -55,6 +55,18 @@ Install `/opt/gshsapp/.env` as a non-symlink file owned by root or the dedicated
 
 Before re-enabling membership or the token portal, resolve the known legacy duplicate student-ID group and export an authoritative CSV with the exact header `academicYear,gisu,studentId,name,email`. One file must contain one academic year. In `/admin/settings`, use **Authoritative student roster** and type `REPLACE ROSTER`. Import is capped at 256 KiB/500 rows, validates all rows before one atomic transaction, revokes outstanding self-service invites, keeps prior generations inactive, safely supports annual student-number reuse, seeds exact existing accounts as enrolled, and rejects ambiguous or conflicting identities. The portal cannot be enabled with an empty roster. Never source this CSV from self-declared profile data.
 
+For the first migration, the member-service suspension intentionally blocks every web login, including administrators. Keep the suspension enabled and stream the reviewed roster through the root-controlled Docker command below; the CLI refuses to run after suspension is removed, requires an existing ADMIN actor, applies the same atomic service as the web action, and writes the same audit event. Do not copy the roster into the image or container filesystem.
+
+```bash
+test -f /root/reviewed-roster.csv
+test "$(stat -c '%u:%g:%a' /root/reviewed-roster.csv)" = "0:0:600"
+docker exec -i gshsapp-web node /app/.next/ops/bootstrap-student-roster.mjs \
+  --actor-user-id REPLACE_WITH_ADMIN_LOGIN --confirm REPLACE-ROSTER \
+  < /root/reviewed-roster.csv
+```
+
+Confirm the row count and audit record, then delete the transient root-only CSV. Re-enable membership only in a separately reviewed build after the duplicate legacy identity is resolved and login checks for a sample of active and omitted users pass.
+
 ## 3. Backup and recovery
 
 Configure a private off-host destination, run the backup workflow, and complete the isolated restore drill for the exact image digest. Confirm backup directories are `0700`, files are `0600`, and restoration only creates a staged pending restore. Never automatically replace the live database from an uploaded archive.

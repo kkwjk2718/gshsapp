@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { MEMBER_SERVICE_SUSPENDED } from "@/lib/member-service-suspension";
 
 export const dynamic = "force-dynamic";
 
@@ -26,6 +27,7 @@ export async function GET() {
         service: SERVICE_NAME,
         version,
         imageDigest,
+        memberServiceSuspended: MEMBER_SERVICE_SUSPENDED,
       },
       {
         headers: jsonHeaders(),
@@ -38,6 +40,7 @@ export async function GET() {
         service: SERVICE_NAME,
         version,
         imageDigest,
+        memberServiceSuspended: MEMBER_SERVICE_SUSPENDED,
       },
       {
         headers: jsonHeaders(),

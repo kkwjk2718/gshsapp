@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  getCurrentUser: vi.fn(), transaction: vi.fn(), findMany: vi.fn(), userFindMany: vi.fn(), deleteMany: vi.fn(),
+  getCurrentUser: vi.fn(), transaction: vi.fn(), findMany: vi.fn(), userFindMany: vi.fn(), userFindFirst: vi.fn(), deleteMany: vi.fn(),
   updateMany: vi.fn(), update: vi.fn(), createMany: vi.fn(), auditCreate: vi.fn(), tokenDeleteMany: vi.fn(), distributionUpdateMany: vi.fn(),
 }));
 vi.mock("@/lib/session", () => ({ getCurrentUser: mocks.getCurrentUser }));
@@ -15,6 +15,7 @@ describe("authoritative roster replacement action", () => {
     mocks.getCurrentUser.mockResolvedValue({ id: "admin", role: "ADMIN" });
     mocks.findMany.mockResolvedValue([]);
     mocks.userFindMany.mockResolvedValue([]);
+    mocks.userFindFirst.mockResolvedValue({ id: "admin" });
     mocks.deleteMany.mockResolvedValue({ count: 1 });
     mocks.updateMany.mockResolvedValue({ count: 0 });
     mocks.createMany.mockResolvedValue({ count: 2 });
@@ -28,7 +29,7 @@ describe("authoritative roster replacement action", () => {
         update: mocks.update,
         createMany: mocks.createMany,
       },
-      user: { findMany: mocks.userFindMany, updateMany: mocks.updateMany },
+      user: { findFirst: mocks.userFindFirst, findMany: mocks.userFindMany, updateMany: mocks.updateMany },
       inviteToken: { deleteMany: mocks.tokenDeleteMany },
       tokenDistributionLog: { updateMany: mocks.distributionUpdateMany },
       systemSetting: { updateMany: mocks.updateMany },

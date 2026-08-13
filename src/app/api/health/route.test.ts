@@ -33,6 +33,7 @@ describe("GET /api/health deployment identity", () => {
       service: "gshsapp",
       version: `sha-${"a".repeat(40)}`,
       imageDigest: `sha256:${"b".repeat(64)}`,
+      memberServiceSuspended: true,
     });
   });
 

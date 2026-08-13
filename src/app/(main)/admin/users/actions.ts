@@ -487,7 +487,7 @@ export async function changeUserGisu(formData: FormData): Promise<ChangeUserGisu
 
             const updatedUser = await tx.user.update({
                 where: { id: targetUser.id },
-                data: { gisu: nextGisu },
+                data: { gisu: nextGisu, sessionVersion: { increment: 1 } },
                 select: {
                     id: true,
                     userId: true,

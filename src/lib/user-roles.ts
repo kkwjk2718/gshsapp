@@ -37,7 +37,8 @@ export function canAccessCoreMemberFeatures(role: string | null | undefined) {
 }
 
 export function canChangeGisu(role: string | null | undefined) {
-  return role === "STUDENT" || role === "BROADCAST" || role === "GRADUATE";
+  // Active student/broadcast cohort data is owned by the authoritative roster.
+  return role === "GRADUATE";
 }
 
 export function shouldHideRestrictedNav(role: string | null | undefined) {

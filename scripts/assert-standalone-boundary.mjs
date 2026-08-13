@@ -9,6 +9,7 @@ const REQUIRED_FILES = [
   "node_modules/tar/package.json",
   ".next/ops/run-scheduled-backup.mjs",
   ".next/ops/validate-backup.mjs",
+  ".next/ops/bootstrap-student-roster.mjs",
 ];
 
 function normalize(relative) {

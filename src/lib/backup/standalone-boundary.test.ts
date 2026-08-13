@@ -30,6 +30,7 @@ const minimalAllowed = {
   "node_modules/tar/package.json": "{}",
   ".next/ops/run-scheduled-backup.mjs": "runtime",
   ".next/ops/validate-backup.mjs": "runtime",
+  ".next/ops/bootstrap-student-roster.mjs": "runtime",
 };
 
 describe("standalone artifact boundary", () => {
@@ -57,6 +58,6 @@ describe("standalone artifact boundary", () => {
 
   it("accepts the minimal runtime boundary", async () => {
     const root = await fixture(minimalAllowed);
-    await expect(assertStandaloneBoundary(root)).resolves.toEqual(expect.objectContaining({ filesChecked: 6 }));
+    await expect(assertStandaloneBoundary(root)).resolves.toEqual(expect.objectContaining({ filesChecked: 7 }));
   });
 });

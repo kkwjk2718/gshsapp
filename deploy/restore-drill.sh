@@ -280,6 +280,49 @@ if "Application error" in html:
 PY
 }
 
+verify_suspended_admin_denial() {
+  RESTORE_BASE_URL="$RESTORE_BASE_URL" \
+  E2E_ADMIN_USER="$E2E_ADMIN_USER" \
+  E2E_ADMIN_PASSWORD="$E2E_ADMIN_PASSWORD" \
+  "$PYTHON_BIN" - <<'PY'
+import json
+import os
+import urllib.parse
+import urllib.request
+from http.cookiejar import CookieJar
+
+base_url = os.environ["RESTORE_BASE_URL"].rstrip("/")
+cookie_jar = CookieJar()
+opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(cookie_jar))
+with opener.open(base_url + "/api/auth/csrf", timeout=30) as response:
+    csrf_token = json.loads(response.read().decode("utf-8")).get("csrfToken")
+if not csrf_token:
+    raise SystemExit("Failed to obtain CSRF token for suspended restore drill.")
+payload = urllib.parse.urlencode({
+    "csrfToken": csrf_token,
+    "userId": os.environ["E2E_ADMIN_USER"],
+    "password": os.environ["E2E_ADMIN_PASSWORD"],
+    "callbackUrl": base_url + "/admin",
+    "json": "true",
+}).encode("utf-8")
+request = urllib.request.Request(
+    base_url + "/api/auth/callback/credentials",
+    data=payload,
+    method="POST",
+    headers={"Content-Type": "application/x-www-form-urlencoded", "Origin": base_url, "Referer": base_url + "/login"},
+)
+with opener.open(request, timeout=30) as response:
+    response.read()
+with opener.open(base_url + "/admin", timeout=30) as response:
+    final_url = response.geturl()
+    html = response.read().decode("utf-8", errors="ignore")
+if "/admin" in urllib.parse.urlparse(final_url).path:
+    raise SystemExit("Suspended restore drill unexpectedly granted administrator access.")
+if "Application error" in html:
+    raise SystemExit("Suspended restore denial rendered an application error.")
+PY
+}
+
 write_output_file() {
   if [[ -z "$RESTORE_DRILL_OUTPUT_FILE" ]]; then
     return
@@ -342,7 +385,21 @@ if ! wait_for_health; then
   exit 1
 fi
 
-verify_admin_login
+health_json="$(curl --silent --show-error --fail "$RESTORE_BASE_URL/api/health")"
+member_service_suspended="$(HEALTH_JSON="$health_json" "$PYTHON_BIN" - <<'PY'
+import json, os
+payload = json.loads(os.environ["HEALTH_JSON"])
+value = payload.get("memberServiceSuspended")
+if type(value) is not bool:
+    raise SystemExit("Health payload lacks an exact memberServiceSuspended boolean.")
+print("true" if value else "false")
+PY
+)"
+if [[ "$member_service_suspended" == "true" ]]; then
+  verify_suspended_admin_denial
+else
+  verify_admin_login
+fi
 write_output_file
 
 echo "Restore drill succeeded with source: $RESTORE_SOURCE_NAME"
