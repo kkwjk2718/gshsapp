@@ -7,40 +7,34 @@ import { fileURLToPath } from "node:url";
 
 const BASELINE_MIGRATION = "20260813000000_baseline";
 const SECURITY_MIGRATION = "20260813001000_security_hardening";
-const LEGACY_SCHEMA_FINGERPRINT = "1518f3d3ccb7b305bcd59d6ff916dce66002bfcac8b028c2b2dc50c83d88e609";
-const CURRENT_SCHEMA_FINGERPRINT = "3462920d8439a76ba1ee9471d10f10350837df815692cd09f74ed2c1913eac2f";
-
-function quoteSqlIdentifier(value) {
-  return `"${value.replaceAll('"', '""')}"`;
-}
+const LEGACY_SCHEMA_FINGERPRINT = "3cb19a677a4a6494eac64a996a874be3c36dc8b03c1d90369184cd639bc732e7";
+const CURRENT_SCHEMA_FINGERPRINT = "f1322c5ee67e3ae36f82867e42eb468db9d321934f2c45a1d262deb4c1fa05a3";
 
 export function schemaFingerprint(db) {
-  const tableNames = db.prepare(
-    "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name <> '_prisma_migrations' ORDER BY name",
-  ).all().map((row) => row.name);
+  const schemaObjects = db.prepare(`
+    SELECT type, name, tbl_name AS tableName, sql
+    FROM sqlite_master
+    WHERE type IN ('table', 'index', 'trigger', 'view')
+      AND name NOT LIKE 'sqlite_%'
+      AND name <> '_prisma_migrations'
+      AND tbl_name <> '_prisma_migrations'
+    ORDER BY type, name
+  `).all().map(({ type, name, tableName, sql }) => ({ type, name, tableName, sql }));
 
-  const schema = tableNames.map((tableName) => {
-    const quotedTable = quoteSqlIdentifier(tableName);
-    const columns = db.prepare(`PRAGMA table_info(${quotedTable})`).all().map(
-      ({ cid, name, type, notnull, dflt_value, pk }) => ({ cid, name, type, notnull, dflt_value, pk }),
-    );
-    const foreignKeys = db.prepare(`PRAGMA foreign_key_list(${quotedTable})`).all().map(
-      ({ id, seq, table, from, to, on_update, on_delete, match }) => ({ id, seq, table, from, to, on_update, on_delete, match }),
-    );
-    const indexes = db.prepare(`PRAGMA index_list(${quotedTable})`).all()
-      .filter(({ name }) => !name.startsWith("sqlite_autoindex_"))
-      .sort((left, right) => left.name.localeCompare(right.name))
-      .map(({ name, unique, origin, partial }) => ({
-        name,
-        unique,
-        origin,
-        partial,
-        columns: db.prepare(`PRAGMA index_info(${quoteSqlIdentifier(name)})`).all().map((row) => row.name),
-      }));
-    return { name: tableName, columns, foreignKeys, indexes };
-  });
+  return createHash("sha256").update(JSON.stringify(schemaObjects)).digest("hex");
+}
 
-  return createHash("sha256").update(JSON.stringify(schema)).digest("hex");
+export function assertNoExecutableSchemaObjects(db) {
+  const unexpected = db.prepare(`
+    SELECT type, name
+    FROM sqlite_master
+    WHERE type IN ('trigger', 'view')
+      AND name NOT LIKE 'sqlite_%'
+    ORDER BY type, name
+  `).all();
+  if (unexpected.length > 0) {
+    throw new Error(`Unexpected executable SQLite schema objects: ${unexpected.map(({ type, name }) => `${type}:${name}`).join(", ")}`);
+  }
 }
 
 export function getDatabasePath() {
@@ -75,6 +69,7 @@ export function inspectDatabase(databasePath) {
     if (quickCheck.length !== 1 || quickCheck[0].quick_check !== "ok") {
       throw new Error("SQLite quick_check failed before migration");
     }
+    assertNoExecutableSchemaObjects(db);
     const tables = db.prepare(
       "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name",
     ).all().map((row) => row.name);
@@ -115,6 +110,7 @@ function assertPostMigration(databasePath) {
     if (quickCheck.length !== 1 || quickCheck[0].quick_check !== "ok" || foreignKeyErrors.length !== 0) {
       throw new Error("SQLite integrity verification failed after migration");
     }
+    assertNoExecutableSchemaObjects(db);
     const fingerprint = schemaFingerprint(db);
     if (fingerprint !== CURRENT_SCHEMA_FINGERPRINT) {
       throw new Error(`Post-migration schema fingerprint is not the reviewed schema: ${fingerprint}`);

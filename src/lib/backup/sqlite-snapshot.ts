@@ -28,6 +28,7 @@ export type BackupDatabaseErrorCode =
   | "QUICK_CHECK_FAILED"
   | "FOREIGN_KEY_CHECK_FAILED"
   | "MISSING_TABLES"
+  | "UNSAFE_SCHEMA_OBJECTS"
   | "DESTINATION_EXISTS"
   | "SNAPSHOT_FAILED";
 
@@ -107,6 +108,15 @@ export async function validateSqliteDatabase(
     const tables = new Set(tableRows.map((row) => row.name).filter((name): name is string => typeof name === "string"));
     if (REQUIRED_APPLICATION_TABLES.some((table) => !tables.has(table))) {
       throw new BackupDatabaseError("MISSING_TABLES");
+    }
+
+    const executableSchemaRows = queryRows(
+      await client.$queryRawUnsafe(
+        "SELECT type, name FROM sqlite_master WHERE type IN ('trigger', 'view') ORDER BY type, name",
+      ),
+    );
+    if (executableSchemaRows.length !== 0) {
+      throw new BackupDatabaseError("UNSAFE_SCHEMA_OBJECTS");
     }
   } finally {
     await client.$disconnect().catch(() => undefined);

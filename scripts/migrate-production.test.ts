@@ -5,7 +5,13 @@ import { DatabaseSync } from "node:sqlite";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import { getDatabasePath, inspectDatabase, schemaFingerprint, validatePreMigrationState } from "./migrate-production.mjs";
+import {
+  assertNoExecutableSchemaObjects,
+  getDatabasePath,
+  inspectDatabase,
+  schemaFingerprint,
+  validatePreMigrationState,
+} from "./migrate-production.mjs";
 
 const roots: string[] = [];
 
@@ -28,7 +34,7 @@ describe("production migration preflight", () => {
     const dbPath = join(root, "dev.db");
     const db = new DatabaseSync(dbPath);
     db.exec(readFileSync(join(process.cwd(), "prisma/migrations/20260813000000_baseline/migration.sql"), "utf8"));
-    expect(schemaFingerprint(db)).toBe("1518f3d3ccb7b305bcd59d6ff916dce66002bfcac8b028c2b2dc50c83d88e609");
+    expect(schemaFingerprint(db)).toBe("3cb19a677a4a6494eac64a996a874be3c36dc8b03c1d90369184cd639bc732e7");
     db.close();
 
     process.env.DATA_ROOT = root;
@@ -68,13 +74,36 @@ describe("production migration preflight", () => {
     db.exec('CREATE TABLE "User" ("id" TEXT PRIMARY KEY, "unexpected" TEXT)');
     const driftFingerprint = schemaFingerprint(db);
     db.close();
-    expect(driftFingerprint).not.toBe("1518f3d3ccb7b305bcd59d6ff916dce66002bfcac8b028c2b2dc50c83d88e609");
-    expect(driftFingerprint).not.toBe("3462920d8439a76ba1ee9471d10f10350837df815692cd09f74ed2c1913eac2f");
+    expect(driftFingerprint).not.toBe("3cb19a677a4a6494eac64a996a874be3c36dc8b03c1d90369184cd639bc732e7");
+    expect(driftFingerprint).not.toBe("f1322c5ee67e3ae36f82867e42eb468db9d321934f2c45a1d262deb4c1fa05a3");
     expect(() => validatePreMigrationState({ kind: "unmanaged", fingerprint: driftFingerprint })).toThrow(
       "Refusing to baseline an unknown SQLite schema",
     );
     expect(() => validatePreMigrationState({ kind: "managed", fingerprint: driftFingerprint })).toThrow(
       "Refusing to migrate an unknown SQLite schema",
     );
+  });
+
+  it("detects triggers, views, checks, collations, and partial-index predicates", () => {
+    const baseline = new DatabaseSync(":memory:");
+    baseline.exec('CREATE TABLE "Item" ("id" TEXT PRIMARY KEY, "value" TEXT); CREATE INDEX "Item_value_idx" ON "Item"("value") WHERE "value" IS NOT NULL;');
+    const expected = schemaFingerprint(baseline);
+
+    const predicateDrift = new DatabaseSync(":memory:");
+    predicateDrift.exec('CREATE TABLE "Item" ("id" TEXT PRIMARY KEY, "value" TEXT); CREATE INDEX "Item_value_idx" ON "Item"("value") WHERE length("value") > 0;');
+    expect(schemaFingerprint(predicateDrift)).not.toBe(expected);
+
+    const tableDrift = new DatabaseSync(":memory:");
+    tableDrift.exec('CREATE TABLE "Item" ("id" TEXT PRIMARY KEY, "value" TEXT COLLATE NOCASE CHECK (length("value") < 20)); CREATE INDEX "Item_value_idx" ON "Item"("value") WHERE "value" IS NOT NULL;');
+    expect(schemaFingerprint(tableDrift)).not.toBe(expected);
+
+    baseline.exec('CREATE TRIGGER "Item_after_insert" AFTER INSERT ON "Item" BEGIN UPDATE "Item" SET "value" = upper(NEW."value") WHERE "id" = NEW."id"; END;');
+    expect(() => assertNoExecutableSchemaObjects(baseline)).toThrow("trigger:Item_after_insert");
+    baseline.exec('CREATE VIEW "Item_view" AS SELECT "id" FROM "Item";');
+    expect(() => assertNoExecutableSchemaObjects(baseline)).toThrow("view:Item_view");
+
+    baseline.close();
+    predicateDrift.close();
+    tableDrift.close();
   });
 });

@@ -29,15 +29,18 @@ function validationClient(overrides: Partial<{
   quickCheck: unknown[];
   foreignKeys: unknown[];
   tables: unknown[];
+  schemaObjects: unknown[];
 }> = {}): SqliteValidationClient {
   const quickCheck = overrides.quickCheck ?? [{ quick_check: "ok" }];
   const foreignKeys = overrides.foreignKeys ?? [];
   const tables = overrides.tables ?? REQUIRED_APPLICATION_TABLES.map((name) => ({ name }));
+  const schemaObjects = overrides.schemaObjects ?? [];
   return {
     $executeRawUnsafe: vi.fn().mockResolvedValue(0),
     $queryRawUnsafe: vi.fn(async (query: string) => {
       if (query.includes("quick_check")) return quickCheck;
       if (query.includes("foreign_key_check")) return foreignKeys;
+      if (query.includes("type IN ('trigger', 'view')")) return schemaObjects;
       if (query.includes("sqlite_master")) return tables;
       throw new Error("unexpected query");
     }),
@@ -51,6 +54,18 @@ describe("SQLite backup snapshots", () => {
     const factory = vi.fn();
     await expect(validateSqliteDatabase(fixture.file, factory)).rejects.toMatchObject({ code: "INVALID_HEADER" });
     expect(factory).not.toHaveBeenCalled();
+  });
+
+  it("rejects executable trigger and view objects in a staged database", async () => {
+    const fixture = await makeTemporaryFile();
+
+    await expect(validateSqliteDatabase(fixture.file, async () => validationClient({
+      schemaObjects: [{ type: "trigger", name: "persist_after_restore" }],
+    }))).rejects.toMatchObject({ code: "UNSAFE_SCHEMA_OBJECTS" });
+
+    await expect(validateSqliteDatabase(fixture.file, async () => validationClient({
+      schemaObjects: [{ type: "view", name: "leak_users" }],
+    }))).rejects.toMatchObject({ code: "UNSAFE_SCHEMA_OBJECTS" });
   });
 
   it("rejects failed quick checks, foreign-key violations and missing required tables", async () => {
