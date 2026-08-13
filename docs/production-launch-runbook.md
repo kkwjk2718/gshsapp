@@ -44,7 +44,7 @@
 
 ## 오프호스트 백업 내보내기
 
-최신 백업 파일이 있다면 그것을 사용하고, 없다면 라이브 SQLite 파일 복사본을 내보냅니다.
+백업 엔진이 만든 최신 스냅샷만 내보냅니다. 생성 백업이 없으면 작업을 중단하며 라이브 SQLite 파일 복사본을 만들지 않습니다.
 
 ```bash
 cd /opt/gshsapp
@@ -74,8 +74,10 @@ OFFSITE_TARGET=backup-user@backup-host:/srv/backups/gshsapp/ ./offsite-backup.sh
 
 1. 마지막 정상 `sha-<commit>`를 다시 배포
 2. `https://gshs.app/api/health` 재확인
-3. 데이터 문제일 때만 최신 `dev.db.*.bak` 복원 고려
+3. 데이터 문제일 때만 검증된 `backup-YYYYMMDD-HHMMSS-<random>.tar.gz`의 격리 restore drill 수행
 4. 라우팅 또는 TLS 문제면 DB를 건드리기 전에 프록시 수정 및 smoke check 재실행
+
+관리자 웹 업로드는 복원을 적용하지 않고 검증된 보류 항목만 생성합니다. 실행 중인 DB를 덮어쓰거나 시작 시 자동 적용하지 마십시오. 실제 복구는 서비스가 중지된 상태에서 별도 검토된 오프라인 절차와 사전 백업·롤백 계획으로 수행합니다.
 
 ## 운영 모니터링 기준
 

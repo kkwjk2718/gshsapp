@@ -43,7 +43,8 @@
 - `build:` 대신 `image:` 사용
 - `sha-<commit>` 기준 이미지 배포
 - `${HOST_BIND_IP}:${HOST_PORT}:3000` 방식 포트 바인딩
-- `./data:/app/data`, `./backup:/app/backup` 영속 볼륨 사용
+- `./data:/app/data`, `./backup:/app/data/backup` 영속 볼륨 사용
+- `DATA_ROOT=/app/data` 아래에서 DB, 백업, 복원 스테이징, 날씨 캐시 경로를 고정
 - `APP_VERSION`을 컨테이너에 주입
 
 현재 기본값은 프록시가 다른 서버에서 접근할 수 있도록 `0.0.0.0:${HOST_PORT}:3000`입니다.
@@ -88,7 +89,11 @@
 ## 서버 `.env` 예시
 
 ```dotenv
+DATA_ROOT=/app/data
 DATABASE_URL=file:/app/data/dev.db
+BACKUP_DIR=/app/data/backup
+RESTORE_ROOT=/app/data/restore
+WEATHER_CACHE_PATH=/app/data/weather-cache.json
 AUTH_SECRET=replace-me
 AUTH_TRUST_HOST=true
 AUTH_URL=https://test.gshs.app
@@ -124,7 +129,7 @@ Runner labels:
 
 ## 복원 리허설
 
-`restore-drill.sh`는 최신 백업 또는 라이브 DB 복사본을 임시 작업 디렉터리로 가져와 별도 포트에서 컨테이너를 띄운 뒤, 헬스 응답과 관리자 로그인 가능 여부를 확인하고 정리합니다.
+`restore-drill.sh`는 정해진 이름의 최신 백업이 freshness 기준을 만족할 때만 사용합니다. 새 이미지 내부의 공용 검증기로 아카이브를 격리 검증한 뒤 별도 포트에서 컨테이너를 띄우며, 라이브 DB 복사본이나 호스트 `tar` 폴백은 사용하지 않습니다.
 
 관련 환경 변수:
 
@@ -134,7 +139,7 @@ Runner labels:
 
 ## 오프호스트 백업 내보내기
 
-`offsite-backup.sh`는 최신 백업 파일이 있으면 그것을, 없으면 라이브 DB 복사본을 외부 저장소로 보냅니다.
+`offsite-backup.sh`는 백업 엔진이 생성한 정해진 이름의 최신 스냅샷과 companion metadata만 외부 저장소로 보냅니다. 크기와 SHA-256이 metadata와 일치하지 않거나 스냅샷이 없으면 실패하며 라이브 DB를 복사하지 않습니다.
 
 필수 환경 변수:
 
@@ -161,7 +166,7 @@ OFFSITE_TARGET=backup-user@backup-host:/srv/backups/gshsapp/ ./offsite-backup.sh
 - GitHub Actions scheduler가 `gshs-test` runner를 깨움
 - runner가 [`run-scheduled-backup.sh`](./run-scheduled-backup.sh)를 실행
 - 호스트 스크립트가 실행 중인 앱 컨테이너 안으로 들어감
-- 컨테이너 내부에서 [`scripts/run-scheduled-backup.mjs`](../scripts/run-scheduled-backup.mjs)를 실행
+- 컨테이너 내부의 빌드 산출물 `.next/ops/run-scheduled-backup.mjs`를 실행
 
 워크플로우:
 

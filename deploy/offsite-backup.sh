@@ -3,12 +3,10 @@ set -Eeuo pipefail
 
 DEPLOY_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BACKUP_DIR="${BACKUP_DIR:-$DEPLOY_ROOT/backup}"
-DATA_DIR="${DATA_DIR:-$DEPLOY_ROOT/data}"
-DB_FILE="${DB_FILE:-$DATA_DIR/dev.db}"
 OFFSITE_TARGET="${OFFSITE_TARGET:?OFFSITE_TARGET is required}"
 RSYNC_BIN="${RSYNC_BIN:-rsync}"
+PYTHON_BIN="${PYTHON_BIN:-python3}"
 SOURCE_PATH=""
-TEMP_BACKUP=""
 
 require_command() {
   if ! command -v "$1" >/dev/null 2>&1; then
@@ -17,22 +15,45 @@ require_command() {
   fi
 }
 
-cleanup() {
-  if [[ -n "$TEMP_BACKUP" && -f "$TEMP_BACKUP" ]]; then
-    rm -f "$TEMP_BACKUP"
-  fi
-}
-
-trap cleanup EXIT
-
 select_latest_backup() {
-  find "$BACKUP_DIR" -maxdepth 1 -type f \( -name '*.bak' -o -name '*.db' -o -name '*.tar.gz' \) -printf '%T@ %p\n' \
+  find "$BACKUP_DIR" -maxdepth 1 -type f -regextype posix-extended \
+    -regex '.*/backup-[0-9]{8}-[0-9]{6}-[a-f0-9]{8}\.tar\.gz' -printf '%T@ %p\n' \
     | sort -nr \
     | head -n 1 \
     | cut -d' ' -f2-
 }
 
+validate_source() {
+  SOURCE_PATH="$SOURCE_PATH" "$PYTHON_BIN" - <<'PY'
+import hashlib
+import hmac
+import json
+import os
+from pathlib import Path
+
+source = Path(os.environ["SOURCE_PATH"])
+metadata = source.with_name(source.name + ".json")
+if source.is_symlink() or metadata.is_symlink() or not source.is_file() or not metadata.is_file():
+    raise SystemExit("Generated backup and metadata must be regular files.")
+try:
+    payload = json.loads(metadata.read_text(encoding="utf-8"))
+except Exception as error:
+    raise SystemExit("Backup metadata validation failed.") from error
+if payload.get("format") != "gshsapp-backup" or payload.get("version") != 2 or payload.get("file") != source.name:
+    raise SystemExit("Backup metadata validation failed.")
+if payload.get("size") != source.stat().st_size or not isinstance(payload.get("sha256"), str):
+    raise SystemExit("Backup metadata validation failed.")
+digest = hashlib.sha256()
+with source.open("rb") as stream:
+    for block in iter(lambda: stream.read(1024 * 1024), b""):
+        digest.update(block)
+if not hmac.compare_digest(digest.hexdigest(), payload["sha256"]):
+    raise SystemExit("Backup checksum validation failed.")
+PY
+}
+
 require_command "$RSYNC_BIN"
+require_command "$PYTHON_BIN"
 mkdir -p "$BACKUP_DIR"
 
 if [[ -d "$BACKUP_DIR" ]]; then
@@ -40,17 +61,12 @@ if [[ -d "$BACKUP_DIR" ]]; then
 fi
 
 if [[ -z "$SOURCE_PATH" ]]; then
-  if [[ ! -f "$DB_FILE" ]]; then
-    echo "No backup file was found in $BACKUP_DIR and no live DB exists at $DB_FILE." >&2
-    exit 1
-  fi
-
-  timestamp="$(date '+%Y%m%d-%H%M%S')"
-  TEMP_BACKUP="$BACKUP_DIR/dev.db.${timestamp}.manual-export.bak"
-  cp "$DB_FILE" "$TEMP_BACKUP"
-  SOURCE_PATH="$TEMP_BACKUP"
+  echo "No generated snapshot archive was found in $BACKUP_DIR; live SQLite copies are forbidden." >&2
+  exit 1
 fi
 
+validate_source
+
 echo "Copying $(basename "$SOURCE_PATH") to $OFFSITE_TARGET"
-"$RSYNC_BIN" -av "$SOURCE_PATH" "$OFFSITE_TARGET"
+"$RSYNC_BIN" -av "$SOURCE_PATH" "$SOURCE_PATH.json" "$OFFSITE_TARGET"
 echo "Offsite backup export completed successfully."

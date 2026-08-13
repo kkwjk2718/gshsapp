@@ -46,7 +46,11 @@
 서버 `.env` 최소 예시:
 
 ```dotenv
+DATA_ROOT=/app/data
 DATABASE_URL=file:/app/data/dev.db
+BACKUP_DIR=/app/data/backup
+RESTORE_ROOT=/app/data/restore
+WEATHER_CACHE_PATH=/app/data/weather-cache.json
 AUTH_SECRET=replace-with-long-random-secret
 AUTH_TRUST_HOST=true
 AUTH_URL=https://test.gshs.app
@@ -68,9 +72,11 @@ NEXT_PUBLIC_NEIS_API_KEY=
 ## 4. SQLite 운영 원칙
 
 - DB 파일은 `/app/data/dev.db` 영속 볼륨 경로를 사용합니다.
-- 배포 전 DB 백업을 먼저 생성합니다.
+- 배포 전 백업은 새 이미지의 공용 백업 엔진이 `VACUUM INTO`로 만든 일관된 스냅샷이어야 합니다. 라이브 DB 파일을 `cp`하지 않습니다.
 - 라이브 DB를 컨테이너 임시 경로에 두지 않습니다.
 - 복원 리허설은 라이브 DB를 직접 덮어쓰지 않습니다.
+- 웹 업로드는 검증된 보류 복원만 생성합니다. 자동 적용은 비활성화되어 있으며 운영자가 오프라인 절차를 별도로 검토해야 합니다.
+- 컨테이너 시작 스크립트는 스키마를 변경하지 않습니다. 배포 절차가 앱 시작 전에 스키마 동기화를 완료해야 합니다.
 
 ## 5. 테스트 서버 자동 배포
 

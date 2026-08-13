@@ -2,6 +2,7 @@ import { unstable_cache } from "next/cache";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { readBoundedJsonResponse } from "@/lib/outbound-response";
+import { getWeatherCachePath } from "@/lib/backup/paths";
 
 export type WeatherCondition =
   | "clear"
@@ -181,20 +182,9 @@ export function parseOpenMeteoPayload(payload: unknown, now = new Date()): Weath
   };
 }
 
-function resolveWeatherCachePath() {
-  const databaseUrl = process.env.DATABASE_URL;
-  if (databaseUrl?.startsWith("file:")) {
-    const rawPath = databaseUrl.slice("file:".length);
-    const absoluteDbPath = path.isAbsolute(rawPath) ? rawPath : path.resolve(process.cwd(), rawPath);
-    return path.join(path.dirname(absoluteDbPath), "weather-cache.json");
-  }
-
-  return path.resolve(process.cwd(), ".cache", "weather-cache.json");
-}
-
 async function readCachedWeather(): Promise<WeatherData | null> {
   try {
-    const raw = await readFile(resolveWeatherCachePath(), "utf8");
+    const raw = await readFile(getWeatherCachePath(), "utf8");
     const cached = JSON.parse(raw) as CachedWeatherData;
 
     if (
@@ -229,7 +219,7 @@ async function readCachedWeather(): Promise<WeatherData | null> {
 }
 
 async function writeWeatherCache(weather: WeatherData) {
-  const cachePath = resolveWeatherCachePath();
+  const cachePath = getWeatherCachePath();
   await mkdir(path.dirname(cachePath), { recursive: true });
   await writeFile(cachePath, JSON.stringify(weather, null, 2), "utf8");
 }

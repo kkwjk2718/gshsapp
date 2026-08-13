@@ -95,6 +95,7 @@ select_latest_backup() {
     BACKUP_DIR="$BACKUP_DIR" BACKUP_MAX_AGE_HOURS="$BACKUP_MAX_AGE_HOURS" "$PYTHON_BIN" - <<'PY'
 from pathlib import Path
 import os
+import re
 import time
 
 backup_dir = Path(os.environ["BACKUP_DIR"])
@@ -106,9 +107,9 @@ if not backup_dir.exists():
 
 candidates = []
 for item in backup_dir.iterdir():
-    if not item.is_file():
+    if item.is_symlink() or not item.is_file():
         continue
-    if item.name.endswith(".tar.gz") or item.name.endswith(".db") or item.name.endswith(".bak"):
+    if re.fullmatch(r"backup-\d{8}-\d{6}-[a-f0-9]{8}\.tar\.gz", item.name):
         candidates.append(item)
 
 if not candidates:
@@ -136,46 +137,41 @@ PY
 }
 
 prepare_restore_source() {
-  local source_kind
-
+  if [[ -L "$BACKUP_DIR" || ! -d "$BACKUP_DIR" ]]; then
+    echo "Backup directory must be a real directory." >&2
+    exit 1
+  fi
   if select_latest_backup && [[ "${LATEST_BACKUP_IS_FRESH:-0}" == "1" ]]; then
     RESTORE_SOURCE_PATH="$LATEST_BACKUP_PATH"
     RESTORE_SOURCE_NAME="$LATEST_BACKUP_NAME"
-    source_kind="fresh backup"
-  elif [[ -f "$DB_FILE" ]]; then
-    RESTORE_SOURCE_PATH="$DB_FILE"
-    RESTORE_SOURCE_NAME="$(basename "$DB_FILE")"
-    source_kind="live database copy"
-  elif [[ -n "$LATEST_BACKUP_PATH" ]]; then
-    RESTORE_SOURCE_PATH="$LATEST_BACKUP_PATH"
-    RESTORE_SOURCE_NAME="$LATEST_BACKUP_NAME"
-    source_kind="stale backup"
   else
-    echo "No restore source is available. Checked $BACKUP_DIR and $DB_FILE." >&2
+    echo "No fresh validated backup is available in $BACKUP_DIR." >&2
     exit 1
   fi
 
-  mkdir -p "$TEMP_DIR/data" "$TEMP_DIR/backup"
+  mkdir -p "$TEMP_DIR/validated"
+  chmod 2770 "$TEMP_DIR/validated"
+  docker run --rm \
+    --network none \
+    --read-only \
+    --cap-drop ALL \
+    --security-opt no-new-privileges \
+    --group-add "$(id -g)" \
+    --tmpfs /tmp:rw,noexec,nosuid,nodev,size=1536m \
+    --mount "type=bind,src=$BACKUP_DIR,dst=/input,readonly" \
+    --mount "type=bind,src=$TEMP_DIR/validated,dst=/output" \
+    "${DOCKER_IMAGE}:${IMAGE_TAG}" \
+    node .next/ops/validate-backup.mjs "/input/$RESTORE_SOURCE_NAME" /output
 
-  case "$RESTORE_SOURCE_PATH" in
-    *.tar.gz)
-      tar -xzf "$RESTORE_SOURCE_PATH" -C "$TEMP_DIR"
-      ;;
-    *.db|*.bak)
-      cp "$RESTORE_SOURCE_PATH" "$TEMP_DIR/data/dev.db"
-      ;;
-    *)
-      echo "Unsupported restore source: $RESTORE_SOURCE_PATH" >&2
-      exit 1
-      ;;
-  esac
+  mv "$TEMP_DIR/validated/data" "$TEMP_DIR/data"
+  rmdir "$TEMP_DIR/validated"
 
   if [[ ! -f "$TEMP_DIR/data/dev.db" ]]; then
-    echo "Restore drill did not produce $TEMP_DIR/data/dev.db" >&2
+    echo "Restore drill did not produce an isolated database." >&2
     exit 1
   fi
 
-  echo "Using $source_kind for restore drill: $RESTORE_SOURCE_NAME"
+  echo "Using fresh validated backup for restore drill: $RESTORE_SOURCE_NAME"
 }
 
 wait_for_health() {
@@ -297,7 +293,6 @@ EOF
 
 require_command docker
 require_command curl
-require_command tar
 require_command "$PYTHON_BIN"
 
 if ! docker compose version >/dev/null 2>&1; then
@@ -315,7 +310,6 @@ RUNTIME_ENV_FILE="$TEMP_DIR/.env"
 cp "$SOURCE_COMPOSE_FILE" "$COMPOSE_FILE"
 write_runtime_env
 write_compose_env
-prepare_restore_source
 
 if [[ -n "${DOCKERHUB_USERNAME:-}" && -n "${DOCKERHUB_TOKEN:-}" ]]; then
   echo "Logging into Docker Hub..."
@@ -324,6 +318,8 @@ fi
 
 echo "Pulling image ${DOCKER_IMAGE}:${IMAGE_TAG} for restore drill..."
 docker pull "${DOCKER_IMAGE}:${IMAGE_TAG}"
+
+prepare_restore_source
 
 echo "Starting isolated restore drill container on ${RESTORE_BASE_URL}..."
 compose up -d --remove-orphans

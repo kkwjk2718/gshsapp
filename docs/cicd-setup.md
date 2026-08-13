@@ -192,6 +192,9 @@ runner가 필요한 이유:
 
 - 더 이상 웹 요청 경로에서 실행되지 않음
 - `scheduled-backup-test.yml` + `run-scheduled-backup.sh` + `run-scheduled-backup.mjs` 구조 사용
+- 정기·배포 전 백업 모두 이미지의 동일한 SQLite 스냅샷/아카이브 검증 엔진을 사용
+
+비밀정보 검사는 `.github/workflows/secret-scan.yml`에서 전체 Git 이력과 체크아웃 디렉터리를 모두 redacted 모드로 검사합니다. 이력에 노출된 값이 발견되면 allowlist로 숨기지 말고 먼저 발급처에서 회전·폐기한 뒤 `SECURITY.md`의 협업 이력 정리 절차를 따릅니다.
 
 ## 12. 문제 발생 시 우선 확인 순서
 

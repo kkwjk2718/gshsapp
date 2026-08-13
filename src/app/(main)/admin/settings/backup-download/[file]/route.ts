@@ -1,43 +1,65 @@
-import path from "node:path";
+import { constants } from "node:fs";
 import fs from "node:fs/promises";
+import { Readable } from "node:stream";
 import { NextResponse } from "next/server";
-import { getBackupDir } from "@/lib/backup";
-import { AuthorizationError, requireAdmin } from "@/lib/current-user";
+
 import { writeAuditLog } from "@/lib/audit";
+import { getBackupDir } from "@/lib/backup";
+import { resolveStoredBackup } from "@/lib/backup/backup-engine";
+import { AuthorizationError, requireAdmin } from "@/lib/current-user";
 import { prisma } from "@/lib/db";
+
+export const runtime = "nodejs";
 
 const PRIVATE_NO_STORE = { "Cache-Control": "private, no-store" };
 
 export async function GET(_: Request, { params }: { params: Promise<{ file: string }> }) {
   try {
     const actor = await requireAdmin();
-
     const { file } = await params;
-    const safe = path.basename(file);
-    if (!(safe.endsWith('.db') || safe.endsWith('.bak') || safe.endsWith('.tar.gz') || safe.endsWith('.json'))) {
-      return new NextResponse('Unsupported file type', { status: 400, headers: PRIVATE_NO_STORE });
-    }
-    const full = path.join(getBackupDir(), safe);
 
-    let data: Buffer;
+    let stored: Awaited<ReturnType<typeof resolveStoredBackup>>;
     try {
-      data = await fs.readFile(full);
+      stored = await resolveStoredBackup(getBackupDir(), file);
+    } catch {
+      return new NextResponse("Not found", { status: 404, headers: PRIVATE_NO_STORE });
+    }
+
+    let handle: Awaited<ReturnType<typeof fs.open>>;
+    try {
+      handle = await fs.open(stored.path, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
+      const stats = await handle.stat();
+      if (!stats.isFile() || stats.size !== stored.size || stats.dev !== stored.dev || stats.ino !== stored.ino) {
+        await handle.close();
+        return new NextResponse("Not found", { status: 404, headers: PRIVATE_NO_STORE });
+      }
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (["ENOENT", "ELOOP", "EACCES"].includes(code ?? "")) {
         return new NextResponse("Not found", { status: 404, headers: PRIVATE_NO_STORE });
       }
       throw error;
     }
-    await writeAuditLog(prisma, {
-      actorId: actor.id,
-      action: "BACKUP_DOWNLOADED",
-      target: { type: "BACKUP", id: safe },
-    });
-    return new NextResponse(new Uint8Array(data), {
+
+    try {
+      await writeAuditLog(prisma, {
+        actorId: actor.id,
+        action: "BACKUP_DOWNLOADED",
+        target: { type: "BACKUP", id: stored.file },
+      });
+    } catch (error) {
+      await handle.close().catch(() => undefined);
+      throw error;
+    }
+
+    const nodeStream = handle.createReadStream({ autoClose: true });
+    const body = Readable.toWeb(nodeStream) as ReadableStream<Uint8Array>;
+    return new NextResponse(body, {
       status: 200,
       headers: {
-        "Content-Type": "application/octet-stream",
-        "Content-Disposition": `attachment; filename=\"${safe}\"`,
+        "Content-Type": stored.contentType,
+        "Content-Length": String(stored.size),
+        "Content-Disposition": `attachment; filename="${stored.file}"`,
         ...PRIVATE_NO_STORE,
       },
     });

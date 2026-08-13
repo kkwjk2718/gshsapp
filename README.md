@@ -46,8 +46,8 @@ GSHS.app은 학교 생활에서 자주 확인하는 정보를 한곳에 모은 N
 
 ### 요구 사항
 
-- Node.js 20 이상
-- npm 10 이상
+- Node.js 24.19 이상(24.x)
+- npm 11 이상
 
 ### 설치
 
@@ -60,7 +60,11 @@ npm ci
 `.env.local` 또는 `.env`에 아래 값을 준비합니다.
 
 ```dotenv
+DATA_ROOT=
 DATABASE_URL=file:./dev.db
+BACKUP_DIR=backup
+RESTORE_ROOT=restore
+WEATHER_CACHE_PATH=weather-cache.json
 AUTH_SECRET=replace-with-long-random-secret
 AUTH_TRUST_HOST=true
 AUTH_URL=http://localhost:3000
@@ -76,6 +80,8 @@ ICAL_ALLOWED_HOSTS=calendar.google.com
 - Google Analytics는 환경 변수가 아니라 `/admin/settings`에서 관리합니다.
 - Brevo 메일 발송은 `BREVO_API_KEY`, `BREVO_SENDER_EMAIL`, `BREVO_SENDER_NAME`이 있어야 실제 동작합니다.
 - iCal 동기화는 `ICAL_ALLOWED_HOSTS`의 쉼표 구분 HTTPS 호스트만 허용하며 기본값은 `calendar.google.com`입니다.
+- 로컬 상대 SQLite 경로는 Prisma 스키마 디렉터리 아래로, 서버 경로는 명시한 `DATA_ROOT=/app/data` 아래로 제한됩니다.
+- 최초 관리자 생성은 환경에서 네 개의 `BOOTSTRAP_ADMIN_*` 값을 일회성으로 주입한 뒤 `npm run bootstrap:admin`을 실행합니다. 기존 계정은 수정하지 않습니다.
 
 ### 데이터베이스 초기화
 

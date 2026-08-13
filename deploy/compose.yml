@@ -14,6 +14,7 @@ services:
     environment:
       NODE_ENV: production
       DATA_ROOT: /app/data
+      DATABASE_URL: file:/app/data/dev.db
       TMPDIR: /tmp
       TZ: Asia/Seoul
     volumes:
@@ -46,13 +47,16 @@ services:
       HOSTNAME: 0.0.0.0
       TZ: Asia/Seoul
       TMPDIR: /tmp
-      DATA_ROOT: /app/data
       APP_VERSION: ${APP_VERSION:?APP_VERSION is required}
-      BACKUP_DIR: /app/backup
+      DATA_ROOT: /app/data
+      DATABASE_URL: file:/app/data/dev.db
+      BACKUP_DIR: /app/data/backup
+      RESTORE_ROOT: /app/data/restore
+      WEATHER_CACHE_PATH: /app/data/weather-cache.json
       BACKUP_MAX_AGE_HOURS: ${BACKUP_MAX_AGE_HOURS:-24}
     volumes:
       - ./data:/app/data:rw
-      - ./backup:/app/backup:rw
+      - ./backup:/app/data/backup:rw
     tmpfs:
       - /tmp:rw,noexec,nosuid,nodev,size=64m,uid=1001,gid=1001,mode=1700
       - /app/.next/cache:rw,noexec,nosuid,nodev,size=128m,uid=1001,gid=1001,mode=1700

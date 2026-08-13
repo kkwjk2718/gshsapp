@@ -124,6 +124,36 @@ PY
   return 1
 }
 
+create_predeployment_backup() {
+  if [[ -L "$DB_FILE" ]]; then
+    echo "Refusing to back up a symbolic-link database." >&2
+    exit 1
+  fi
+  if [[ ! -e "$DB_FILE" ]]; then
+    return
+  fi
+  if [[ ! -f "$DB_FILE" ]]; then
+    echo "The configured database is not a regular file." >&2
+    exit 1
+  fi
+
+  echo "Creating a SQLite-consistent pre-deployment backup..."
+  docker run --rm \
+    --user 1001:1001 \
+    --network none \
+    --read-only \
+    --cap-drop ALL \
+    --security-opt no-new-privileges \
+    --tmpfs /tmp:rw,noexec,nosuid,nodev,size=1536m \
+    --env DATA_ROOT=/app/data \
+    --env DATABASE_URL=file:/app/data/dev.db \
+    --env BACKUP_DIR=/app/data/backup \
+    --mount "type=bind,src=$DATA_DIR,dst=/app/data" \
+    --mount "type=bind,src=$BACKUP_DIR,dst=/app/data/backup" \
+    "$image_ref" \
+    node .next/ops/run-scheduled-backup.mjs --force
+}
+
 require_command docker
 require_command curl
 require_command "$PYTHON_BIN"
@@ -175,21 +205,7 @@ if [[ "$image_revision" != "${IMAGE_TAG#sha-}" ]]; then
   exit 1
 fi
 
-if [[ -f "$DB_FILE" ]]; then
-  timestamp="$(date '+%Y%m%d-%H%M%S')"
-  backup_file="$BACKUP_DIR/dev.db.${timestamp}.bak"
-  backup_container="gshsapp-backup-$RANDOM-$$"
-  docker run --rm --name "$backup_container" \
-    --user 1001:1001 --read-only --cap-drop ALL --security-opt no-new-privileges:true \
-    --mount "type=bind,src=$DATA_DIR,dst=/app/data,readonly" \
-    --mount "type=bind,src=$BACKUP_DIR,dst=/app/backup" \
-    --tmpfs /tmp:rw,noexec,nosuid,nodev,size=16m,uid=1001,gid=1001 \
-    --entrypoint node "$image_ref" -e \
-    'const {DatabaseSync}=require("node:sqlite");const src=process.argv[1],dst=process.argv[2],q=String.fromCharCode(39);const db=new DatabaseSync(src,{readOnly:true});db.exec("VACUUM INTO "+q+dst.replaceAll(q,q+q)+q);db.close();' \
-    "/app/data/$(basename "$DB_FILE")" "/app/backup/$(basename "$backup_file")"
-  chmod 600 "$backup_file"
-  echo "Created SQLite backup at $backup_file"
-fi
+create_predeployment_backup
 
 write_deploy_env
 echo "Applying reviewed database migrations..."

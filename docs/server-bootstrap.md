@@ -178,6 +178,12 @@ ls -la /opt/gshsapp/backup
 - `/opt/gshsapp/data/dev.db`가 라이브 SQLite 파일
 - `1235` 포트를 임시 restore drill 컨테이너에 사용할 수 있음
 - restore drill은 라이브 DB를 직접 덮어쓰지 않음
+- `/opt/gshsapp/backup`은 컨테이너의 `/app/data/backup`에 마운트
+- 서버 런타임에는 `DATA_ROOT=/app/data`, `BACKUP_DIR=/app/data/backup`, `RESTORE_ROOT=/app/data/restore` 사용
+- restore drill은 freshness 기준을 만족하는 생성 백업만 사용하며 라이브 DB 폴백을 허용하지 않음
+- 백업은 디렉터리 `0700`, 파일 `0600`으로 강제되므로 호스트의 배포/오프사이트 작업 사용자는 컨테이너 런타임 UID `1001`과 일치시키거나 운영자가 승인한 root 실행 경계를 사용해야 함
+
+최초 관리자 생성이 필요하면 정상 스키마 동기화 후 `BOOTSTRAP_ADMIN_USER_ID`, `BOOTSTRAP_ADMIN_EMAIL`, `BOOTSTRAP_ADMIN_NAME`, `BOOTSTRAP_ADMIN_PASSWORD`를 프로세스 환경으로 일회성 주입하고 `npm run bootstrap:admin`을 실행합니다. 이 명령은 강한 비밀번호만 허용하고 기존 로그인/메일과 충돌하면 아무 계정도 수정하지 않은 채 실패합니다. 실행 후 변수는 즉시 제거합니다.
 
 ## 11. 운영 VM 추가 준비 사항
 

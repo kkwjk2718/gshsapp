@@ -1,0 +1,12 @@
+title = "GSHS.app secret scanning policy"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Exact non-secret documentation and CI placeholders"
+regexTarget = "match"
+regexes = [
+  '''^ci-auth-secret$''',
+  '''^replace-with-a-long-random-secret$''',
+]

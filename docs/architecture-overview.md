@@ -163,9 +163,13 @@ Route group 기준:
 주요 파일:
 
 - `deploy/run-scheduled-backup.sh`
-- `scripts/run-scheduled-backup.mjs`
+- `scripts/run-scheduled-backup.ts` → 빌드 시 `.next/ops/run-scheduled-backup.mjs`
 - `deploy/restore-drill.sh`
 - `deploy/offsite-backup.sh`
+
+백업은 라이브 SQLite 파일 복사가 아니라 `VACUUM INTO` 스냅샷과 버전 2 manifest로 생성됩니다. 아카이브는 허용된 논리 루트, 일반 파일/디렉터리, 경로·항목 수·크기·깊이 제한, manifest SHA-256을 모두 통과해야 합니다. 웹 복원은 이 검증을 거친 보류 항목을 비공개 데이터 디렉터리에 스테이징할 뿐 라이브 DB를 교체하지 않습니다. 자동 적용은 crash-safe 오프라인 저널 설치기가 별도 검토되기 전까지 비활성화됩니다.
+
+런타임의 모든 파일 경로는 `DATA_ROOT` 아래 정적 매핑으로 계산합니다. 프로덕션 standalone 산출물은 원본 `src`, 로컬 DB, 문서, seed/repair/debug 도구, 공개 디버그 캡처를 포함할 수 없으며 빌드 후 assertion이 이를 검사합니다.
 
 ## 9. 운영 추적과 릴리스
 

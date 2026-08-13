@@ -4,9 +4,41 @@ const isProduction = process.env.NODE_ENV === "production";
 const nextConfig = {
     reactCompiler: true,
     output: "standalone",
+    outputFileTracingRoot: process.cwd(),
+    outputFileTracingIncludes: {
+        "*": [
+            "./node_modules/.prisma/client/schema.prisma",
+            "./node_modules/tar/**/*",
+        ],
+    },
+    outputFileTracingExcludes: {
+        "*": [
+            "./.git/**/*",
+            "./.github/**/*",
+            "./.worktrees/**/*",
+            "./.superpowers/**/*",
+            "./docs/**/*",
+            "./data/**/*",
+            "./e2e/**/*",
+            "./mobile-audit/**/*",
+            "./playwright-artifacts/**/*",
+            "./public/debug/**/*",
+            "./prisma/*.db",
+            "./prisma/*.db-*",
+            "./prisma/seed*",
+            "./scripts/**/*",
+            "./src/**/*.test.*",
+            "./src/**/*.ts",
+            "./src/**/*.tsx",
+            "./**/repair_user.*",
+            "./**/debug_user.*",
+            "./**/seed_admin.*",
+            "./test-neis*",
+        ],
+    },
     poweredByHeader: false,
     // Explicitly configure turbopack as empty to silence the warning
-    turbopack: {},
+    turbopack: { root: process.cwd() },
     async headers() {
         return [
             {

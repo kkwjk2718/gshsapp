@@ -7,16 +7,19 @@
     "node": ">=24.19.0 <25"
   },
   "prisma": {
-    "seed": "node prisma/seed_admin.js"
+    "seed": "tsx prisma/seed_categories.js"
   },
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "next build && npm run build:ops && npm run assert:standalone",
+    "build:ops": "node scripts/build-ops.mjs",
+    "assert:standalone": "node scripts/assert-standalone-boundary.mjs",
     "start": "next start",
     "lint": "eslint --max-warnings=0",
     "test": "vitest run",
     "test:e2e": "playwright test",
-    "test:e2e:smoke": "playwright test --grep @smoke"
+    "test:e2e:smoke": "playwright test --grep @smoke",
+    "bootstrap:admin": "tsx scripts/bootstrap-admin.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
@@ -36,7 +39,8 @@
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "sonner": "^2.0.7",
-    "tailwind-merge": "^3.4.0"
+    "tailwind-merge": "^3.4.0",
+    "tar": "7.5.19"
   },
   "devDependencies": {
     "@playwright/test": "^1.58.2",
@@ -47,6 +51,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "babel-plugin-react-compiler": "1.0.0",
+    "esbuild": "0.25.12",
     "eslint": "^9",
     "eslint-config-next": "16.3.0",
     "lightningcss": "^1.30.2",
