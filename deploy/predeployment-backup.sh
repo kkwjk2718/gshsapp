@@ -9,6 +9,8 @@ CONTAINER_NAME="${CONTAINER_NAME:-gshsapp-web}"
 PYTHON_BIN="${PYTHON_BIN:-python3}"
 DOCKER_IMAGE="${DOCKER_IMAGE:?DOCKER_IMAGE is required}"
 IMAGE_DIGEST="${IMAGE_DIGEST:?IMAGE_DIGEST is required}"
+TRUSTED_BACKUP_IMAGE_ID="${TRUSTED_BACKUP_IMAGE_ID:-}"
+TRUSTED_BACKUP_HAS_OPS="${TRUSTED_BACKUP_HAS_OPS:-false}"
 VALIDATION_ROOT=""
 BOOTSTRAP_NAME=""
 BOOTSTRAP_COMMITTED=false
@@ -48,22 +50,42 @@ if [[ ! -f "$DB_FILE" ]]; then
 fi
 
 echo "Creating a SQLite-consistent pre-deployment backup..."
-if ! docker container inspect "$CONTAINER_NAME" >/dev/null 2>&1 ||
-   [[ "$(docker container inspect --format '{{.State.Running}}' "$CONTAINER_NAME")" != "true" ]]; then
-  echo "An existing database requires an already-running trusted application container during online backup." >&2
-  echo "Restore the last known-good service or create a reviewed offline backup before deploying." >&2
+if ! remaining_web="$(docker ps --all --quiet --filter "name=^/${CONTAINER_NAME}$")"; then
+  echo "Unable to verify that the web writer is absent." >&2
+  exit 1
+fi
+if [[ -n "$remaining_web" ]]; then
+  echo "Pre-deployment backup requires the web container to be fully quiesced and removed." >&2
   exit 1
 fi
 
-if docker exec "$CONTAINER_NAME" test -f /app/.next/ops/run-scheduled-backup.mjs; then
-  # This remains the normal path after the first hardened deployment. The
-  # already-running accepted image owns live DB access and backup retention.
-  docker exec "$CONTAINER_NAME" \
+if [[ "$TRUSTED_BACKUP_HAS_OPS" == "true" ]]; then
+  if [[ ! "$TRUSTED_BACKUP_IMAGE_ID" =~ ^sha256:[a-f0-9]{64}$ ]] ||
+     ! docker image inspect "$TRUSTED_BACKUP_IMAGE_ID" >/dev/null 2>&1; then
+    echo "The captured trusted backup runtime is unavailable or invalid." >&2
+    exit 1
+  fi
+  # Re-run only the already-accepted image's root-controlled backup entrypoint
+  # after its web container is gone. No network is available and the command
+  # cannot serve requests while taking the final cutover snapshot.
+  docker run --rm \
+    --network none \
+    --read-only \
+    --cap-drop ALL \
+    --security-opt no-new-privileges \
+    --tmpfs "/tmp:rw,noexec,nosuid,nodev,size=1536m,uid=1001,gid=1001,mode=1700" \
+    --mount "type=bind,src=$DATA_DIR,dst=/app/data" \
+    --mount "type=bind,src=$BACKUP_DIR,dst=/app/data/backup" \
+    --env NODE_ENV=production \
+    --env DATA_ROOT=/app/data \
+    --env DATABASE_URL=file:/app/data/dev.db \
+    --env BACKUP_DIR=/app/data/backup \
+    "$TRUSTED_BACKUP_IMAGE_ID" \
     node /app/.next/ops/run-scheduled-backup.mjs --force
   exit 0
 fi
 
-echo "The trusted running image predates the backup runtime; using the reviewed host bootstrap path."
+echo "Using the reviewed offline host bootstrap path for a quiesced database."
 BOOTSTRAP_NAME="$(
   "$PYTHON_BIN" "$DEPLOY_ROOT/bootstrap-backup.py" create \
     --database "$DB_FILE" \

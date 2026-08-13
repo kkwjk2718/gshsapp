@@ -66,6 +66,33 @@ describe("safe backup engine", () => {
     );
   });
 
+  it("syncs the backup directory after archive and metadata publication", async () => {
+    const root = await makeRoot();
+    const backupDir = path.join(root, "backup");
+    const liveDatabase = path.join(root, "live.db");
+    await fs.writeFile(liveDatabase, "live");
+    const publicationStates: string[][] = [];
+
+    await createSafeBackup({
+      backupDir,
+      databasePath: liveDatabase,
+      databaseClient: { $executeRawUnsafe: vi.fn() },
+      snapshot: async (_client, destination) => fs.writeFile(destination, Buffer.from("SQLite format 3\0snapshot")),
+      validateArchive: vi.fn(),
+      now: () => new Date("2026-08-13T01:02:03.000Z"),
+      randomSuffix: () => "facefeed",
+      contentRoots: new Map(),
+      syncDirectory: async (directory) => {
+        publicationStates.push((await fs.readdir(directory)).filter((name) => name.startsWith("backup-")).sort());
+      },
+    });
+
+    expect(publicationStates).toEqual([
+      ["backup-20260813-010203-facefeed.tar.gz"],
+      ["backup-20260813-010203-facefeed.tar.gz", "backup-20260813-010203-facefeed.tar.gz.json"],
+    ]);
+  });
+
   it("rejects a configured content root that is not a directory", async () => {
     const root = await makeRoot();
     const content = path.join(root, "uploads");
@@ -248,6 +275,7 @@ describe("safe backup engine", () => {
     const previous = "backup-20260802-000000-a1b2c3d4.tar.gz";
     await writeBackupPair(backupDir, oldest, new Date("2026-08-01T00:00:00.000Z"));
     await writeBackupPair(backupDir, previous, new Date("2026-08-02T00:00:00.000Z"));
+    const durableStates: string[][] = [];
     const common = {
       backupDir,
       databasePath: liveDatabase,
@@ -256,6 +284,7 @@ describe("safe backup engine", () => {
       contentRoots: new Map(),
       now: () => new Date("2026-08-13T00:00:00.000Z"),
       getAvailableBytes: async () => 1024 * 1024 * 1024,
+      syncDirectory: async () => { durableStates.push(await directoryNames(backupDir)); },
       retention: {
         minimumGenerations: 2,
         maximumGenerations: 2,
@@ -270,6 +299,7 @@ describe("safe backup engine", () => {
       randomSuffix: () => "deadbeef",
       validateArchive: async () => { throw new Error("invalid new archive"); },
     })).rejects.toThrow("invalid new archive");
+    expect(durableStates).toHaveLength(0);
     expect(await directoryNames(backupDir)).toEqual(expect.arrayContaining([oldest, `${oldest}.json`, previous, `${previous}.json`]));
 
     await createSafeBackup({
@@ -286,6 +316,8 @@ describe("safe backup engine", () => {
       "backup-20260813-000000-cafebabe.tar.gz",
       "backup-20260813-000000-cafebabe.tar.gz.json",
     ]));
+    expect(durableStates).toHaveLength(3);
+    expect(durableStates[2]).not.toContain(oldest);
   });
 
   it("enforces age and total-byte limits without deleting the newest or minimum generations", async () => {

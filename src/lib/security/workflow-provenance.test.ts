@@ -100,9 +100,11 @@ describe("deployment workflow provenance boundaries", () => {
     const backup = await source("deploy/predeployment-backup.sh");
 
     expect(deploy).toContain("predeployment-backup.sh");
-    expect(backup).toContain('docker exec "$CONTAINER_NAME"');
+    expect(deploy).toContain('remove_web_container "pre-migration"');
+    expect(backup).toContain('"$TRUSTED_BACKUP_IMAGE_ID"');
     expect(backup).toContain("--network none");
     expect(backup).toContain("/input/bootstrap.tar.gz,readonly");
-    expect(backup).not.toContain("dst=/app/data");
+    const candidateValidation = backup.slice(backup.indexOf("# The candidate receives only"));
+    expect(candidateValidation).not.toContain("dst=/app/data");
   });
 });

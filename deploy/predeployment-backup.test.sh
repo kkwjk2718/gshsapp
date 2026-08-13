@@ -27,26 +27,24 @@ set -Eeuo pipefail
 printf '%q ' "$@" >>"$DOCKER_LOG"
 printf '\n' >>"$DOCKER_LOG"
 
-if [[ "${1:-}" == "container" && "${2:-}" == "inspect" ]]; then
-  if [[ " $* " == *" --format "* ]]; then
-    printf 'true\n'
-  fi
-  exit 0
+if [[ "${1:-}" == "ps" && "${2:-}" == "--all" ]]; then
+  [[ "${DOCKER_API_FAIL:-0}" != "1" ]] || exit 70
+  if [[ "${WEB_PRESENT:-0}" == "1" ]]; then printf '%s\n' "web-container-id"; fi
+  exit
 fi
 
-if [[ "${1:-}" == "exec" ]]; then
-  if [[ " $* " == *" test -f /app/.next/ops/run-scheduled-backup.mjs "* ]]; then
-    [[ "${OLD_HAS_OPS:-0}" == "1" ]]
-    exit
-  fi
-  if [[ " $* " == *" node /app/.next/ops/run-scheduled-backup.mjs --force "* ]]; then
-    [[ "${OLD_HAS_OPS:-0}" == "1" ]] || exit 90
-    exit 0
-  fi
-  exit 91
+if [[ "${1:-}" == "image" && "${2:-}" == "inspect" ]]; then
+  [[ "${TRUSTED_IMAGE_PRESENT:-0}" == "1" ]]
+  exit
 fi
 
 if [[ "${1:-}" == "run" ]]; then
+  if [[ " $* " == *" node /app/.next/ops/run-scheduled-backup.mjs --force "* ]]; then
+    [[ "${TRUSTED_IMAGE_PRESENT:-0}" == "1" ]]
+    [[ " $* " == *" --network none "* ]]
+    [[ " $* " == *" $TRUSTED_BACKUP_IMAGE_ID "* ]]
+    exit
+  fi
   [[ "${FAIL_VALIDATION:-0}" != "1" ]] || exit 92
   [[ " $* " == *" --network none "* ]]
   [[ " $* " == *" --read-only "* ]]
@@ -117,23 +115,25 @@ bash "$REPO_ROOT/deploy/predeployment-backup.sh"
 [[ "$(find "$BACKUP_DIR" -maxdepth 1 -type f -name 'backup-*.tar.gz.json' | wc -l)" -eq 1 ]]
 grep -q '^run ' "$DOCKER_LOG"
 if grep -q 'run-scheduled-backup.mjs --force' "$DOCKER_LOG"; then
-  echo "Legacy bootstrap unexpectedly used a missing trusted-container operation." >&2
+  echo "Offline bootstrap unexpectedly used a missing trusted runtime." >&2
   exit 1
 fi
 
 BACKUP_DIR="$TEST_ROOT/trusted-success"
 DOCKER_LOG="$TEST_ROOT/trusted-success.log"
-OLD_HAS_OPS=1
-export BACKUP_DIR DOCKER_LOG OLD_HAS_OPS
+TRUSTED_IMAGE_PRESENT=1
+TRUSTED_BACKUP_HAS_OPS=true
+TRUSTED_BACKUP_IMAGE_ID="sha256:$(printf 'b%.0s' {1..64})"
+export BACKUP_DIR DOCKER_LOG TRUSTED_IMAGE_PRESENT TRUSTED_BACKUP_HAS_OPS TRUSTED_BACKUP_IMAGE_ID
 mkdir -p "$BACKUP_DIR"
 bash "$REPO_ROOT/deploy/predeployment-backup.sh"
 [[ -z "$(find "$BACKUP_DIR" -maxdepth 1 -type f -print -quit)" ]]
 grep -q 'run-scheduled-backup.mjs --force' "$DOCKER_LOG"
-if grep -q '^run ' "$DOCKER_LOG"; then
-  echo "Trusted-container backup unexpectedly used the bootstrap validator." >&2
+if grep -q 'validate-backup.mjs' "$DOCKER_LOG"; then
+  echo "Trusted offline backup unexpectedly used the bootstrap validator." >&2
   exit 1
 fi
-unset OLD_HAS_OPS
+unset TRUSTED_IMAGE_PRESENT TRUSTED_BACKUP_HAS_OPS TRUSTED_BACKUP_IMAGE_ID
 
 BACKUP_DIR="$TEST_ROOT/validation-failure"
 DOCKER_LOG="$TEST_ROOT/validation-failure.log"
@@ -146,5 +146,28 @@ if bash "$REPO_ROOT/deploy/predeployment-backup.sh" >"$TEST_ROOT/validation-fail
 fi
 grep -q "Isolated bootstrap backup validation failed" "$TEST_ROOT/validation-failure.output"
 [[ -z "$(find "$BACKUP_DIR" -mindepth 1 -maxdepth 1 -print -quit)" ]]
+
+BACKUP_DIR="$TEST_ROOT/running-writer-rejected"
+DOCKER_LOG="$TEST_ROOT/running-writer-rejected.log"
+WEB_PRESENT=1
+export BACKUP_DIR DOCKER_LOG WEB_PRESENT
+mkdir -p "$BACKUP_DIR"
+if bash "$REPO_ROOT/deploy/predeployment-backup.sh" >"$TEST_ROOT/running-writer.output" 2>&1; then
+  echo "A remaining web container must abort the final backup." >&2
+  exit 1
+fi
+grep -q "fully quiesced and removed" "$TEST_ROOT/running-writer.output"
+
+BACKUP_DIR="$TEST_ROOT/docker-api-failure"
+DOCKER_LOG="$TEST_ROOT/docker-api-failure.log"
+DOCKER_API_FAIL=1
+unset WEB_PRESENT
+export BACKUP_DIR DOCKER_LOG DOCKER_API_FAIL
+mkdir -p "$BACKUP_DIR"
+if bash "$REPO_ROOT/deploy/predeployment-backup.sh" >"$TEST_ROOT/docker-api-failure.output" 2>&1; then
+  echo "A Docker API failure must not be treated as writer absence." >&2
+  exit 1
+fi
+grep -q "Unable to verify that the web writer is absent" "$TEST_ROOT/docker-api-failure.output"
 
 echo "Pre-deployment backup integration checks passed."

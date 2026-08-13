@@ -94,7 +94,7 @@
 **Files:** `Dockerfile`, `docker-entrypoint.sh`, `deploy/**`, `.github/workflows/**`, `.env.example`, deployment/security docs and validation scripts.
 
 1. Use supported Node 24, digest-pinnable image references, non-root read-only runtime, dropped capabilities, `no-new-privileges`, bounded resources, tmpfs/cache and a real healthcheck.
-2. Remove schema push from every restart; deployment performs a private backup, one controlled schema sync, health verification and automatic rollback.
+2. Remove schema push from every restart; deployment performs a private backup, fully quiesces the old web writer, applies one controlled schema sync and verifies health. After migration starts, failure stays offline instead of running an old binary against the new schema.
 3. Scope workflow permissions by job, validate exact 40-hex commit identity, propagate/verify image digest, avoid mutable-tag trust and keep deploy secrets out of untrusted jobs.
 4. Default bind to loopback; reject wildcard binds unless an explicit unsafe override is set. Add an idempotent dry-run host-hardening script that requires proxy source, SSH key user and private/interface addresses before applying UFW/SSH restrictions.
 5. Enforce private backup permissions, freshness monitoring, restore drills and offsite configuration. Add exact DMARC enforcement, SPF hard-fail, CAA and DNSSEC runbook records.

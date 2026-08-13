@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 import { BACKUP_ARCHIVE_LIMITS } from "./archive-policy";
+import { syncDirectory as syncDirectoryEntry } from "./fs-durability";
 
 const GENERATED_BACKUP_NAME = /^backup-\d{8}-\d{6}-[a-f0-9]{8}\.tar\.gz$/u;
 const GENERATED_BACKUP_METADATA_NAME = /^backup-\d{8}-\d{6}-[a-f0-9]{8}\.tar\.gz\.json$/u;
@@ -208,9 +209,11 @@ export async function cleanupStaleBackupWork(
   backupDir: string,
   policy: BackupRetentionPolicy,
   now: Date,
+  syncDirectory: (directory: string) => Promise<void> = syncDirectoryEntry,
 ) {
   const entries = await fs.readdir(backupDir, { withFileTypes: true });
   const names = new Set(entries.map((entry) => entry.name));
+  let removed = false;
   for (const entry of entries) {
     const isWorkDirectory = STALE_WORK_DIRECTORY.test(entry.name);
     const isPartialFile = STALE_PARTIAL_FILE.test(entry.name);
@@ -229,7 +232,9 @@ export async function cleanupStaleBackupWork(
     if (!sameIdentity(expected, current)) continue;
     if (isWorkDirectory) await fs.rm(target, { recursive: true });
     else await fs.unlink(target);
+    removed = true;
   }
+  if (removed) await syncDirectory(backupDir);
 }
 
 function strictTimestamp(value: unknown) {
@@ -289,6 +294,7 @@ export async function pruneBackupGenerations(input: Readonly<{
   protectedFile?: string;
   policy: BackupRetentionPolicy;
   now: Date;
+  syncDirectory?: (directory: string) => Promise<void>;
 }>) {
   if (input.protectedFile !== undefined && !GENERATED_BACKUP_NAME.test(input.protectedFile)) {
     throw new BackupLifecycleError("UNSAFE_BACKUP_SOURCE");
@@ -312,5 +318,6 @@ export async function pruneBackupGenerations(input: Readonly<{
     totalBytes -= generation.totalBytes;
     deleted.push(generation.file);
   }
+  if (deleted.length > 0) await (input.syncDirectory ?? syncDirectoryEntry)(input.backupDir);
   return { deleted, retained: survivors.size, retainedBytes: totalBytes };
 }

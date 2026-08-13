@@ -5,6 +5,7 @@ import { lock as lockFile } from "proper-lockfile";
 
 import { extractAndVerifyBackupArchive, type InspectedBackupArchive } from "./archive-io";
 import { validateSqliteDatabase } from "./sqlite-snapshot";
+import { syncDirectory } from "./fs-durability";
 
 const DEFAULT_MAX_UPLOAD_BYTES = 128 * 1024 * 1024;
 const HARD_MAX_UPLOAD_BYTES = 512 * 1024 * 1024;
@@ -228,6 +229,7 @@ async function removeOpaqueStageDirectory(restoreRoot: string, id: string) {
   const current = await fs.lstat(directory);
   if (!sameIdentity(expected, current)) throw new RestoreStagingError("STAGING_FAILED");
   await fs.rm(directory, { recursive: true });
+  await syncDirectory(path.join(restoreRoot, "staged"));
 }
 
 async function consumeExpiredPending(restoreRoot: string, now: Date) {
@@ -247,6 +249,7 @@ async function consumeExpiredPending(restoreRoot: string, now: Date) {
     throw new RestoreStagingError("STAGING_FAILED");
   }
   await fs.unlink(pendingPath);
+  await syncDirectory(restoreRoot);
 }
 
 async function removeStaleLegacyFileLock(lockPath: string) {
@@ -267,6 +270,7 @@ async function removeStaleLegacyFileLock(lockPath: string) {
   }
   try {
     await fs.unlink(lockPath);
+    await syncDirectory(path.dirname(lockPath));
   } catch (error) {
     if (["EISDIR", "EPERM", "ENOENT"].includes((error as NodeJS.ErrnoException).code ?? "")) {
       throw new RestoreStagingError("RESTORE_PENDING");
@@ -348,6 +352,7 @@ export async function cancelPendingRestore(options: Readonly<{
       throw new RestoreStagingError("STAGING_FAILED");
     }
     await fs.unlink(pendingPath);
+    await syncDirectory(restoreRoot);
     return descriptor;
   } finally {
     await lock.release();
@@ -390,6 +395,7 @@ export async function stageRestoreUpload(options: StageRestoreUploadOptions): Pr
     await fs.chmod(restoreRoot, 0o700).catch(() => { throw new RestoreStagingError("STAGING_FAILED"); });
     await fs.chmod(path.join(restoreRoot, "staged"), 0o700).catch(() => { throw new RestoreStagingError("STAGING_FAILED"); });
   }
+  await syncDirectory(restoreRoot).catch(() => { throw new RestoreStagingError("STAGING_FAILED"); });
   const lock = await acquireRestoreLock(restoreRoot);
 
   let stageDirectory: string | null = null;
@@ -402,6 +408,7 @@ export async function stageRestoreUpload(options: StageRestoreUploadOptions): Pr
     const partialPath = path.join(stageDirectory, "artifact.partial");
     const artifactPath = path.join(stageDirectory, `artifact.${format}`);
     await fs.mkdir(stageDirectory, { mode: 0o700 });
+    await syncDirectory(path.join(restoreRoot, "staged"));
     const artifactHandle = await fs.open(partialPath, "wx", 0o600);
     const reader = options.body.getReader();
     const hash = createHash("sha256");
@@ -429,6 +436,7 @@ export async function stageRestoreUpload(options: StageRestoreUploadOptions): Pr
     }
 
     await fs.rename(partialPath, artifactPath);
+    await syncDirectory(stageDirectory);
     await assertMagic(artifactPath, format);
 
     let roots: readonly string[] = ["database"];
@@ -471,10 +479,14 @@ export async function stageRestoreUpload(options: StageRestoreUploadOptions): Pr
     } finally {
       await descriptorHandle.close();
     }
+    await syncDirectory(restoreRoot);
     descriptorCommitted = true;
     return { id, format, bytes, sha256, expiresAt: descriptor.expiresAt };
   } catch (error) {
-    if (!descriptorCommitted && stageDirectory) await fs.rm(stageDirectory, { recursive: true, force: true }).catch(() => undefined);
+    if (!descriptorCommitted && stageDirectory) {
+      await fs.rm(stageDirectory, { recursive: true, force: true }).catch(() => undefined);
+      await syncDirectory(path.join(restoreRoot, "staged")).catch(() => undefined);
+    }
     if (error instanceof RestoreStagingError) throw error;
     if ((error as NodeJS.ErrnoException).code === "EEXIST") throw new RestoreStagingError("RESTORE_PENDING");
     throw new RestoreStagingError("STAGING_FAILED");

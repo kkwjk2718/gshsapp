@@ -62,14 +62,18 @@
 
 1. Docker Compose 사용 가능 여부 확인
 2. `data/`, `backup/` 디렉터리 준비
-3. 임시 `.deploy.env` 생성
-4. 필요 시 Docker Hub 로그인
-5. GitHub-hosted prepare job이 승인한 digest로 이미지를 pull하고 revision label을 보조 검증
-6. 기존 SQLite DB는 현재 실행 중인 마지막 신뢰 컨테이너 내부의 snapshot 엔진으로 일관된 사전 백업 생성. 단, 그 구형 컨테이너에 ops 런타임이 아직 없는 최초 강화 배포는 검토된 호스트 Python online-backup으로 DB 전용 v2 쌍을 만들고, 후보 이미지는 네트워크 없이 그 아카이브만 읽어 격리 마이그레이션 검증(후보에 라이브 DB·data root·runtime secret을 마운트하지 않음)
-7. 검토된 Prisma migration을 일회성 컨테이너에서 적용
-8. `docker compose up -d --remove-orphans --wait web`
-9. `/api/health` 버전 응답 확인
-10. 실패 시 이전 digest의 애플리케이션만 롤백(DB 자동 복원 금지)
+3. 필요 시 Docker Hub 로그인
+4. GitHub-hosted prepare job이 승인한 digest로 이미지를 pull하고 revision label을 보조 검증
+5. 기존 Compose web의 이름·상태와 immutable image ID를 캡처하고, backup ops 런타임 보유 여부를 확인
+6. 기존 web 컨테이너를 정지·삭제하고 부재를 검증하여 SQLite writer를 완전히 quiesce
+7. 직전에 승인되어 실행 중이던 image ID의 backup ops를 네트워크 없는 one-shot 컨테이너로 실행하여 마지막 쓰기까지 포함한 최종 스냅샷 생성. 구형 image에 ops가 없거나 이전 실패로 web이 이미 없으면 검토된 호스트 Python SQLite backup으로 DB 전용 v2 쌍을 만들고, 후보 이미지는 네트워크 없이 그 아카이브만 읽어 격리 마이그레이션 검증(후보에 라이브 DB·data root·runtime secret을 마운트하지 않음)
+8. 후보 digest의 `.deploy.env`를 원자적으로 기록
+9. 검토된 Prisma migration을 일회성 컨테이너에서 적용
+10. `docker compose up -d --remove-orphans --wait web`
+11. `/api/health` 버전·digest 응답 확인
+12. migration 시작 뒤 실패하면 후보를 제거하고 서비스를 offline 상태로 유지
+
+스키마 전환이 시작된 뒤 구 바이너리만 자동 롤백하지 않습니다. 구 바이너리가 새 스키마에 legacy 데이터를 다시 쓰는 것을 막기 위한 의도적인 유지보수 경계입니다. 실패 시 검증된 사전 백업을 별도 복구 절차로 복원하거나, 같은/새로운 강화 후보의 migration과 health를 다시 통과시켜야 합니다. `docker compose up`으로 과거 digest를 임의 재시작하면 안 됩니다.
 
 ## `deploy.sh` 주요 환경 변수
 
@@ -147,7 +151,7 @@ Runner labels:
 - private registry 자격증명이 필요한 경우에도 배포/복원 스크립트는 `0700` 임시 `DOCKER_CONFIG`만 사용하고 종료 시 삭제합니다. publish 권한 토큰을 runner의 기본 `~/.docker/config.json`에 남기지 않습니다.
 - SQLite를 사용하므로 대규모 변경 전에는 백업 상태를 먼저 확인합니다.
 
-백업 보존은 완전한 archive/metadata 쌍을 세대 단위로 다루며 새 백업이 검증·영속화된 뒤에만 실행됩니다. manual, scheduled, 일반 pre-deployment가 다른 Node process에서 겹쳐도 backup directory의 원자적 lock directory와 heartbeat lease를 획득한 한 writer만 전체 생명주기를 수행하고 나머지는 `BACKUP_BUSY`로 중단합니다. 최초 강화 배포의 호스트 bootstrap은 바깥의 `.deploy.lock`으로 정기 작업과 직렬화되고 보존 삭제를 수행하지 않으며, 고유 이름의 DB-only 쌍을 완전히 검증한 뒤에만 남깁니다. 기본값은 최소 3세대, 최대 30세대, 90일, 총 20 GiB이고 최신 검증 세대와 최소 세대 수가 age/bytes 제한보다 우선합니다. 생성 전에는 DB와 선택된 content root를 기준으로 snapshot+archive 동시 점유량과 256 MiB reserve를 보수적으로 검사합니다. 24시간이 지난 정해진 이름의 `.create-*`, `.partial`, unpaired archive/metadata만 일반 파일·디렉터리와 inode를 재검증한 뒤 정리합니다.
+백업 보존은 완전한 archive/metadata 쌍을 세대 단위로 다루며 새 백업 파일과 metadata의 rename 뒤 각각 backup directory까지 `fsync`하여 검증·영속화된 뒤에만 실행됩니다. prune/cleanup의 unlink 뒤에도 directory를 `fsync`합니다. manual, scheduled, 일반 pre-deployment가 다른 Node process에서 겹쳐도 backup directory의 원자적 lock directory와 heartbeat lease를 획득한 한 writer만 전체 생명주기를 수행하고 나머지는 `BACKUP_BUSY`로 중단합니다. 최초 강화 배포의 호스트 bootstrap은 바깥의 `.deploy.lock`으로 정기 작업과 직렬화되고 보존 삭제를 수행하지 않으며, 고유 이름의 DB-only 쌍을 완전히 검증한 뒤에만 남깁니다. 기본값은 최소 3세대, 최대 30세대, 90일, 총 20 GiB이고 최신 검증 세대와 최소 세대 수가 age/bytes 제한보다 우선합니다. 생성 전에는 DB와 선택된 content root를 기준으로 snapshot+archive 동시 점유량과 256 MiB reserve를 보수적으로 검사합니다. 24시간이 지난 정해진 이름의 `.create-*`, `.partial`, unpaired archive/metadata만 일반 파일·디렉터리와 inode를 재검증한 뒤 정리합니다.
 
 ## 복원 리허설
 

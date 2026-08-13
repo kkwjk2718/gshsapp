@@ -17,6 +17,7 @@ import {
 } from "./backup-retention";
 import { copyRegularFileExclusive } from "./private-copy";
 import { createSqliteSnapshot, type SqliteSnapshotClient } from "./sqlite-snapshot";
+import { syncDirectory as syncDirectoryEntry } from "./fs-durability";
 
 const GENERATED_BACKUP_NAME = /^backup-\d{8}-\d{6}-[a-f0-9]{8}\.tar\.gz$/u;
 const GENERATED_BACKUP_METADATA_NAME = /^backup-\d{8}-\d{6}-[a-f0-9]{8}\.tar\.gz\.json$/u;
@@ -54,6 +55,7 @@ export type CreateSafeBackupOptions = Readonly<{
   reason?: string;
   retention?: Partial<BackupRetentionPolicy>;
   getAvailableBytes?: (directory: string) => Promise<number>;
+  syncDirectory?: (directory: string) => Promise<void>;
 }>;
 
 async function hashFile(file: string) {
@@ -179,8 +181,9 @@ async function createSafeBackupUnderLease(
   if (!Number.isFinite(now.getTime()) || !/^[a-f0-9]{8}$/u.test(suffix)) throw new Error("Invalid backup identity");
   const retention = resolveBackupRetentionPolicy(options.retention);
   const contentRoots = options.contentRoots ?? new Map();
+  const syncDirectory = options.syncDirectory ?? syncDirectoryEntry;
   assertLeaseOwned();
-  await cleanupStaleBackupWork(backupDir, retention, now);
+  await cleanupStaleBackupWork(backupDir, retention, now, syncDirectory);
   const capacityInput = {
     backupDir,
     databasePath: options.databasePath,
@@ -193,7 +196,7 @@ async function createSafeBackupUnderLease(
   } catch (error) {
     if (!(error instanceof BackupLifecycleError) || error.code !== "INSUFFICIENT_SPACE") throw error;
     assertLeaseOwned();
-    await pruneBackupGenerations({ backupDir, policy: retention, now });
+    await pruneBackupGenerations({ backupDir, policy: retention, now, syncDirectory });
     await assertBackupCapacity(capacityInput);
   }
   const work = await fs.mkdtemp(path.join(backupDir, ".create-"));
@@ -242,6 +245,7 @@ async function createSafeBackupUnderLease(
     const artifactHandle = await fs.open(partial, "r+");
     try { await artifactHandle.sync(); } finally { await artifactHandle.close(); }
     await fs.rename(partial, target);
+    await syncDirectory(backupDir);
 
     const size = (await fs.stat(target)).size;
     const metadata = {
@@ -262,8 +266,9 @@ async function createSafeBackupUnderLease(
     }
     assertLeaseOwned();
     await fs.rename(metadataPartial, metadataTarget);
+    await syncDirectory(backupDir);
     assertLeaseOwned();
-    await pruneBackupGenerations({ backupDir, protectedFile: file, policy: retention, now });
+    await pruneBackupGenerations({ backupDir, protectedFile: file, policy: retention, now, syncDirectory });
     return metadata;
   } finally {
     await fs.rm(work, { recursive: true, force: true });

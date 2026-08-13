@@ -13,6 +13,21 @@ describe("deployment backup boundaries", () => {
     expect(script).not.toMatch(/\bcp\s+["']?\$DB_FILE/u);
   });
 
+  it("removes the legacy web before migration and never rolls an old binary onto the new schema", async () => {
+    const script = await source("deploy/deploy.sh");
+    const capture = script.lastIndexOf("capture_trusted_backup_runtime");
+    const quiesce = script.lastIndexOf("remove_web_container \"pre-migration\"");
+    const backup = script.lastIndexOf("create_predeployment_backup");
+    const migration = script.indexOf("compose run --rm --no-deps migrate");
+    expect(capture).toBeGreaterThan(-1);
+    expect(quiesce).toBeGreaterThan(capture);
+    expect(backup).toBeGreaterThan(quiesce);
+    expect(migration).toBeGreaterThan(backup);
+    expect(script).not.toContain("rollback_application");
+    expect(script).toContain('remove_web_container "candidate-failure"');
+    expect(script).toContain("Pre-migration application rollback is disabled after schema transition begins");
+  });
+
   it("mounts every mutable backup path below the configured data root", async () => {
     const compose = await source("deploy/compose.yml");
     expect(compose).toContain("DATA_ROOT: /app/data");

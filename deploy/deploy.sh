@@ -31,6 +31,8 @@ SMOKE_TIMEOUT_SECONDS="${SMOKE_TIMEOUT_SECONDS:-90}"
 SMOKE_INTERVAL_SECONDS="${SMOKE_INTERVAL_SECONDS:-3}"
 PYTHON_BIN="${PYTHON_BIN:-python3}"
 TEMP_DOCKER_CONFIG=""
+TRUSTED_BACKUP_IMAGE_ID=""
+TRUSTED_BACKUP_HAS_OPS="false"
 
 cleanup_deploy_secrets() {
   if [[ -n "$TEMP_DOCKER_CONFIG" && "$TEMP_DOCKER_CONFIG" == "$DEPLOY_ROOT"/.docker-config.* &&
@@ -72,37 +74,53 @@ EOF
   mv -f "$temporary_env" "$DEPLOY_ENV_FILE"
 }
 
-read_deploy_env_value() {
-  local key="$1"
-  local file="$2"
-  sed -n "s/^${key}=//p" "$file" | tail -n 1
-}
+remove_web_container() {
+  local reason="$1"
+  local -a web_container_ids=()
+  local web_output named_output remaining_output
+  if ! web_output="$(docker ps --all --quiet \
+      --filter "label=com.docker.compose.project=$PROJECT_NAME" \
+      --filter "label=com.docker.compose.service=web")"; then
+    echo "Unable to enumerate Compose web containers; refusing deployment mutation." >&2
+    return 1
+  fi
+  if [[ -n "$web_output" ]]; then mapfile -t web_container_ids <<<"$web_output"; fi
 
-rollback_application() {
-  if [[ -z "${previous_env:-}" || ! -f "$previous_env" ]]; then
-    echo "No digest-pinned previous deployment is available for automatic application rollback." >&2
+  if (( ${#web_container_ids[@]} > 1 )); then
+    echo "Refusing to mutate multiple web containers for project $PROJECT_NAME." >&2
+    return 1
+  fi
+  if (( ${#web_container_ids[@]} == 0 )); then
+    if ! named_output="$(docker ps --all --quiet --filter "name=^/${CONTAINER_NAME}$")"; then
+      echo "Unable to verify the configured container name is unused." >&2
+      return 1
+    fi
+    if [[ -n "$named_output" ]]; then
+      echo "Container $CONTAINER_NAME exists outside the expected Compose project/service labels." >&2
+      return 1
+    fi
+    return 0
+  fi
+
+  local container_id="${web_container_ids[0]}"
+  local container_name
+  container_name="$(docker inspect --format '{{.Name}}' "$container_id")"
+  if [[ "$container_name" != "/$CONTAINER_NAME" ]]; then
+    echo "Compose web container name does not match the reviewed deployment identity." >&2
     return 1
   fi
 
-  local old_tag old_digest old_image old_version old_bind old_port old_container old_backup_age
-  old_tag="$(read_deploy_env_value IMAGE_TAG "$previous_env")"
-  old_digest="$(read_deploy_env_value IMAGE_DIGEST "$previous_env")"
-  old_image="$(read_deploy_env_value DOCKER_IMAGE "$previous_env")"
-  old_version="$(read_deploy_env_value APP_VERSION "$previous_env")"
-  old_bind="$(read_deploy_env_value HOST_BIND_IP "$previous_env")"
-  old_port="$(read_deploy_env_value HOST_PORT "$previous_env")"
-  old_container="$(read_deploy_env_value CONTAINER_NAME "$previous_env")"
-  old_backup_age="$(read_deploy_env_value BACKUP_MAX_AGE_HOURS "$previous_env")"
-
-  IMAGE_TAG="$old_tag" IMAGE_DIGEST="$old_digest" DOCKER_IMAGE="$old_image" APP_VERSION="$old_version" \
-  HOST_BIND_IP="$old_bind" HOST_PORT="$old_port" CONTAINER_NAME="$old_container" \
-  BACKUP_MAX_AGE_HOURS="$old_backup_age"
-  export IMAGE_TAG IMAGE_DIGEST DOCKER_IMAGE APP_VERSION HOST_BIND_IP HOST_PORT CONTAINER_NAME BACKUP_MAX_AGE_HOURS
-  validate_deploy_identity
-  validate_bind_policy
-  cp "$previous_env" "$DEPLOY_ENV_FILE"
-  compose pull web
-  compose up -d --remove-orphans --wait web
+  echo "Quiescing and removing web container for $reason..."
+  docker stop --time 30 "$container_id"
+  docker rm "$container_id"
+  if ! remaining_output="$(docker ps --all --quiet --filter "id=$container_id")"; then
+    echo "Unable to verify web container removal." >&2
+    return 1
+  fi
+  if [[ -n "$remaining_output" ]]; then
+    echo "Web container remained present after quiescence." >&2
+    return 1
+  fi
 }
 
 wait_for_health() {
@@ -145,9 +163,62 @@ create_predeployment_backup() {
   PYTHON_BIN="$PYTHON_BIN" \
   DOCKER_IMAGE="$DOCKER_IMAGE" \
   IMAGE_DIGEST="$IMAGE_DIGEST" \
+  TRUSTED_BACKUP_IMAGE_ID="$TRUSTED_BACKUP_IMAGE_ID" \
+  TRUSTED_BACKUP_HAS_OPS="$TRUSTED_BACKUP_HAS_OPS" \
     "$DEPLOY_ROOT/predeployment-backup.sh"
 }
 
+capture_trusted_backup_runtime() {
+  local -a web_container_ids=()
+  local web_output named_output
+  if ! web_output="$(docker ps --all --quiet \
+      --filter "label=com.docker.compose.project=$PROJECT_NAME" \
+      --filter "label=com.docker.compose.service=web")"; then
+    echo "Unable to enumerate the current Compose web container." >&2
+    return 1
+  fi
+  if [[ -n "$web_output" ]]; then mapfile -t web_container_ids <<<"$web_output"; fi
+  if (( ${#web_container_ids[@]} > 1 )); then
+    echo "Refusing to trust multiple web containers for pre-deployment backup." >&2
+    return 1
+  fi
+  if (( ${#web_container_ids[@]} == 0 )); then
+    if ! named_output="$(docker ps --all --quiet --filter "name=^/${CONTAINER_NAME}$")"; then
+      echo "Unable to verify the configured container name is unused." >&2
+      return 1
+    fi
+    if [[ -n "$named_output" ]]; then
+      echo "Container $CONTAINER_NAME exists outside the expected Compose identity." >&2
+      return 1
+    fi
+    return 0
+  fi
+
+  local container_id="${web_container_ids[0]}"
+  local container_name running
+  container_name="$(docker inspect --format '{{.Name}}' "$container_id")"
+  running="$(docker inspect --format '{{.State.Running}}' "$container_id")"
+  if [[ "$container_name" != "/$CONTAINER_NAME" ]]; then
+    echo "The existing Compose web container has an unexpected name." >&2
+    return 1
+  fi
+  if [[ "$running" != "true" ]]; then
+    # A prior interrupted deployment may have already stopped the expected
+    # writer. Do not execute that image; remove it and use the reviewed offline
+    # host snapshot path so a retry remains recoverable.
+    return 0
+  fi
+  TRUSTED_BACKUP_IMAGE_ID="$(docker inspect --format '{{.Image}}' "$container_id")"
+  if [[ ! "$TRUSTED_BACKUP_IMAGE_ID" =~ ^sha256:[a-f0-9]{64}$ ]]; then
+    echo "Existing web container has an invalid immutable image identity." >&2
+    return 1
+  fi
+  if docker exec "$container_id" test -f /app/.next/ops/run-scheduled-backup.mjs; then
+    TRUSTED_BACKUP_HAS_OPS="true"
+  fi
+}
+
+deploy_main() {
 require_command docker
 require_command curl
 require_command "$PYTHON_BIN"
@@ -176,14 +247,6 @@ if ! flock -n 9; then
   echo "Another deployment or backup operation is already running." >&2
   exit 1
 fi
-previous_env=""
-had_previous_env=false
-if [[ -f "$DEPLOY_ENV_FILE" ]]; then
-  had_previous_env=true
-  previous_env="$(mktemp "$DEPLOY_ROOT/.deploy.env.previous.XXXXXX")"
-  cp --preserve=mode "$DEPLOY_ENV_FILE" "$previous_env"
-fi
-
 if [[ -n "${DOCKERHUB_USERNAME:-}" && -n "${DOCKERHUB_TOKEN:-}" ]]; then
   echo "Logging into Docker Hub..."
   TEMP_DOCKER_CONFIG="$(mktemp -d "$DEPLOY_ROOT/.docker-config.XXXXXX")"
@@ -208,24 +271,24 @@ if [[ "$image_revision" != "${IMAGE_TAG#sha-}" ]]; then
   exit 1
 fi
 
+capture_trusted_backup_runtime
+remove_web_container "pre-migration"
 create_predeployment_backup
-
 write_deploy_env
 echo "Applying reviewed database migrations..."
 if ! compose run --rm --no-deps migrate; then
-  echo "Migration failed; the running application was not replaced." >&2
-  if [[ "$had_previous_env" == "true" ]]; then
-    cp "$previous_env" "$DEPLOY_ENV_FILE"
-  else
-    rm -f -- "$DEPLOY_ENV_FILE"
-  fi
+  echo "Migration failed after the legacy application was removed; service remains offline." >&2
+  echo "Pre-migration application rollback is disabled after schema transition begins." >&2
   exit 1
 fi
 
 echo "Starting deployment..."
 if ! compose up -d --remove-orphans --wait web; then
-  echo "Container startup failed; attempting application rollback." >&2
-  rollback_application || true
+  echo "Container startup failed; removing the candidate and leaving maintenance mode." >&2
+  if ! remove_web_container "candidate-failure"; then
+    echo "WARNING: candidate container cleanup failed and requires immediate operator isolation." >&2
+  fi
+  echo "Pre-migration application rollback is disabled after schema transition begins." >&2
   exit 1
 fi
 
@@ -233,12 +296,18 @@ if ! wait_for_health; then
   echo "Health check failed for $HEALTHCHECK_URL" >&2
   compose ps || true
   compose logs --tail=200 || true
-  echo "Restoring last known-good application image (database is not auto-restored)..." >&2
-  rollback_application || true
+  echo "Removing the unhealthy candidate and leaving the service offline for reviewed recovery." >&2
+  if ! remove_web_container "candidate-failure"; then
+    echo "WARNING: candidate container cleanup failed and requires immediate operator isolation." >&2
+  fi
+  echo "Pre-migration application rollback is disabled after schema transition begins." >&2
   exit 1
 fi
 
-rm -f -- "$previous_env"
-
 echo "Deployment healthy. Current service status:"
 compose ps
+}
+
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  deploy_main "$@"
+fi

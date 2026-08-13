@@ -43,7 +43,8 @@ jobs:
         run: |
           npm run build:ops
           python3 -m py_compile deploy/bootstrap-backup.py
-          bash -n deploy/predeployment-backup.sh deploy/predeployment-backup.test.sh
+          bash -n deploy/deploy.sh deploy/deploy-quiescence.test.sh deploy/predeployment-backup.sh deploy/predeployment-backup.test.sh
+          bash deploy/deploy-quiescence.test.sh
           bash deploy/predeployment-backup.test.sh
 
   firewall-policy:
