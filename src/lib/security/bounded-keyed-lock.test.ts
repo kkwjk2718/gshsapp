@@ -39,14 +39,25 @@ describe("bounded keyed authentication serialization", () => {
     expect(compare).toHaveBeenCalledTimes(2);
   });
 
-  it("atomically caps rotated principals on a shared network without holding a bcrypt lock", async () => {
+  it("atomically caps rotated principals while releasing only each successful reservation", async () => {
     const admission = new BoundedAttemptAdmission({ maxAttempts: 3, windowMs: 60_000, maxKeys: 2 });
-    const admitted = await Promise.all(Array.from({ length: 6 }, async () => {
-      const allowed = admission.admit("same-network");
+    const reservations = await Promise.all(Array.from({ length: 6 }, async () => {
+      const reservation = admission.reserve("same-network");
       await Promise.resolve();
-      return allowed;
+      return reservation;
     }));
-    expect(admitted).toEqual([true, true, true, false, false, false]);
+    expect(reservations.map(Boolean)).toEqual([true, true, true, false, false, false]);
+    reservations[0]!.release();
+    reservations[1]!.release();
+    reservations[2]!.commitFailure();
+    const next = [admission.reserve("same-network"), admission.reserve("same-network"), admission.reserve("same-network")];
+    expect(next.map(Boolean)).toEqual([true, true, false]);
+  });
+
+  it("evicts a completed LRU network instead of globally denying new networks", () => {
+    const admission = new BoundedAttemptAdmission({ maxAttempts: 3, windowMs: 60_000, maxKeys: 1 });
+    admission.reserve("old-network")!.commitFailure();
+    expect(admission.reserve("new-network")).not.toBeNull();
   });
 
   it("fails closed instead of growing unbounded queues or active key state", async () => {

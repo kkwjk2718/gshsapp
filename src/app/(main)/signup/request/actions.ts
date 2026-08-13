@@ -61,7 +61,8 @@ export async function unlockTokenPortal(
 
   const unlockKeys = await getPortalUnlockKeys();
   if (!unlockKeys.trustedClient) return { error: "Unable to verify the portal network path." };
-  if (!portalNetworkAdmission.admit(unlockKeys.networkKey)) {
+  const networkReservation = portalNetworkAdmission.reserve(unlockKeys.networkKey);
+  if (!networkReservation) {
     return { error: "Too many network attempts. Please wait before trying again." };
   }
   try {
@@ -75,6 +76,7 @@ export async function unlockTokenPortal(
 
   const isMatch = await bcrypt.compare(password, settings.passwordHash!);
   if (!isMatch) {
+    networkReservation.commitFailure();
     portalUnlockLimiter.recordFailure(unlockKeys.clientKey, unlockKeys.networkKey);
     await logAction("token_portal_password_failed", { provided: true });
     return { error: "비밀번호가 올바르지 않습니다." };
@@ -96,6 +98,8 @@ export async function unlockTokenPortal(
       return { error: "Too many concurrent attempts. Please wait before trying again." };
     }
     throw error;
+  } finally {
+    networkReservation.release();
   }
 }
 

@@ -65,7 +65,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           const networkKey = clientAddress === null
             ? null
             : hashSecurityPrincipal("login-network", clientAddress, securitySecret);
-          if (!loginNetworkAdmission.admit(networkKey)) throw new LoginTemporarilyLockedError();
+          const networkReservation = loginNetworkAdmission.reserve(networkKey);
+          if (!networkReservation) throw new LoginTemporarilyLockedError();
 
           try {
             return await loginVerificationLock.runExclusive(
@@ -81,6 +82,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
                 const user = await prisma.user.findUnique({ where: { userId } });
                 const verifiedUser = await verifyLoginCandidate(password, user, verifyPassword);
                 if (verifiedUser && isRosterGovernedRole(verifiedUser.role) && !(await hasActiveRosterMembership(prisma, verifiedUser))) {
+                  networkReservation.commitFailure();
                   loginAttemptLimiter.recordFailure(identifierKey, networkKey);
                   await logAction("LOGIN_FAILED", { loginId: userId, reason: "Inactive enrollment" }, undefined, { userId: verifiedUser.id });
                   return null;
@@ -98,6 +100,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
                     mustChangePassword: verifiedUser.mustChangePassword,
                   };
                 }
+                networkReservation.commitFailure();
                 loginAttemptLimiter.recordFailure(identifierKey, networkKey);
                 await logAction("LOGIN_FAILED", { loginId: userId, reason: "Invalid credentials" }, undefined, { userId: user?.id ?? null });
                 return null;
@@ -106,6 +109,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           } catch (error) {
             if (error instanceof BoundedKeyedLockError) throw new LoginTemporarilyLockedError();
             throw error;
+          } finally {
+            networkReservation.release();
           }
         }
 
