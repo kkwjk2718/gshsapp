@@ -14,9 +14,9 @@
 현재 기본 흐름:
 
 1. Pull Request 또는 push에서 CI 실행
-2. `main` push 시 Docker 이미지 빌드
-3. Docker Hub에 `sha-<40-hex commit>` 태그를 푸시하고 registry digest 기록
-4. 테스트 서버 self-hosted runner가 자동 배포
+2. 변경을 보호된 `main`에 merge하고 운영자가 정확한 SHA를 runner 호스트에 승인
+3. `Publish And Deploy Test`를 수동 실행해 Docker 이미지를 빌드하고 Docker Hub에 `sha-<40-hex commit>` 태그와 registry digest 기록
+4. 같은 run의 self-hosted job이 승인 SHA를 재검증한 뒤 테스트 배포
 5. 운영 서버는 GitHub Actions 수동 실행 + `production` 승인 후 배포
 
 핵심 원칙:
@@ -37,7 +37,7 @@
 - [deploy/offsite-backup.sh](./deploy/offsite-backup.sh): 오프호스트 백업 내보내기
 - [deploy/run-scheduled-backup.sh](./deploy/run-scheduled-backup.sh): 정기 백업 실행
 - [.github/workflows/ci.yml](./.github/workflows/ci.yml): 품질 검사
-- [.github/workflows/publish-and-deploy-test.yml](./.github/workflows/publish-and-deploy-test.yml): 테스트 자동 배포
+- [.github/workflows/publish-and-deploy-test.yml](./.github/workflows/publish-and-deploy-test.yml): 보호된 `main` SHA를 호스트에서 승인한 뒤 수동 실행하는 테스트 배포
 - [.github/workflows/preproduction-rehearsal.yml](./.github/workflows/preproduction-rehearsal.yml): 후보 SHA 리허설
 - [.github/workflows/deploy-prod.yml](./.github/workflows/deploy-prod.yml): 운영 수동 배포
 
@@ -88,21 +88,23 @@ NEXT_PUBLIC_NEIS_API_KEY=
 - 웹 업로드는 검증된 보류 복원만 생성합니다. 원자적 lock directory는 1분 heartbeat로 느린 활성 업로드를 보호하고 heartbeat가 30분 끊긴 crash lock만 회수합니다. 만료 descriptor는 엄격히 파싱하며, 관리자는 정확한 opaque restore ID를 사용해 감사 로그가 남는 취소를 할 수 있습니다. 자동 적용은 비활성화되어 있으며 운영자가 오프라인 절차를 별도로 검토해야 합니다.
 - 컨테이너 시작 스크립트는 스키마를 변경하지 않습니다. 배포 절차가 앱 시작 전에 스키마 동기화를 완료해야 합니다.
 
-## 5. 테스트 서버 자동 배포
+## 5. 테스트 서버 승인 후 수동 배포
 
 트리거:
 
-- `main` 브랜치 push
+- 보호된 `main`의 정확한 40자리 SHA를 runner 호스트의 root 신뢰 파일에 승인
+- 같은 현재 SHA에서 `Publish And Deploy Test`를 `workflow_dispatch`로 실행
 
 흐름:
 
 1. `lint`, `test`, `build`
 2. Docker 이미지 빌드 및 Docker Hub 푸시
-3. `gshs-test` runner가 테스트 서버 배포
-4. `/opt/gshsapp`에 최신 배포 자산 반영
-5. `deploy.sh` 실행
-6. 서버 내부 smoke check
-7. Playwright E2E
+3. job-start hook이 저장소·보호 브랜치·workflow·이벤트와 root 승인 SHA의 정확한 일치를 검증
+4. `gshs-test` runner가 테스트 서버 배포
+5. `/opt/gshsapp`에 최신 배포 자산 반영
+6. `deploy.sh` 실행
+7. 서버 내부 smoke check
+8. Playwright E2E
 
 ## 6. 운영 배포
 

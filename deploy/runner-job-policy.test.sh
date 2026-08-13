@@ -2,10 +2,23 @@
 set -Eeuo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
-POLICY="$SCRIPT_DIR/runner-job-policy.sh"
+temporary_directory="$(mktemp -d)"
+trap 'rm -rf -- "$temporary_directory"' EXIT
+POLICY="$temporary_directory/runner-job-policy.sh"
+APPROVAL_DIRECTORY="$temporary_directory/etc/gshsapp-runner-trust"
+mkdir -p "$APPROVAL_DIRECTORY"
+cp "$SCRIPT_DIR/runner-job-policy.sh" "$POLICY"
+sed -i "s|/etc/gshsapp-runner-trust|$APPROVAL_DIRECTORY|g" "$POLICY"
+sed -i "s|readonly EXPECTED_ROOT_UID=0|readonly EXPECTED_ROOT_UID=$(id -u)|" "$POLICY"
+sed -i "s|readonly EXPECTED_ROOT_GID=0|readonly EXPECTED_ROOT_GID=$(id -g)|" "$POLICY"
 REPOSITORY="kkwjk2718/gshsapp"
 MAIN_REF="refs/heads/main"
 MAIN_SHA="0123456789abcdef0123456789abcdef01234567"
+HISTORIC_SHA="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+printf '%s\n' "$MAIN_SHA" >"$APPROVAL_DIRECTORY/approved-main-test.sha"
+printf '%s\n' "$MAIN_SHA" >"$APPROVAL_DIRECTORY/approved-main-prod.sha"
+chmod 0755 "$temporary_directory/etc" "$APPROVAL_DIRECTORY"
+chmod 0644 "$APPROVAL_DIRECTORY/approved-main-test.sha" "$APPROVAL_DIRECTORY/approved-main-prod.sha"
 
 run_policy() {
   local role="$1"
@@ -44,13 +57,46 @@ expect_denied() {
   }
 }
 
-run_policy test publish-and-deploy-test.yml push
+run_policy test publish-and-deploy-test.yml workflow_dispatch
 run_policy test preproduction-rehearsal.yml workflow_dispatch
 run_policy test scheduled-backup-test.yml schedule
 run_policy test scheduled-backup-test.yml workflow_dispatch
 run_policy prod deploy-prod.yml workflow_dispatch
 run_policy prod scheduled-backup-prod.yml schedule
 run_policy prod scheduled-backup-prod.yml workflow_dispatch
+
+expect_denied "historic main workflow rerun" run_policy test publish-and-deploy-test.yml workflow_dispatch \
+  GITHUB_SHA="$HISTORIC_SHA" \
+  GITHUB_WORKFLOW_SHA="$HISTORIC_SHA"
+
+expect_denied "historic scheduled backup rerun" run_policy prod scheduled-backup-prod.yml schedule \
+  GITHUB_SHA="$HISTORIC_SHA" \
+  GITHUB_WORKFLOW_SHA="$HISTORIC_SHA"
+
+expect_denied "automatic test deployment push" run_policy test publish-and-deploy-test.yml push
+
+approved_test_file="$APPROVAL_DIRECTORY/approved-main-test.sha"
+printf '%s\n%s\n' "$MAIN_SHA" "$HISTORIC_SHA" >"$approved_test_file"
+expect_denied "multiple approved SHA lines" run_policy test publish-and-deploy-test.yml workflow_dispatch
+printf '%s\n' "$MAIN_SHA" >"$approved_test_file"
+
+printf '%s\n' "${MAIN_SHA^^}" >"$approved_test_file"
+expect_denied "non-canonical approved SHA" run_policy test publish-and-deploy-test.yml workflow_dispatch
+printf '%s\n' "$MAIN_SHA" >"$approved_test_file"
+
+chmod 0666 "$approved_test_file"
+if [[ "$(stat -c '%a' "$approved_test_file")" == "666" ]]; then
+  expect_denied "writable approved SHA file" run_policy test publish-and-deploy-test.yml workflow_dispatch
+fi
+chmod 0644 "$approved_test_file"
+
+mv "$approved_test_file" "$approved_test_file.real"
+ln -s "$approved_test_file.real" "$approved_test_file"
+if [[ -L "$approved_test_file" ]]; then
+  expect_denied "symlinked approved SHA file" run_policy test publish-and-deploy-test.yml workflow_dispatch
+fi
+rm -f "$approved_test_file"
+mv "$approved_test_file.real" "$approved_test_file"
 
 expect_denied "feature branch" run_policy test publish-and-deploy-test.yml push \
   GITHUB_REF=refs/heads/security/attacker \

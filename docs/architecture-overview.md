@@ -127,9 +127,9 @@ Route group 기준:
 배포 흐름:
 
 1. PR / push에서 CI 실행
-2. `main` push 시 Docker 이미지 빌드
-3. Docker Hub에 `sha-<40-hex commit>` 이미지를 푸시하고 digest 고정
-4. 테스트 서버 self-hosted runner가 자동 배포
+2. 보호된 `main`의 현재 SHA를 runner 호스트에서 root가 승인
+3. `Publish And Deploy Test`를 수동 실행해 Docker Hub에 `sha-<40-hex commit>` 이미지를 푸시하고 digest 고정
+4. 같은 run의 self-hosted job이 승인 SHA를 재검증한 뒤 테스트 서버 배포
 5. 운영 서버는 수동 `Deploy Production`으로 승격
 
 서버 구조:

@@ -14,7 +14,7 @@
 이 저장소에는 이미 아래 체계가 들어 있습니다.
 
 - CI/CD
-- 테스트 서버 자동 배포
+- 승인된 현재 `main` SHA의 테스트 서버 수동 배포
 - Playwright E2E
 - 복원 리허설
 - 운영 배포 workflow
@@ -152,7 +152,7 @@ npm run test:e2e:smoke
 필수 순서:
 
 1. 변경이 `main`에 반영됨
-2. 테스트 서버 자동 배포 성공
+2. 현재 보호 `main` SHA를 runner 호스트에 root로 승인하고 테스트 서버 수동 배포 성공
 3. 같은 `sha-<commit>`로 `Preproduction Rehearsal` 성공
 4. `test.gshs.app`에서 사람 확인 통과
 5. 운영 배포는 같은 `sha-<commit>` 사용

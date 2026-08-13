@@ -32,7 +32,7 @@ GSHS.app은 학교 생활에서 자주 확인하는 정보를 한곳에 모은 N
 | 구분 | 주소 | 용도 |
 | --- | --- | --- |
 | 로컬 개발 | `http://localhost:3000` | 개발 및 수동 확인 |
-| 테스트 서버 | `https://test.gshs.app` | `main` 자동 배포 검증 |
+| 테스트 서버 | `https://test.gshs.app` | 승인된 `main` SHA 수동 배포 검증 |
 | 운영 서버 | `https://gshs.app` | 실제 서비스 |
 
 배포 기본 원칙:
@@ -40,6 +40,7 @@ GSHS.app은 학교 생활에서 자주 확인하는 정보를 한곳에 모은 N
 - Docker 이미지는 `sha-<commit>` 출처와 immutable registry digest를 함께 검증하여 배포합니다.
 - GitHub Release는 `vX.Y.Z` semver 태그를 기준으로 관리합니다.
 - 테스트와 운영은 self-hosted runner가 각각 분리되어 있습니다.
+- self-hosted runner는 root가 승인한 현재 `main` SHA만 실행하며 테스트 배포도 `workflow_dispatch`로 수동 시작합니다.
 - SQLite는 `/app/data/dev.db` 영속 볼륨 경로를 사용합니다.
 
 ## 빠른 시작
