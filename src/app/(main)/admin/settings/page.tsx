@@ -1,4 +1,5 @@
 import { BarChart3, DatabaseBackup, KeyRound, Link, Mail, Save, Settings } from "lucide-react";
+import { requireAdmin } from "@/lib/current-user";
 import { updateGradeMapping } from "./actions";
 import { BackupIntervalForm } from "./backup-interval-form";
 import { BackupNowForm } from "./backup-now-form";
@@ -12,6 +13,7 @@ import { TokenPortalPasswordForm } from "./token-portal-password-form";
 export const dynamic = "force-dynamic";
 
 export default async function SettingsPage() {
+  await requireAdmin();
   const { mapping, iCalUrl, googleAnalyticsId, backups, intervalDays, tokenPortal, warnings } =
     await loadSettingsPageData();
   const portalUrl = `${process.env.NEXT_PUBLIC_APP_URL || "https://gshs.app"}/signup/request`;

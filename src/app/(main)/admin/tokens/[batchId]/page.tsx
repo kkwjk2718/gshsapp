@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import { requireAdmin } from "@/lib/current-user";
 import { ArrowLeft, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { TokenList } from "./token-list";
@@ -6,6 +7,7 @@ import { deleteTokenBatch } from "../actions";
 import { formatKST } from "@/lib/date-utils";
 
 export default async function TokenBatchDetailPage({ params }: { params: Promise<{ batchId: string }> }) {
+  await requireAdmin();
   const { batchId } = await params;
 
   const batch = await prisma.tokenBatch.findUnique({

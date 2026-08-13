@@ -1,12 +1,10 @@
 import { prisma } from "@/lib/db";
 import { createRelatedSite, deleteRelatedSite } from "./actions";
 import { Trash2, ExternalLink, Plus } from "lucide-react";
-import { getCurrentUser } from "@/lib/session";
-import { redirect } from "next/navigation";
+import { requireAdmin } from "@/lib/current-user";
 
 export default async function AdminSitesPage() {
-    const user = await getCurrentUser();
-    if (!user || user.role !== 'ADMIN') redirect("/");
+    await requireAdmin();
 
     const sites = await prisma.relatedSite.findMany({
         orderBy: { createdAt: "desc" },

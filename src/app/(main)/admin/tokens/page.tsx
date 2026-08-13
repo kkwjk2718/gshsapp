@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import { requireAdmin } from "@/lib/current-user";
 import { ChevronRight, FileText, MailPlus, Send, Users } from "lucide-react";
 import Link from "next/link";
 import { ManualSendForm } from "./manual-send-form";
@@ -26,6 +27,7 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 export default async function TokenManagerPage() {
+  await requireAdmin();
   const [batches, recentLogs, quota] = await Promise.all([
     prisma.tokenBatch.findMany({
       orderBy: { createdAt: "desc" },

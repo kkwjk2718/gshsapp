@@ -1,9 +1,11 @@
 import { prisma } from "@/lib/db";
+import { requireAdmin } from "@/lib/current-user";
 import { loadNoticeCategories } from "@/lib/notice-categories";
 import { createCategory, deleteCategory } from "./actions";
 import { Trash2, Tag } from "lucide-react";
 
 export default async function CategoriesPage() {
+  await requireAdmin();
   const categories = await loadNoticeCategories(prisma);
 
   return (

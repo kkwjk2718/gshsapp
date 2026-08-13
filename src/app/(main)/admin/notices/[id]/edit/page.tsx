@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import { requireAdmin } from "@/lib/current-user";
 import { loadNoticeCategories } from "@/lib/notice-categories";
 import { notFound } from "next/navigation";
 import { EditNoticeForm } from "./edit-form";
@@ -8,6 +9,7 @@ type Props = {
 };
 
 export default async function EditNoticePage({ params }: Props) {
+    await requireAdmin();
     const { id } = await params;
 
     const [notice, categories] = await Promise.all([

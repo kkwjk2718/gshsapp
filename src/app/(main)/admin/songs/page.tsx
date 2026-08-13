@@ -1,10 +1,12 @@
 import { prisma } from "@/lib/db";
+import { requireAdmin } from "@/lib/current-user";
 import { updateSongStatus } from "./actions";
 import { Check, X, Play } from "lucide-react";
 import { BanUserButton } from "./ban-user-button";
 import { formatKST } from "@/lib/date-utils";
 
 export default async function AdminSongsPage() {
+  await requireAdmin();
   const songs = await prisma.songRequest.findMany({
     orderBy: { createdAt: "desc" },
     take: 500,
