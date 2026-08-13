@@ -35,7 +35,9 @@ ALLOW_NON_RFC1918_INTERNAL=true \
 ./host-hardening.sh --dry-run
 ```
 
-Before `--apply`, verify console/out-of-band access and that the administrator has a non-empty `~/.ssh/authorized_keys`. Keep the current SSH session open while opening a second key-only session. The script then permits port 1234 only from the named reverse-proxy CIDR, SSH only from the named admin CIDR, disables password/root SSH, and denies all other inbound traffic.
+Before `--apply`, verify console/out-of-band access and that the administrator has a non-empty `~/.ssh/authorized_keys`. Keep the current SSH session open while opening a second key-only session. The script then permits port 1234 only from the named reverse-proxy CIDR, SSH only from the named admin CIDR, disables password/root SSH, and denies all other inbound and routed traffic.
+
+The apply step is deliberately fail-closed. `ufw show added` must contain either no rules or exactly those two source/destination/port/TCP rules. A broad `Anywhere` rule, route rule, IPv6 rule, duplicate, stale port, or any other rule stops the script before it changes SSH or UFW. The script never resets or bulk-deletes firewall rules. If it refuses an existing host, use console access to review and migrate each unexpected rule individually, then repeat the dry run and apply procedure. After enabling UFW, the script verifies active status, default policies, and the complete two-rule managed set before reloading SSH.
 
 Set the test/production GitHub Environment values:
 

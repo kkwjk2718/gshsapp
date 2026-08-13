@@ -98,13 +98,14 @@ runner가 필요한 이유:
 
 1. `lint`
 2. `test`
-3. `build`
-4. Docker Hub 푸시
-5. `gshs-test` runner가 테스트 서버 배포 수행
-6. `/opt/gshsapp`에 `compose.yml`, `deploy.sh` 등 최신 자산 반영
-7. `deploy.sh` 실행
-8. 서버 내부 smoke check
-9. `test.gshs.app` 기준 Playwright E2E 실행
+3. 방화벽 정책 검증기와 host-hardening shell 회귀 테스트
+4. `build`
+5. Docker Hub 푸시
+6. `gshs-test` runner가 테스트 서버 배포 수행
+7. `/opt/gshsapp`에 `compose.yml`, `deploy.sh`, UFW 정책 검증기 등 최신 자산 반영
+8. `deploy.sh` 실행
+9. 서버 내부 smoke check
+10. `test.gshs.app` 기준 Playwright E2E 실행
 
 ## 7. 운영 서버 수동 배포 흐름
 

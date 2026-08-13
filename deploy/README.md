@@ -126,7 +126,7 @@ Runner labels:
 ## 운영 시 주의 사항
 
 - 태그만 신뢰하지 않고, 검증한 `sha-<commit>` 출처와 immutable image digest를 함께 배포 기준으로 사용합니다.
-- 별도 프록시 호스트를 쓰는 경우 [`host-hardening.sh`](./host-hardening.sh)와 [인프라 보안 런북](../docs/infrastructure-security-runbook.md)을 먼저 적용합니다.
+- 별도 프록시 호스트를 쓰는 경우 [`host-hardening.sh`](./host-hardening.sh)와 [인프라 보안 런북](../docs/infrastructure-security-runbook.md)을 먼저 적용합니다. 기존 UFW 관리 규칙이 없거나 의도한 SSH/프록시 규칙 두 개와 정확히 일치하지 않으면 스크립트가 변경 전에 중단되며, 규칙을 자동 초기화하거나 일괄 삭제하지 않습니다.
 - `backup/` 디렉터리는 삭제하지 않습니다.
 - `.env`는 서버에서 직접 관리하며 저장소에는 올리지 않습니다.
 - SQLite를 사용하므로 대규모 변경 전에는 백업 상태를 먼저 확인합니다.
