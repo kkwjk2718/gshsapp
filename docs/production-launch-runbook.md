@@ -4,7 +4,7 @@
 
 ## 이미 준비된 것
 
-- `main` push 시 CI가 돌고, 정확한 현재 SHA를 runner 호스트에 root로 승인한 뒤 `Publish And Deploy Test`를 수동 실행하면 image publish와 테스트 배포가 순서대로 진행됨
+- `main` push 시 CI가 돌고 `test.gshs.app`으로 자동 배포됨
 - `Preproduction Rehearsal`은 `main` 조상인 후보만 받고 Docker Hub digest와 GitHub Sigstore build provenance가 정확히 일치할 때만 테스트 서버에서 재검증
 - `deploy/restore-drill.sh`로 라이브 DB를 건드리지 않는 복원 리허설 가능
 - `/api/health`와 `/admin/test`를 운영 전 최종 판단 기준으로 사용
@@ -32,18 +32,17 @@
 
 배포할 정확한 `sha-<commit>`와 `sha256:<digest>` 기준으로 아래 순서를 지킵니다. 수동 입력은 선택 기준일 뿐 신뢰 기준이 아닙니다. 워크플로가 Docker Hub의 `sha-<commit>` manifest digest를 다시 조회하고, `publish-and-deploy-test.yml`이 동일 `main` commit에서 GitHub-hosted runner로 만든 Sigstore provenance를 검증해야 다음 단계가 열립니다.
 
-1. 별도 신뢰 호스트에서 현재 보호 `main` SHA와 bundle digest를 확인하고 runner 호스트에 정확히 승인
-2. 같은 SHA에서 `Publish And Deploy Test`를 수동 실행해 초록인지 확인
-3. 같은 SHA와 publish job이 출력한 digest로 `Preproduction Rehearsal` 실행 후 provenance 검증을 포함해 초록 확인하고 run ID 기록
-4. `test.gshs.app/admin/test`에서 모든 항목이 `PASS`인지 확인
-5. 최신 백업 시각이 충분히 최근인지 확인
-6. `test.gshs.app`에서 아래 수동 점검 수행
+1. `Publish And Deploy Test`가 해당 SHA에서 초록인지 확인
+2. 같은 SHA와 publish job이 출력한 digest로 `Preproduction Rehearsal` 실행 후 provenance 검증을 포함해 초록 확인하고 run ID 기록
+3. `test.gshs.app/admin/test`에서 모든 항목이 `PASS`인지 확인
+4. 최신 백업 시각이 충분히 최근인지 확인
+5. `test.gshs.app`에서 아래 수동 점검 수행
    - 로그인
    - 관리자 설정
    - 공지 작성 / 조회
    - 급식
    - 학사일정
-7. 오프호스트 백업 복사 또는 Proxmox 스냅샷 1회 생성
+6. 오프호스트 백업 복사 또는 Proxmox 스냅샷 1회 생성
 
 ## 오프호스트 백업 내보내기
 

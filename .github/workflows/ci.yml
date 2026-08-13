@@ -53,14 +53,13 @@ jobs:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - name: Validate host firewall policy scripts
         run: |
-          bash -n deploy/host-hardening.sh deploy/host-hardening.test.sh deploy/runner-job-policy.sh deploy/runner-job-policy.test.sh deploy/install-runner-trust-hook.sh deploy/verify-runner-trust-hook.sh deploy/runner-trust-hook.test.sh deploy/approve-runner-main-sha.sh deploy/approve-runner-main-sha.test.sh
+          bash -n deploy/host-hardening.sh deploy/host-hardening.test.sh deploy/runner-job-policy.sh deploy/runner-job-policy.test.sh deploy/install-runner-trust-hook.sh deploy/verify-runner-trust-hook.sh deploy/runner-trust-hook.test.sh
           bash -n deploy/deploy-policy.sh deploy/deploy-policy.test.sh docker-entrypoint.sh
           bash deploy/deploy-policy.test.sh
           python3 -m unittest deploy/validate_ufw_rules_test.py
           bash deploy/host-hardening.test.sh
           bash deploy/runner-job-policy.test.sh
           bash deploy/runner-trust-hook.test.sh
-          bash deploy/approve-runner-main-sha.test.sh
 
   build:
     runs-on: ubuntu-latest

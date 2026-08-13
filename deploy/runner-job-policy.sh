@@ -4,17 +4,11 @@ set -Eeuo pipefail
 PATH=/usr/sbin:/usr/bin:/sbin:/bin
 LC_ALL=C
 export PATH LC_ALL
-builtin unset BASH_ENV ENV CDPATH GLOBIGNORE LD_PRELOAD LD_LIBRARY_PATH PYTHONPATH PYTHONHOME NODE_OPTIONS TMPDIR TMP TEMP
-IFS=$' \t\n'
-while IFS= read -r inherited_function; do
-  builtin unset -f "$inherited_function" 2>/dev/null || true
-done < <(builtin compgen -A function)
+builtin unset -f printf 2>/dev/null || true
+builtin unset BASH_ENV ENV CDPATH GLOBIGNORE
 
 readonly EXPECTED_REPOSITORY="kkwjk2718/gshsapp"
 readonly EXPECTED_REF="refs/heads/main"
-readonly APPROVED_SHA_DIRECTORY="/etc/gshsapp-runner-trust"
-readonly EXPECTED_ROOT_UID=0
-readonly EXPECTED_ROOT_GID=0
 
 deny() {
   printf '%s\n' "runner trust policy denied: $1" >&2
@@ -28,7 +22,6 @@ require_value() {
 
 [[ "$#" -eq 1 ]] || deny "runner role is missing"
 readonly runner_role="$1"
-[[ "$runner_role" == "test" || "$runner_role" == "prod" ]] || deny "runner role is not recognized"
 
 for required_variable in \
   GITHUB_REPOSITORY \
@@ -52,26 +45,11 @@ done
 [[ "$GITHUB_SHA" =~ ^[0-9a-fA-F]{40}$ ]] || deny "job SHA is malformed"
 [[ "$GITHUB_WORKFLOW_SHA" == "$GITHUB_SHA" ]] || deny "workflow SHA does not match the job SHA"
 
-approval_parent="$(dirname -- "$APPROVED_SHA_DIRECTORY")"
-readonly approval_parent
-[[ -d "$approval_parent" && ! -L "$approval_parent" ]] || deny "approval parent directory is not trusted"
-[[ "$(/usr/bin/stat -c '%u:%g:%a' -- "$approval_parent")" == "$EXPECTED_ROOT_UID:$EXPECTED_ROOT_GID:755" ]] || deny "approval parent directory permissions are not trusted"
-[[ -d "$APPROVED_SHA_DIRECTORY" && ! -L "$APPROVED_SHA_DIRECTORY" ]] || deny "approval directory is not trusted"
-[[ "$(/usr/bin/stat -c '%u:%g:%a' -- "$APPROVED_SHA_DIRECTORY")" == "$EXPECTED_ROOT_UID:$EXPECTED_ROOT_GID:755" ]] || deny "approval directory permissions are not trusted"
-readonly approved_sha_file="$APPROVED_SHA_DIRECTORY/approved-main-$runner_role.sha"
-[[ -f "$approved_sha_file" && ! -L "$approved_sha_file" ]] || deny "approved main SHA is missing"
-[[ "$(/usr/bin/stat -c '%u:%g:%a' -- "$approved_sha_file")" == "$EXPECTED_ROOT_UID:$EXPECTED_ROOT_GID:644" ]] || deny "approved main SHA permissions are not trusted"
-mapfile -t approved_sha_lines <"$approved_sha_file"
-[[ "${#approved_sha_lines[@]}" -eq 1 ]] || deny "approved main SHA file must contain exactly one line"
-readonly approved_main_sha="${approved_sha_lines[0]}"
-[[ "$approved_main_sha" =~ ^[0-9a-f]{40}$ ]] || deny "approved main SHA is malformed"
-[[ "$GITHUB_SHA" == "$approved_main_sha" ]] || deny "job SHA is not the currently approved protected-main commit"
-
 case "$runner_role" in
   test)
     case "$GITHUB_WORKFLOW_REF" in
       "$EXPECTED_REPOSITORY/.github/workflows/publish-and-deploy-test.yml@$EXPECTED_REF")
-        [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]] || deny "event is not allowed for the test deployment workflow"
+        [[ "$GITHUB_EVENT_NAME" == "push" ]] || deny "event is not allowed for the test deployment workflow"
         ;;
       "$EXPECTED_REPOSITORY/.github/workflows/preproduction-rehearsal.yml@$EXPECTED_REF")
         [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]] || deny "event is not allowed for rehearsal"

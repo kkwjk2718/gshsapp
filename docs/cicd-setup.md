@@ -20,14 +20,15 @@
 ## 1. 목표 구조
 
 - PR / push: CI 실행
-- root 승인 + 수동 실행: 현재 보호 `main` SHA의 Docker 이미지 publish와 테스트 서버 배포
+- `main` push: Docker 이미지 빌드 및 Docker Hub 푸시
+- `main` push: 테스트 서버 self-hosted runner 자동 배포
 - 수동 실행: 운영 서버 self-hosted runner 배포
 - 운영 배포 성공 후 `vX.Y.Z` GitHub Release 생성
 
 ## 2. 워크플로우 파일
 
 - [`.github/workflows/ci.yml`](../.github/workflows/ci.yml)
-- [`.github/workflows/publish-and-deploy-test.yml`](../.github/workflows/publish-and-deploy-test.yml) — 보호된 `main`의 정확한 SHA를 호스트 신뢰 파일에 승인한 후 `workflow_dispatch`로 실행
+- [`.github/workflows/publish-and-deploy-test.yml`](../.github/workflows/publish-and-deploy-test.yml)
 - [`.github/workflows/preproduction-rehearsal.yml`](../.github/workflows/preproduction-rehearsal.yml)
 - [`.github/workflows/deploy-prod.yml`](../.github/workflows/deploy-prod.yml)
 - [`.github/workflows/production-health-monitor.yml`](../.github/workflows/production-health-monitor.yml)
@@ -92,21 +93,20 @@ runner가 필요한 이유:
 - GitHub-hosted runner가 직접 SSH 배포하기 어려움
 - 서버 안의 runner가 배포 스크립트를 실행하는 모델이 더 안정적임
 
-## 6. 테스트 서버 승인 후 수동 배포 흐름
+## 6. 테스트 서버 자동 배포 흐름
 
-변경이 보호된 `main`에 merge되면 별도 신뢰 호스트에서 확인한 정확한 SHA를 runner 호스트에 root로 승인하고 `Publish And Deploy Test`를 수동 실행합니다. 그 workflow의 GitHub-hosted job이 image publish와 provenance를 만들고, 이어지는 self-hosted job이 승인 SHA를 다시 확인해 배포합니다. 과거 workflow run 재실행과 승인되지 않은 SHA는 job step 전에 거부됩니다.
+`main`에 push하면 아래 순서로 진행됩니다.
 
 1. `lint`
 2. `test`
 3. 방화벽 정책 검증기와 host-hardening shell 회귀 테스트
 4. `build`
 5. Docker Hub 푸시
-6. root 승인 SHA와 workflow provenance 일치 검증
-7. `gshs-test` runner가 테스트 서버 배포 수행
-8. `/opt/gshsapp`에 `compose.yml`, `deploy.sh`, UFW 정책 검증기 등 최신 자산 반영
-9. `deploy.sh` 실행
-10. 서버 내부 smoke check
-11. `test.gshs.app` 기준 Playwright E2E 실행
+6. `gshs-test` runner가 테스트 서버 배포 수행
+7. `/opt/gshsapp`에 `compose.yml`, `deploy.sh`, UFW 정책 검증기 등 최신 자산 반영
+8. `deploy.sh` 실행
+9. 서버 내부 smoke check
+10. `test.gshs.app` 기준 Playwright E2E 실행
 
 ## 7. 운영 서버 수동 배포 흐름
 
@@ -179,7 +179,7 @@ runner가 필요한 이유:
 
 운영 승격 조건:
 
-- 승인된 현재 SHA의 테스트 수동 배포 초록
+- 테스트 자동 배포 초록
 - 같은 SHA의 `Preproduction Rehearsal` 초록
 - `/admin/test`가 PASS
 
