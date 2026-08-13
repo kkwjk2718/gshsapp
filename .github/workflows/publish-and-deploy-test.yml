@@ -21,6 +21,8 @@ env:
   DATABASE_URL: file:./prisma/dev.db
   NEXT_PUBLIC_NEIS_API_KEY: ""
   IMAGE_TAG: sha-${{ github.sha }}
+  IMAGE_REPOSITORY: docker.io/kkwjk2718git/gshsapp
+  DOCKER_IMAGE: kkwjk2718git/gshsapp
   DEPLOY_PATH: /opt/gshsapp
   E2E_BASE_URL: https://test.gshs.app
   BACKUP_MAX_AGE_HOURS: "24"
@@ -43,6 +45,10 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     needs: quality
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
     outputs:
       image_digest: ${{ steps.build.outputs.digest }}
     steps:
@@ -65,7 +71,12 @@ jobs:
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
           tags: |
-            ${{ secrets.DOCKERHUB_USERNAME }}/gshsapp:${{ env.IMAGE_TAG }}
+            ${{ env.IMAGE_REPOSITORY }}:${{ env.IMAGE_TAG }}
+      - name: Attest the published image provenance
+        uses: actions/attest@a1948c3f048ba23858d222213b7c278aabede763 # v4.1.1
+        with:
+          subject-name: docker.io/kkwjk2718git/gshsapp
+          subject-digest: ${{ steps.build.outputs.digest }}
 
   deploy:
     runs-on:
@@ -99,6 +110,7 @@ jobs:
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
           IMAGE_TAG: ${{ env.IMAGE_TAG }}
           IMAGE_DIGEST: ${{ needs.publish.outputs.image_digest }}
+          EXPECTED_APP_ORIGIN: https://test.gshs.app
           BACKUP_MAX_AGE_HOURS: ${{ env.BACKUP_MAX_AGE_HOURS }}
           HOST_BIND_IP: ${{ vars.HOST_BIND_IP }}
           ALLOW_PUBLIC_BIND: ${{ vars.ALLOW_PUBLIC_BIND }}
@@ -110,12 +122,13 @@ jobs:
           export DOCKERHUB_TOKEN="$DOCKERHUB_TOKEN"
           export IMAGE_TAG="$IMAGE_TAG"
           export IMAGE_DIGEST="$IMAGE_DIGEST"
+          export EXPECTED_APP_ORIGIN="$EXPECTED_APP_ORIGIN"
           export APP_VERSION="$IMAGE_TAG"
           export BACKUP_MAX_AGE_HOURS="$BACKUP_MAX_AGE_HOURS"
           export HOST_BIND_IP="$HOST_BIND_IP"
           export ALLOW_PUBLIC_BIND="$ALLOW_PUBLIC_BIND"
           export REQUIRE_EXPLICIT_BIND="$REQUIRE_EXPLICIT_BIND"
-          export DOCKER_IMAGE="${DOCKERHUB_USERNAME}/gshsapp"
+          export DOCKER_IMAGE="$DOCKER_IMAGE"
           ./deploy.sh
 
   smoke:
@@ -124,16 +137,19 @@ jobs:
       - Linux
       - X64
       - gshs-test
-    needs: deploy
+    needs:
+      - publish
+      - deploy
     steps:
       - name: Smoke check test deployment on server
         shell: bash
         env:
           EXPECTED_VERSION: ${{ env.IMAGE_TAG }}
+          EXPECTED_IMAGE_DIGEST: ${{ needs.publish.outputs.image_digest }}
           SMOKE_HOST: ${{ vars.HOST_BIND_IP }}
         run: |
           set -euo pipefail
-          EXPECTED_VERSION="$EXPECTED_VERSION" python3 - <<'PY'
+          EXPECTED_VERSION="$EXPECTED_VERSION" EXPECTED_IMAGE_DIGEST="$EXPECTED_IMAGE_DIGEST" python3 - <<'PY'
           import json
           import ipaddress
           import os
@@ -167,11 +183,15 @@ jobs:
                       raise SystemExit(
                           f"Health endpoint version mismatch: expected {expected_version}, got {payload.get('version')}"
                       )
+                  if payload.get('imageDigest') != os.environ['EXPECTED_IMAGE_DIGEST']:
+                      raise SystemExit('Health endpoint image digest does not match the published image')
           PY
 
   e2e:
     runs-on: ubuntu-latest
-    needs: smoke
+    needs:
+      - publish
+      - smoke
     environment:
       name: test
       url: ${{ env.E2E_BASE_URL }}
@@ -187,9 +207,10 @@ jobs:
         shell: bash
         env:
           EXPECTED_VERSION: ${{ env.IMAGE_TAG }}
+          EXPECTED_IMAGE_DIGEST: ${{ needs.publish.outputs.image_digest }}
         run: |
           set -euo pipefail
-          EXPECTED_VERSION="$EXPECTED_VERSION" E2E_BASE_URL="$E2E_BASE_URL" python3 - <<'PY'
+          EXPECTED_VERSION="$EXPECTED_VERSION" EXPECTED_IMAGE_DIGEST="$EXPECTED_IMAGE_DIGEST" E2E_BASE_URL="$E2E_BASE_URL" python3 - <<'PY'
           import json
           import os
           import time
@@ -207,7 +228,11 @@ jobs:
               try:
                   with urllib.request.urlopen(request, timeout=30) as response:
                       payload = json.loads(response.read().decode("utf-8"))
-                  if payload.get("version") == expected_version and payload.get("ok") is True:
+                  if (
+                      payload.get("version") == expected_version
+                      and payload.get("imageDigest") == os.environ["EXPECTED_IMAGE_DIGEST"]
+                      and payload.get("ok") is True
+                  ):
                       break
               except Exception:
                   pass

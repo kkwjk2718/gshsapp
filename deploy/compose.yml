@@ -48,6 +48,7 @@ services:
       TZ: Asia/Seoul
       TMPDIR: /tmp
       APP_VERSION: ${APP_VERSION:?APP_VERSION is required}
+      APP_IMAGE_DIGEST: ${IMAGE_DIGEST:?IMAGE_DIGEST is required}
       DATA_ROOT: /app/data
       DATABASE_URL: file:/app/data/dev.db
       BACKUP_DIR: /app/data/backup

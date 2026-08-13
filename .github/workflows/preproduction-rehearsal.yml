@@ -21,6 +21,8 @@ concurrency:
 
 env:
   DEPLOY_PATH: /opt/gshsapp
+  IMAGE_REPOSITORY: docker.io/kkwjk2718git/gshsapp
+  DOCKER_IMAGE: kkwjk2718git/gshsapp
   E2E_BASE_URL: https://test.gshs.app
   RESTORE_DRILL_PORT: "1235"
   BACKUP_MAX_AGE_HOURS: "24"
@@ -28,27 +30,35 @@ env:
 
 jobs:
   prepare:
+    if: ${{ github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      attestations: read
     outputs:
-      image_tag: ${{ steps.normalize.outputs.image_tag }}
-      image_digest: ${{ steps.normalize.outputs.image_digest }}
-      source_sha: ${{ steps.normalize.outputs.source_sha }}
+      image_tag: ${{ steps.provenance.outputs.image_tag }}
+      image_digest: ${{ steps.provenance.outputs.image_digest }}
+      source_sha: ${{ steps.provenance.outputs.source_sha }}
+      control_sha: ${{ steps.provenance.outputs.control_sha }}
     steps:
-      - id: normalize
+      - name: Check out trusted deployment controls from main
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - id: provenance
+        name: Verify candidate commit and signed image provenance
         shell: bash
         env:
           CANDIDATE_SHA: ${{ inputs.candidate_sha }}
-          IMAGE_DIGEST: ${{ inputs.image_digest }}
+          REQUESTED_IMAGE_DIGEST: ${{ inputs.image_digest }}
+          IMAGE_REPOSITORY: ${{ env.IMAGE_REPOSITORY }}
+          TRUSTED_CONTROL_SHA: ${{ github.sha }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          candidate="$(echo "$CANDIDATE_SHA" | tr -d '[:space:]')"
-          [[ "$candidate" =~ ^[0-9a-f]{40}$ ]] || { echo "candidate_sha must be exactly 40 lowercase hex." >&2; exit 1; }
-          [[ "$IMAGE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "image_digest must be sha256:<64 lowercase hex>." >&2; exit 1; }
-          image_tag="sha-$candidate"
-
-          echo "image_tag=$image_tag" >> "$GITHUB_OUTPUT"
-          echo "image_digest=$IMAGE_DIGEST" >> "$GITHUB_OUTPUT"
-          echo "source_sha=$candidate" >> "$GITHUB_OUTPUT"
+          bash ./deploy/verify-image-provenance.sh
 
   deploy:
     runs-on:
@@ -63,7 +73,7 @@ jobs:
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
-          ref: ${{ needs.prepare.outputs.source_sha }}
+          ref: ${{ needs.prepare.outputs.control_sha }}
           persist-credentials: false
       - name: Sync deploy assets on test server
         shell: bash
@@ -85,6 +95,7 @@ jobs:
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
           IMAGE_TAG: ${{ needs.prepare.outputs.image_tag }}
           IMAGE_DIGEST: ${{ needs.prepare.outputs.image_digest }}
+          EXPECTED_APP_ORIGIN: https://test.gshs.app
           BACKUP_MAX_AGE_HOURS: ${{ env.BACKUP_MAX_AGE_HOURS }}
           HOST_BIND_IP: ${{ vars.HOST_BIND_IP }}
           ALLOW_PUBLIC_BIND: ${{ vars.ALLOW_PUBLIC_BIND }}
@@ -96,12 +107,13 @@ jobs:
           export DOCKERHUB_TOKEN="$DOCKERHUB_TOKEN"
           export IMAGE_TAG="$IMAGE_TAG"
           export IMAGE_DIGEST="$IMAGE_DIGEST"
+          export EXPECTED_APP_ORIGIN="$EXPECTED_APP_ORIGIN"
           export APP_VERSION="$IMAGE_TAG"
           export BACKUP_MAX_AGE_HOURS="$BACKUP_MAX_AGE_HOURS"
           export HOST_BIND_IP="$HOST_BIND_IP"
           export ALLOW_PUBLIC_BIND="$ALLOW_PUBLIC_BIND"
           export REQUIRE_EXPLICIT_BIND="$REQUIRE_EXPLICIT_BIND"
-          export DOCKER_IMAGE="${DOCKERHUB_USERNAME}/gshsapp"
+          export DOCKER_IMAGE="$DOCKER_IMAGE"
           ./deploy.sh
 
   smoke:
@@ -121,11 +133,12 @@ jobs:
         shell: bash
         env:
           EXPECTED_VERSION: ${{ needs.prepare.outputs.image_tag }}
+          EXPECTED_IMAGE_DIGEST: ${{ needs.prepare.outputs.image_digest }}
           SMOKE_HOST: ${{ vars.HOST_BIND_IP }}
         run: |
           set -euo pipefail
           health_version="$(
-          EXPECTED_VERSION="$EXPECTED_VERSION" python3 - <<'PY'
+          EXPECTED_VERSION="$EXPECTED_VERSION" EXPECTED_IMAGE_DIGEST="$EXPECTED_IMAGE_DIGEST" python3 - <<'PY'
           import json
           import ipaddress
           import os
@@ -160,6 +173,8 @@ jobs:
                       raise SystemExit(
                           f"Health endpoint version mismatch: expected {expected_version}, got {health_payload.get('version')}"
                       )
+                  if health_payload.get("imageDigest") != os.environ["EXPECTED_IMAGE_DIGEST"]:
+                      raise SystemExit("Health endpoint image digest does not match the verified image")
 
           print(health_payload["version"])
           PY
@@ -178,7 +193,7 @@ jobs:
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
-          ref: ${{ needs.prepare.outputs.source_sha }}
+          ref: ${{ needs.prepare.outputs.control_sha }}
           persist-credentials: false
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
@@ -190,9 +205,10 @@ jobs:
         shell: bash
         env:
           EXPECTED_VERSION: ${{ needs.prepare.outputs.image_tag }}
+          EXPECTED_IMAGE_DIGEST: ${{ needs.prepare.outputs.image_digest }}
         run: |
           set -euo pipefail
-          EXPECTED_VERSION="$EXPECTED_VERSION" E2E_BASE_URL="$E2E_BASE_URL" python3 - <<'PY'
+          EXPECTED_VERSION="$EXPECTED_VERSION" EXPECTED_IMAGE_DIGEST="$EXPECTED_IMAGE_DIGEST" E2E_BASE_URL="$E2E_BASE_URL" python3 - <<'PY'
           import json
           import os
           import time
@@ -210,7 +226,11 @@ jobs:
               try:
                   with urllib.request.urlopen(request, timeout=30) as response:
                       payload = json.loads(response.read().decode("utf-8"))
-                  if payload.get("version") == expected_version and payload.get("ok") is True:
+                  if (
+                      payload.get("version") == expected_version
+                      and payload.get("imageDigest") == os.environ["EXPECTED_IMAGE_DIGEST"]
+                      and payload.get("ok") is True
+                  ):
                       break
               except Exception:
                   pass
@@ -255,7 +275,7 @@ jobs:
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
-          ref: ${{ needs.prepare.outputs.source_sha }}
+          ref: ${{ needs.prepare.outputs.control_sha }}
           persist-credentials: false
       - name: Sync deploy assets for restore drill
         shell: bash
@@ -286,7 +306,7 @@ jobs:
           export IMAGE_TAG="$IMAGE_TAG"
           export IMAGE_DIGEST="$IMAGE_DIGEST"
           export APP_VERSION="$IMAGE_TAG"
-          export DOCKER_IMAGE="${DOCKERHUB_USERNAME}/gshsapp"
+          export DOCKER_IMAGE="$DOCKER_IMAGE"
           ./restore-drill.sh
       - id: parse
         name: Parse restore drill outputs
@@ -319,6 +339,7 @@ jobs:
           E2E_RESULT: ${{ needs.e2e.result }}
           RESTORE_RESULT: ${{ needs.restore_drill.result }}
           IMAGE_TAG: ${{ needs.prepare.outputs.image_tag }}
+          IMAGE_DIGEST: ${{ needs.prepare.outputs.image_digest }}
           HEALTH_VERSION: ${{ needs.smoke.outputs.health_version }}
           RESTORE_SOURCE_NAME: ${{ needs.restore_drill.outputs.restore_source_name }}
           LATEST_BACKUP_NAME: ${{ needs.restore_drill.outputs.latest_backup_name }}
@@ -329,6 +350,7 @@ jobs:
             echo "## Preproduction Rehearsal"
             echo
             echo "- Deployment SHA: $IMAGE_TAG"
+            echo "- Verified image digest: $IMAGE_DIGEST"
             echo "- Health version: ${HEALTH_VERSION:-n/a}"
             echo "- Smoke result: $SMOKE_RESULT"
             echo "- E2E result: $E2E_RESULT"
@@ -341,3 +363,55 @@ jobs:
           if [[ "$DEPLOY_RESULT" != "success" || "$SMOKE_RESULT" != "success" || "$E2E_RESULT" != "success" || "$RESTORE_RESULT" != "success" ]]; then
             exit 1
           fi
+
+  proof:
+    runs-on: ubuntu-latest
+    needs:
+      - prepare
+      - report
+    permissions:
+      contents: read
+    steps:
+      - name: Create exact rehearsal proof
+        shell: bash
+        env:
+          PROOF_DIRECTORY: ${{ runner.temp }}/preproduction-rehearsal-proof
+          CONTROL_SHA: ${{ needs.prepare.outputs.control_sha }}
+          CANDIDATE_SHA: ${{ needs.prepare.outputs.source_sha }}
+          IMAGE_TAG: ${{ needs.prepare.outputs.image_tag }}
+          IMAGE_DIGEST: ${{ needs.prepare.outputs.image_digest }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$PROOF_DIRECTORY"
+          PROOF_DIRECTORY="$PROOF_DIRECTORY" \
+          CONTROL_SHA="$CONTROL_SHA" \
+          CANDIDATE_SHA="$CANDIDATE_SHA" \
+          IMAGE_TAG="$IMAGE_TAG" \
+          IMAGE_DIGEST="$IMAGE_DIGEST" \
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          proof = {
+              "schemaVersion": 1,
+              "repository": os.environ["GITHUB_REPOSITORY"],
+              "workflow": ".github/workflows/preproduction-rehearsal.yml",
+              "event": os.environ["GITHUB_EVENT_NAME"],
+              "runId": int(os.environ["GITHUB_RUN_ID"]),
+              "runAttempt": int(os.environ["GITHUB_RUN_ATTEMPT"]),
+              "controlSha": os.environ["CONTROL_SHA"],
+              "candidateSha": os.environ["CANDIDATE_SHA"],
+              "imageTag": os.environ["IMAGE_TAG"],
+              "imageDigest": os.environ["IMAGE_DIGEST"],
+          }
+          destination = Path(os.environ["PROOF_DIRECTORY"]) / "rehearsal-proof.json"
+          destination.write_text(json.dumps(proof, separators=(",", ":")), encoding="utf-8")
+          PY
+      - name: Preserve successful rehearsal proof
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: preproduction-rehearsal-proof-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/preproduction-rehearsal-proof/rehearsal-proof.json
+          if-no-files-found: error
+          retention-days: 30

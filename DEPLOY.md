@@ -106,6 +106,7 @@ NEXT_PUBLIC_NEIS_API_KEY=
 
 - `image_tag=sha-<40-hex commit>`
 - `image_digest=sha256:<64-hex>`
+- `rehearsal_run_id=<successful Preproduction Rehearsal run ID>`
 
 원칙:
 

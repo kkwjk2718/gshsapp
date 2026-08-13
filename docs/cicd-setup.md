@@ -116,6 +116,7 @@ runner가 필요한 이유:
 
 - `image_tag=sha-<40-hex commit>`
 - `image_digest=sha256:<64-hex>`
+- `rehearsal_run_id=<successful Preproduction Rehearsal run ID>`
 
 진행 순서:
 

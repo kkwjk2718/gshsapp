@@ -111,7 +111,7 @@ wait_for_health() {
 
   while (( SECONDS < deadline )); do
     if health_json="$(curl --silent --show-error --fail --location "$HEALTHCHECK_URL" 2>/dev/null)"; then
-      if EXPECTED_VERSION="$APP_VERSION" HEALTH_JSON="$health_json" "$PYTHON_BIN" - <<'PY'
+      if EXPECTED_VERSION="$APP_VERSION" EXPECTED_IMAGE_DIGEST="$IMAGE_DIGEST" HEALTH_JSON="$health_json" "$PYTHON_BIN" - <<'PY'
 import json
 import os
 import sys
@@ -122,6 +122,8 @@ if payload.get("ok") is not True:
 if payload.get("service") != "gshsapp":
     sys.exit(1)
 if payload.get("version") != os.environ["EXPECTED_VERSION"]:
+    sys.exit(1)
+if payload.get("imageDigest") != os.environ["EXPECTED_IMAGE_DIGEST"]:
     sys.exit(1)
 PY
       then
@@ -149,20 +151,18 @@ create_predeployment_backup() {
   fi
 
   echo "Creating a SQLite-consistent pre-deployment backup..."
-  docker run --rm \
-    --user 1001:1001 \
-    --network none \
-    --read-only \
-    --cap-drop ALL \
-    --security-opt no-new-privileges \
-    --tmpfs /tmp:rw,noexec,nosuid,nodev,size=1536m \
-    --env DATA_ROOT=/app/data \
-    --env DATABASE_URL=file:/app/data/dev.db \
-    --env BACKUP_DIR=/app/data/backup \
-    --mount "type=bind,src=$DATA_DIR,dst=/app/data" \
-    --mount "type=bind,src=$BACKUP_DIR,dst=/app/data/backup" \
-    "$image_ref" \
-    node .next/ops/run-scheduled-backup.mjs --force
+  if ! docker container inspect "$CONTAINER_NAME" >/dev/null 2>&1 ||
+     [[ "$(docker container inspect --format '{{.State.Running}}' "$CONTAINER_NAME")" != "true" ]]; then
+    echo "An existing database may only be backed up by the already-running trusted application container." >&2
+    echo "Restore the last known-good service or create a reviewed offline backup before deploying." >&2
+    exit 1
+  fi
+
+  # Never execute the not-yet-deployed candidate image against the live DB.
+  # The current service already owns DB access and provides the consistent
+  # snapshot implementation that was accepted with the last deployment.
+  docker exec "$CONTAINER_NAME" \
+    node /app/.next/ops/run-scheduled-backup.mjs --force
 }
 
 require_command docker

@@ -10,6 +10,8 @@
 - [restore-drill.sh](./restore-drill.sh): 임시 컨테이너 기반 복원 리허설
 - [offsite-backup.sh](./offsite-backup.sh): 오프호스트 백업 내보내기
 - [run-scheduled-backup.sh](./run-scheduled-backup.sh): self-hosted runner가 실행하는 정기 백업 진입점
+- [verify-image-provenance.sh](./verify-image-provenance.sh): GitHub-hosted prepare job에서 `main` ancestry, Docker Hub digest, GitHub Sigstore build provenance를 함께 검증
+- [verify-rehearsal-proof.sh](./verify-rehearsal-proof.sh): 운영 배포 전에 동일 control SHA에서 동일 후보/digest의 E2E·restore drill 리허설이 성공했는지 GitHub run과 proof artifact로 검증
 
 ## 서버에 최종적으로 필요한 구조
 
@@ -41,7 +43,7 @@
 서버용 compose는 아래 원칙으로 작성되어 있습니다.
 
 - `build:` 대신 `image:` 사용
-- `sha-<40-hex commit>` 출처와 `sha256:<64-hex>` 이미지 digest를 함께 검증하여 배포
+- `sha-<40-hex commit>`이 `main`의 조상인지 확인하고 Docker Hub가 반환한 `sha256:<64-hex>` digest에 `publish-and-deploy-test.yml`의 서명된 build provenance가 있는지 검증하여 배포
 - `${HOST_BIND_IP}:${HOST_PORT}:3000` 방식 포트 바인딩
 - `./data:/app/data`, `./backup:/app/data/backup` 영속 볼륨 사용
 - `DATA_ROOT=/app/data` 아래에서 DB, 백업, 복원 스테이징, 날씨 캐시 경로를 고정
@@ -57,8 +59,8 @@
 2. `data/`, `backup/` 디렉터리 준비
 3. 임시 `.deploy.env` 생성
 4. 필요 시 Docker Hub 로그인
-5. digest로 이미지를 pull하고 revision label이 `sha-<commit>`와 일치하는지 검증
-6. 기존 SQLite DB의 일관된 사전 백업 생성
+5. GitHub-hosted prepare job이 승인한 digest로 이미지를 pull하고 revision label을 보조 검증
+6. 기존 SQLite DB는 현재 실행 중인 마지막 신뢰 컨테이너 내부의 snapshot 엔진으로만 일관된 사전 백업 생성(미검증 후보 이미지는 라이브 DB에 마운트하지 않음)
 7. 검토된 Prisma migration을 일회성 컨테이너에서 적용
 8. `docker compose up -d --remove-orphans --wait web`
 9. `/api/health` 버전 응답 확인

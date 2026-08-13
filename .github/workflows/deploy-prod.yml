@@ -11,6 +11,10 @@ on:
         description: Exact published image digest (sha256:<64 hex>)
         required: true
         type: string
+      rehearsal_run_id:
+        description: Successful Preproduction Rehearsal workflow run ID for this exact image
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -23,29 +27,58 @@ env:
   APP_URL: https://gshs.app
   E2E_BASE_URL: https://gshs.app
   DEPLOY_PATH: /opt/gshsapp
+  IMAGE_REPOSITORY: docker.io/kkwjk2718git/gshsapp
+  DOCKER_IMAGE: kkwjk2718git/gshsapp
   BACKUP_MAX_AGE_HOURS: "24"
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 jobs:
   prepare:
+    if: ${{ github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      attestations: read
+      actions: read
     outputs:
-      image_tag: ${{ steps.validate.outputs.image_tag }}
-      image_digest: ${{ steps.validate.outputs.image_digest }}
-      source_sha: ${{ steps.validate.outputs.source_sha }}
+      image_tag: ${{ steps.provenance.outputs.image_tag }}
+      image_digest: ${{ steps.provenance.outputs.image_digest }}
+      source_sha: ${{ steps.provenance.outputs.source_sha }}
+      control_sha: ${{ steps.provenance.outputs.control_sha }}
+      rehearsal_run_id: ${{ steps.rehearsal.outputs.rehearsal_run_id }}
     steps:
-      - id: validate
+      - name: Check out trusted deployment controls from main
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - id: provenance
+        name: Verify candidate commit and signed image provenance
         shell: bash
         env:
-          IMAGE_TAG: ${{ inputs.image_tag }}
-          IMAGE_DIGEST: ${{ inputs.image_digest }}
+          IMAGE_TAG_INPUT: ${{ inputs.image_tag }}
+          REQUESTED_IMAGE_DIGEST: ${{ inputs.image_digest }}
+          IMAGE_REPOSITORY: ${{ env.IMAGE_REPOSITORY }}
+          TRUSTED_CONTROL_SHA: ${{ github.sha }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          [[ "$IMAGE_TAG" =~ ^sha-[0-9a-f]{40}$ ]] || { echo "image_tag must be sha-<40 lowercase hex>." >&2; exit 1; }
-          [[ "$IMAGE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "image_digest must be sha256:<64 lowercase hex>." >&2; exit 1; }
-          echo "image_tag=$IMAGE_TAG" >> "$GITHUB_OUTPUT"
-          echo "image_digest=$IMAGE_DIGEST" >> "$GITHUB_OUTPUT"
-          echo "source_sha=${IMAGE_TAG#sha-}" >> "$GITHUB_OUTPUT"
+          [[ "$IMAGE_TAG_INPUT" =~ ^sha-[0-9a-f]{40}$ ]] || { echo "image_tag must be sha-<40 lowercase hex>." >&2; exit 1; }
+          export CANDIDATE_SHA="${IMAGE_TAG_INPUT#sha-}"
+          bash ./deploy/verify-image-provenance.sh
+      - id: rehearsal
+        name: Verify successful rehearsal proof for this image
+        shell: bash
+        env:
+          REHEARSAL_RUN_ID: ${{ inputs.rehearsal_run_id }}
+          CANDIDATE_SHA: ${{ steps.provenance.outputs.source_sha }}
+          REQUESTED_IMAGE_DIGEST: ${{ steps.provenance.outputs.image_digest }}
+          CONTROL_SHA: ${{ steps.provenance.outputs.control_sha }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          bash ./deploy/verify-rehearsal-proof.sh
 
   preflight:
     runs-on: ubuntu-latest
@@ -68,9 +101,10 @@ jobs:
         shell: bash
         env:
           EXPECTED_VERSION: ${{ needs.prepare.outputs.image_tag }}
+          EXPECTED_IMAGE_DIGEST: ${{ needs.prepare.outputs.image_digest }}
         run: |
           set -euo pipefail
-          EXPECTED_VERSION="$EXPECTED_VERSION" python3 - <<'PY'
+          EXPECTED_VERSION="$EXPECTED_VERSION" EXPECTED_IMAGE_DIGEST="$EXPECTED_IMAGE_DIGEST" python3 - <<'PY'
           import json
           import os
           import urllib.request
@@ -85,6 +119,8 @@ jobs:
               raise SystemExit(f"Preproduction is unhealthy: {payload}")
           if payload.get("version") != os.environ["EXPECTED_VERSION"]:
               raise SystemExit(f"Preproduction is not running the candidate: {payload}")
+          if payload.get("imageDigest") != os.environ["EXPECTED_IMAGE_DIGEST"]:
+              raise SystemExit("Preproduction is not running the exact verified image digest")
           PY
 
   deploy:
@@ -102,7 +138,7 @@ jobs:
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
-          ref: ${{ needs.prepare.outputs.source_sha }}
+          ref: ${{ needs.prepare.outputs.control_sha }}
           persist-credentials: false
       - name: Sync deploy assets on production server
         shell: bash
@@ -124,6 +160,7 @@ jobs:
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
           IMAGE_TAG: ${{ needs.prepare.outputs.image_tag }}
           IMAGE_DIGEST: ${{ needs.prepare.outputs.image_digest }}
+          EXPECTED_APP_ORIGIN: https://gshs.app
           BACKUP_MAX_AGE_HOURS: ${{ env.BACKUP_MAX_AGE_HOURS }}
           HOST_BIND_IP: ${{ vars.HOST_BIND_IP }}
           ALLOW_PUBLIC_BIND: ${{ vars.ALLOW_PUBLIC_BIND }}
@@ -135,12 +172,13 @@ jobs:
           export DOCKERHUB_TOKEN="$DOCKERHUB_TOKEN"
           export IMAGE_TAG="$IMAGE_TAG"
           export IMAGE_DIGEST="$IMAGE_DIGEST"
+          export EXPECTED_APP_ORIGIN="$EXPECTED_APP_ORIGIN"
           export APP_VERSION="$IMAGE_TAG"
           export BACKUP_MAX_AGE_HOURS="$BACKUP_MAX_AGE_HOURS"
           export HOST_BIND_IP="$HOST_BIND_IP"
           export ALLOW_PUBLIC_BIND="$ALLOW_PUBLIC_BIND"
           export REQUIRE_EXPLICIT_BIND="$REQUIRE_EXPLICIT_BIND"
-          export DOCKER_IMAGE="${DOCKERHUB_USERNAME}/gshsapp"
+          export DOCKER_IMAGE="$DOCKER_IMAGE"
           ./deploy.sh
 
   smoke:
@@ -160,11 +198,12 @@ jobs:
         shell: bash
         env:
           EXPECTED_VERSION: ${{ needs.prepare.outputs.image_tag }}
+          EXPECTED_IMAGE_DIGEST: ${{ needs.prepare.outputs.image_digest }}
           SMOKE_HOST: ${{ vars.HOST_BIND_IP }}
         run: |
           set -euo pipefail
           health_version="$(
-          EXPECTED_VERSION="$EXPECTED_VERSION" python3 - <<'PY'
+          EXPECTED_VERSION="$EXPECTED_VERSION" EXPECTED_IMAGE_DIGEST="$EXPECTED_IMAGE_DIGEST" python3 - <<'PY'
           import json
           import ipaddress
           import os
@@ -198,6 +237,8 @@ jobs:
                       raise SystemExit(
                           f"Health endpoint version mismatch: expected {expected_version}, got {payload.get('version')}"
                       )
+                  if payload.get("imageDigest") != os.environ["EXPECTED_IMAGE_DIGEST"]:
+                      raise SystemExit("Health endpoint image digest does not match the verified image")
 
           print(payload["version"])
           PY
@@ -217,8 +258,9 @@ jobs:
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
-          ref: ${{ needs.prepare.outputs.source_sha }}
+          ref: ${{ needs.prepare.outputs.control_sha }}
           persist-credentials: false
+          fetch-depth: 0
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: 24.19.0
@@ -229,9 +271,10 @@ jobs:
         shell: bash
         env:
           EXPECTED_VERSION: ${{ needs.prepare.outputs.image_tag }}
+          EXPECTED_IMAGE_DIGEST: ${{ needs.prepare.outputs.image_digest }}
         run: |
           set -euo pipefail
-          EXPECTED_VERSION="$EXPECTED_VERSION" E2E_BASE_URL="$E2E_BASE_URL" python3 - <<'PY'
+          EXPECTED_VERSION="$EXPECTED_VERSION" EXPECTED_IMAGE_DIGEST="$EXPECTED_IMAGE_DIGEST" E2E_BASE_URL="$E2E_BASE_URL" python3 - <<'PY'
           import json
           import os
           import time
@@ -249,7 +292,11 @@ jobs:
               try:
                   with urllib.request.urlopen(request, timeout=30) as response:
                       payload = json.loads(response.read().decode("utf-8"))
-                  if payload.get("version") == expected_version and payload.get("ok") is True:
+                  if (
+                      payload.get("version") == expected_version
+                      and payload.get("imageDigest") == os.environ["EXPECTED_IMAGE_DIGEST"]
+                      and payload.get("ok") is True
+                  ):
                       break
               except Exception:
                   pass
@@ -291,6 +338,8 @@ jobs:
           SMOKE_RESULT: ${{ needs.smoke.result }}
           E2E_RESULT: ${{ needs.e2e.result }}
           IMAGE_TAG: ${{ needs.prepare.outputs.image_tag }}
+          IMAGE_DIGEST: ${{ needs.prepare.outputs.image_digest }}
+          REHEARSAL_RUN_ID: ${{ needs.prepare.outputs.rehearsal_run_id }}
           HEALTH_VERSION: ${{ needs.smoke.outputs.health_version }}
         run: |
           set -euo pipefail
@@ -298,6 +347,8 @@ jobs:
             echo "## Production Deployment"
             echo
             echo "- Deployment SHA: $IMAGE_TAG"
+            echo "- Verified image digest: $IMAGE_DIGEST"
+            echo "- Verified rehearsal run: $REHEARSAL_RUN_ID"
             echo "- Health version: ${HEALTH_VERSION:-n/a}"
             echo "- Deploy result: $DEPLOY_RESULT"
             echo "- Smoke result: $SMOKE_RESULT"
@@ -322,14 +373,20 @@ jobs:
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
-          ref: ${{ needs.prepare.outputs.source_sha }}
+          ref: ${{ needs.prepare.outputs.control_sha }}
           persist-credentials: false
+          fetch-depth: 0
       - id: package_version
         name: Read package version
         shell: bash
         run: |
           set -euo pipefail
-          printf 'value=%s\n' "$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+          package_json="$(git show "${SOURCE_SHA}:package.json")"
+          package_version="$(node -e 'const fs=require("node:fs"); const parsed=JSON.parse(fs.readFileSync(0,"utf8")); process.stdout.write(parsed.version)' <<<"$package_json")"
+          [[ "$package_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([+-][0-9A-Za-z.-]+)?$ ]] || { echo "Candidate package version is invalid." >&2; exit 1; }
+          printf 'value=%s\n' "$package_version" >> "$GITHUB_OUTPUT"
+        env:
+          SOURCE_SHA: ${{ needs.prepare.outputs.source_sha }}
       - name: Create or update GitHub Release
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         env:

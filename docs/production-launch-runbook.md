@@ -5,7 +5,7 @@
 ## 이미 준비된 것
 
 - `main` push 시 CI가 돌고 `test.gshs.app`으로 자동 배포됨
-- `Preproduction Rehearsal`로 후보 `sha-<commit>`와 image digest를 테스트 서버에서 재검증 가능
+- `Preproduction Rehearsal`은 `main` 조상인 후보만 받고 Docker Hub digest와 GitHub Sigstore build provenance가 정확히 일치할 때만 테스트 서버에서 재검증
 - `deploy/restore-drill.sh`로 라이브 DB를 건드리지 않는 복원 리허설 가능
 - `/api/health`와 `/admin/test`를 운영 전 최종 판단 기준으로 사용
 
@@ -30,10 +30,10 @@
 
 ## 운영 배포 직전 필수 순서
 
-배포할 정확한 `sha-<commit>`와 `sha256:<digest>` 기준으로 아래 순서를 지킵니다.
+배포할 정확한 `sha-<commit>`와 `sha256:<digest>` 기준으로 아래 순서를 지킵니다. 수동 입력은 선택 기준일 뿐 신뢰 기준이 아닙니다. 워크플로가 Docker Hub의 `sha-<commit>` manifest digest를 다시 조회하고, `publish-and-deploy-test.yml`이 동일 `main` commit에서 GitHub-hosted runner로 만든 Sigstore provenance를 검증해야 다음 단계가 열립니다.
 
 1. `Publish And Deploy Test`가 해당 SHA에서 초록인지 확인
-2. 같은 SHA로 `Preproduction Rehearsal` 실행 후 초록 확인
+2. 같은 SHA와 publish job이 출력한 digest로 `Preproduction Rehearsal` 실행 후 provenance 검증을 포함해 초록 확인하고 run ID 기록
 3. `test.gshs.app/admin/test`에서 모든 항목이 `PASS`인지 확인
 4. 최신 백업 시각이 충분히 최근인지 확인
 5. `test.gshs.app`에서 아래 수동 점검 수행
@@ -63,10 +63,10 @@ OFFSITE_TARGET=backup-user@backup-host:/srv/backups/gshsapp/ ./offsite-backup.sh
 ## 운영 배포 절차
 
 1. GitHub Actions에서 `Deploy Production` 실행
-2. 이미 리허설을 통과한 동일한 `sha-<commit>`와 `sha256:<digest>` 입력
+2. 이미 리허설을 통과한 동일한 `sha-<commit>`, `sha256:<digest>`, `Preproduction Rehearsal` run ID 입력(운영 workflow와 리허설의 control SHA 또는 후보/digest가 다르면 즉시 중단)
 3. `production` environment 승인
 4. 워크플로우가 `deploy -> smoke -> e2e`까지 끝날 때까지 대기
-5. `https://gshs.app/api/health`가 배포한 SHA를 반환하는지 확인
+5. `https://gshs.app/api/health`가 배포한 SHA와 정확한 immutable image digest를 반환하는지 확인
 6. 관리자 계정으로 `gshs.app` 로그인
 7. `/admin/test`에서 모든 항목이 `PASS`인지 확인
 
