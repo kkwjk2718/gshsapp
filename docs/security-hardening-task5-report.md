@@ -28,7 +28,7 @@ Base: `dbae412ad4f178dfee1c8f497f2d59f131d87b94`
 - Standalone assertion: passing, 2,260 files inspected.
 - Shell syntax: deployment, scheduled backup, restore drill, offsite backup, and entrypoint scripts pass `bash -n`.
 - Real operations-bundle smoke: a file-backed SQLite fixture completed snapshot creation, canonical archive validation, and isolated restore preparation.
-- Gitleaks 8.24.3 checksum-verified local scan: checked-out source snapshot has zero findings. Full history has five redacted findings and intentionally fails closed.
+- Gitleaks 8.24.3 checksum-verified local scan: tracked source (excluding generated build output) has zero findings. Full history still has four redacted findings for the same exposed legacy API credential in two removed test files across two commits and intentionally fails closed.
 - This isolated branch still inherits the base dependency audit findings (12 total); the separate dependency/browser hardening task owns their upgrades and must reconcile `package-lock.json` while retaining exact `tar` and operations-bundler versions.
 - Docker image execution was not available in this Windows verification environment; the Dockerfile and Compose behavior still require CI/server validation.
 

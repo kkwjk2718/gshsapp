@@ -157,4 +157,38 @@ describe("first-deployment bootstrap backup", () => {
     await fs.writeFile(regeneratedMetadataPath, JSON.stringify(regeneratedMetadata));
     expect(runBootstrap(["verify", "--backup-dir", backupDir, "--name", regeneratedFile]).status).not.toBe(0);
   });
+
+  it("round-trips every allowlisted mutable content root through the host backup format", async () => {
+    const root = await temporaryRoot();
+    const dataDir = path.join(root, "data");
+    const backupDir = path.join(root, "backup");
+    const outputDir = path.join(root, "output");
+    await fs.mkdir(dataDir);
+    await fs.mkdir(backupDir);
+    new DatabaseSync(path.join(dataDir, "dev.db")).close();
+    for (const contentRoot of ["uploads", "user-content", "storage", "logs"]) {
+      await fs.mkdir(path.join(dataDir, contentRoot), { recursive: true });
+      await fs.writeFile(path.join(dataDir, contentRoot, `${contentRoot}.txt`), contentRoot);
+    }
+    await fs.mkdir(path.join(dataDir, "unmanaged"));
+    await fs.writeFile(path.join(dataDir, "unmanaged", "excluded.txt"), "excluded");
+
+    const created = runBootstrap([
+      "create", "--database", path.join(dataDir, "dev.db"), "--data-root", dataDir,
+      "--backup-dir", backupDir, "--reason", "pre-deployment",
+    ]);
+    expect(created.status, created.stderr).toBe(0);
+    const file = created.stdout.trim();
+    const extracted = path.join(root, "inspected");
+    const inspected = await extractAndVerifyBackupArchive(path.join(backupDir, file), extracted);
+    expect(inspected.layout.contentRoots).toEqual(["logs", "storage", "uploads", "user-content"]);
+    expect(await fs.readFile(path.join(extracted, "content", "uploads", "uploads.txt"), "utf8")).toBe("uploads");
+    await expect(fs.stat(path.join(extracted, "content", "unmanaged"))).rejects.toMatchObject({ code: "ENOENT" });
+
+    const restored = runBootstrap([
+      "extract", "--backup-dir", backupDir, "--name", file, "--output", outputDir,
+    ]);
+    expect(restored.status, restored.stderr).toBe(0);
+    expect(await fs.readFile(path.join(outputDir, "content", "storage", "storage.txt"), "utf8")).toBe("storage");
+  });
 });

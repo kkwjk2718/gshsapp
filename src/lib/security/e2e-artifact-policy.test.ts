@@ -18,9 +18,22 @@ describe("secret-bearing E2E artifact policy", () => {
     expect(config).toContain('reporter: process.env.CI ? [["list"]]');
   });
 
-  it.each(remoteWorkflows)("never publishes raw Playwright output from %s", (workflow) => {
+  it.each(remoteWorkflows)("never exposes privileged browser credentials or raw output from %s", (workflow) => {
     const source = readFileSync(join(root, workflow), "utf8");
-    expect(source).toContain("E2E_ADMIN_PASSWORD:");
+    expect(source).not.toContain("E2E_ADMIN_USER");
+    expect(source).not.toContain("E2E_ADMIN_PASSWORD");
+    const artifactUploads = source.match(/actions\/upload-artifact@/gu) ?? [];
+    if (workflow.endsWith("preproduction-rehearsal.yml")) {
+      expect(artifactUploads).toHaveLength(1);
+      expect(source).toContain("name: preproduction-proof-${{ github.run_id }}-${{ github.run_attempt }}");
+      expect(source).toContain("path: ${{ runner.temp }}/preproduction-proof.json");
+    } else if (workflow.endsWith("deploy-prod.yml")) {
+      expect(artifactUploads).toHaveLength(1);
+      expect(source).toContain("name: production-proof-${{ github.run_id }}-${{ github.run_attempt }}");
+      expect(source).toContain("path: ${{ runner.temp }}/production-proof.json");
+    } else {
+      expect(artifactUploads).toHaveLength(0);
+    }
     expect(source).not.toMatch(/playwright-report-(?:test|preproduction|production)/u);
     expect(source).not.toMatch(/path:\s*[|>-]?\s*\n\s*(?:playwright-report|test-results)/u);
   });

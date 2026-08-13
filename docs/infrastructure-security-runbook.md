@@ -1,6 +1,6 @@
 # Infrastructure security runbook
 
-Repository hardening cannot safely infer the reverse-proxy source address, rotate credentials, rewrite public Git history, or mutate DNS. Complete this checklist before setting the protected production environment variables to `true`.
+Repository hardening cannot safely infer the reverse-proxy source address, rotate credentials, rewrite public Git history, reimage a host, or mutate DNS. Complete this operator checklist before approving or starting any root deployment transaction; no workflow boolean substitutes for this evidence.
 
 ## 1. Mandatory credential incident response
 
@@ -17,7 +17,8 @@ The former public history contained operational credentials and user password ma
    gitleaks dir --redact --config .gitleaks.toml .
    ```
 
-6. Only after rotation, session revocation, history cleanup, and clean scans set production environment variable `SECURITY_ROTATION_COMPLETE=true`.
+6. Remove every legacy self-hosted runner service/account, registration token, deploy key, broker credential, and cached Actions workspace from the reimaged hosts. Do not register a replacement host runner; current workflows are GitHub-hosted only.
+7. Record completion in the operator-controlled incident log. The current workflows do not accept a boolean environment variable as a substitute for rotation, revocation, history cleanup, and clean scans.
 
 Before the first hardened deployment, delete every historic GitHub Actions artifact containing `playwright-report` or `test-results` and confirm none remain downloadable. Treat every test and production E2E administrator credential previously supplied to Playwright as compromised, rotate it, and revoke its sessions. Future remote E2E must use a dedicated short-lived, least-privilege account and must never enable trace, screenshots, video, or raw Playwright artifact uploads.
 
@@ -28,28 +29,30 @@ The supplied address `172.15.10.34` is **not** RFC1918 private space (`172.16.0.
 Dry-run first:
 
 ```bash
-cd /opt/gshsapp
 PROXY_SOURCE_CIDR=REPLACE_WITH_PROXY_CIDR \
 SSH_SOURCE_CIDR=REPLACE_WITH_ADMIN_CIDR \
 SSH_ADMIN_USER=REPLACE_WITH_NON_ROOT_USER \
 SSH_AUTHORIZED_KEY_FINGERPRINT=SHA256:REPLACE_WITH_REVIEWED_FINGERPRINT \
 HOST_BIND_IP=172.15.10.34 \
 ALLOW_NON_RFC1918_INTERNAL=true \
-./host-hardening.sh --dry-run
+/bin/bash /usr/local/lib/gshsapp-operations/host-hardening.sh --dry-run
 ```
 
-Before `--apply`, verify console/out-of-band access and install a reviewed administrator public key. Record its exact `ssh-keygen -l -E sha256 -f authorized_keys` fingerprint in `SSH_AUTHORIZED_KEY_FINGERPRINT`. The script resolves the account's real home, enforces StrictModes-compatible ownership/permissions and a valid login shell, verifies the exact fingerprint, and checks the effective `sshd -T` policy before reloading. Keep the current SSH session open while opening a second key-only session. The script then permits port 1234 only from the named reverse-proxy CIDR, SSH only from the named admin CIDR, disables password/root SSH, and denies all other inbound and routed traffic.
+Before `--apply`, verify console/out-of-band access and install a reviewed administrator public key. Record its exact `ssh-keygen -l -E sha256 -f authorized_keys` fingerprint in `SSH_AUTHORIZED_KEY_FINGERPRINT`. The script resolves the account's real home, enforces StrictModes-compatible ownership/permissions and a valid login shell, verifies the exact fingerprint, and checks the effective `sshd -T` policy before reloading. Keep the current SSH session open while opening a second key-only session. The script then permits port 1234 only from the named reverse-proxy CIDR, SSH only from the named admin CIDR, disables password/root SSH, and denies all other inbound and routed traffic. Because Compose publishes through a Docker bridge, the installed control must also install and verify an exact `DOCKER-USER` policy that accepts established traffic and the named proxy source to the published application port, then drops every other ingress path to that port; UFW INPUT alone is not a sufficient boundary.
 
-The apply step is deliberately fail-closed. `ufw show added` must contain either no rules or exactly those two source/destination/port/TCP rules. A broad `Anywhere` rule, route rule, IPv6 rule, duplicate, stale port, or any other rule stops the script before it changes SSH or UFW. The script never resets or bulk-deletes firewall rules. If it refuses an existing host, use console access to review and migrate each unexpected rule individually, then repeat the dry run and apply procedure. After enabling UFW, the script verifies active status, default policies, and the complete two-rule managed set before reloading SSH.
+The apply step is deliberately fail-closed. `ufw show added` must contain either no rules or exactly the reviewed host INPUT rules. A broad `Anywhere` rule, route rule, IPv6 rule, duplicate, stale port, unexpected `DOCKER-USER` rule, or any other rule stops the script before it changes SSH or firewall state. The script never resets or bulk-deletes unrelated firewall rules. If it refuses an existing host, use console access to review and migrate each unexpected rule individually, then repeat the dry run and apply procedure. After enabling UFW, the script verifies active status, default policies, the complete managed host rules, and the complete managed Docker forwarding rules before reloading SSH.
 
-Set the test/production GitHub Environment values:
+Set the corresponding root-owned `/etc/gshsapp-operations/deploy.env` values:
 
 - `HOST_BIND_IP`: exact proxy-facing host interface, never `0.0.0.0`.
-- `ALLOW_PUBLIC_BIND=true` only for reviewed non-RFC1918 topology with the source-restricted UFW rule above.
-- `ORIGIN_FIREWALL_READY=true` only after rules and second SSH session are verified.
+- `PROXY_SOURCE_CIDR`: the one reviewed reverse proxy as a canonical IPv4 `/32`; a subnet is rejected.
+- `PROTECTED_INTERNAL_CIDRS`: sorted, canonical comma-separated IPv4 CIDRs covering every routed campus/management network and `HOST_BIND_IP` (for example the reviewed `172.15.0.0/16`). The web bridge is denied to these networks, RFC1918, CGNAT, link-local, host INPUT, and exact connected non-public prefixes while public DNS/HTTPS egress remains available.
+- `ALLOW_PUBLIC_BIND=true` only for reviewed non-RFC1918 topology with both the source-restricted UFW and `DOCKER-USER` rules above.
 - `TRUSTED_PROXY_HOPS`: exact number (1-3) of controlled proxies that overwrite, rather than append, untrusted forwarding headers. Production startup and deployment fail closed when it is absent or zero. Verify the edge removes any client-supplied `Forwarded`, `X-Forwarded-For`, and `X-Real-IP` values before writing its own chain.
 
-Install `/opt/gshsapp/.env` as a non-symlink file owned by root or the dedicated deploy account with mode `0600`; every directory below the trusted deployment root must reject group/other writes. Deployment refuses weaker ownership or permissions. Rotate `AUTH_SECRET` only in a planned maintenance window because doing so invalidates every active session.
+The installed deployment unit invokes `host-hardening.sh --verify-firewall` and `docker-user-firewall.sh --verify`, and refuses either policy mismatch on every deployment; no workflow flag bypasses these checks. The deploy installer also enables the static `gshsapp-docker-user-firewall.service` so the exact Docker forwarding policy is restored after Docker daemon or host restart.
+
+On the freshly reimaged host, install `/opt/gshsapp/.env` as a root:root non-symlink file mode `0600`; `/opt/gshsapp` is root-owned and inaccessible to unprivileged accounts. Deployment refuses weaker ownership or permissions. Rotate `AUTH_SECRET` only in a planned maintenance window because doing so invalidates every active session.
 
 ## 2a. Student roster gate
 
@@ -69,15 +72,15 @@ Confirm the row count and audit record, then delete the transient root-only CSV.
 
 ## 3. Backup and recovery
 
-Configure a private off-host destination, run the backup workflow, and complete the isolated restore drill for the exact image digest. Confirm backup directories are `0700`, files are `0600`, and restoration only creates a staged pending restore. Never automatically replace the live database from an uploaded archive.
+Configure a root-private mounted offsite filesystem, install `gshsapp-backup.timer`, and complete the isolated restore drill for the exact image digest. GitHub Actions does not run or schedule host backups. Confirm backup directories are `0700`, files are `0600`, and restoration only creates a staged pending restore. Never automatically replace the live database from an uploaded archive.
 
-Local pair-aware retention runs only after a new archive and metadata are validated and durable; it does not attest that `offsite-backup.sh` succeeded. Run the off-host export immediately after scheduled creation, keep remote immutable/versioned retention independent, never mirror local deletion with `rsync --delete`, and verify the remote checksum. Expired staged restores and stale upload locks are reclaimed automatically, while an administrator cancellation requires the exact opaque restore ID and creates audit records; neither path applies data to the live database.
+The root backup service stops the exact writer, creates a complete archive/metadata pair, exports it to the configured `OFFSITE_DIR`, publishes the root-owned checksum receipt to the fixed `$OFFSITE_DIR/.gshsapp-receipts`, verifies that generation, and only then runs pair-aware local retention. Protect the archive, metadata, and receipt together with immutable/versioned offsite retention and never mirror local deletion. Record the receipt SHA-256 through a separate authenticated operator channel because the receipt itself is not a signature. Expired staged restores and stale upload locks are reclaimed automatically, while an administrator cancellation requires the exact opaque restore ID and creates audit records; neither path applies data to the live database.
 
-Set `OFFSITE_BACKUP_READY=true` only after a fresh off-host copy and successful restore drill.
+For a fresh-host import, use the preserved receipt at `$OFFSITE_DIR/.gshsapp-receipts` and compare its SHA-256 with the separately authenticated operator record; never synthesize a new receipt from the archive. `import-backup.sh` accepts only an empty data root, an exact fresh release approval, a matching archive/metadata/receipt generation, and the approved digest-pinned validator. The successful import leaves the application stopped and publishes the durable bootstrap marker.
 
-The first hardened deployment may start from an older trusted container that does not contain `.next/ops/run-scheduled-backup.mjs`. In that compatibility case, or when a prior failed deployment already left the web absent, `predeployment-backup.sh` uses Python's SQLite backup API on the quiesced host database to publish a DB-only v2 archive/metadata pair. The digest-pinned candidate then receives only that archive read-only, with no network, runtime secrets, live database, data root, or backup-directory mount, and must migrate and validate an isolated copy before deployment continues. On later deployments the script captures the accepted running container's immutable image ID, removes the web writer, and runs that exact accepted image's backup operation once with no network so the final snapshot includes every write accepted before shutdown.
+Every hardened deployment quiesces the writer and uses the reviewed host SQLite backup implementation to publish a DB-only v2 archive/metadata pair. No pre-existing image code is ever executed as part of trust bootstrap. The digest-pinned candidate receives only that archive read-only, with no network, runtime secrets, live database, data root, or backup-directory mount, and must migrate and validate an isolated copy before deployment continues.
 
-After the pre-deployment backup, deployment stops and removes the old web container before touching the live schema. A migration, startup, or health failure leaves the web service offline and removes any unhealthy candidate. Never restart a pre-hardening image against a database whose security migration may have started. Recovery requires either rerunning a reviewed hardened candidate or a separately approved stopped-service restoration of the verified pre-deployment backup; application-only automatic rollback is intentionally forbidden.
+Deployment disables the old web container's auto-restart policy and preserves the stopped exact container through backup, offsite verification, candidate validation, and environment staging. Immediately before migration it durably records the schema-transition boundary and clears the pre-schema restart intent. Only after migration succeeds does it remove the old container. A migration, startup, or health failure after that boundary leaves the web service offline and quarantines any unaccepted candidate. Never restart a pre-hardening image against a database whose security migration may have started. Recovery requires either rerunning a reviewed hardened candidate or a separately approved stopped-service restoration of the verified pre-deployment backup; application-only automatic rollback is intentionally forbidden.
 
 ## 4. DNS and mail policy
 
@@ -118,8 +121,13 @@ Production deployment now requires:
 
 - an exact `sha-<40 hex>` source identity plus a matching `sha256:<64 hex>` image digest;
 - the same candidate version already healthy at `test.gshs.app`;
-- `SECURITY_ROTATION_COMPLETE=true`, `ORIGIN_FIREWALL_READY=true`, and `OFFSITE_BACKUP_READY=true` in the protected production environment;
-- a reviewed SQLite backup and migration, followed by container health and public smoke checks.
+- a fresh successful preproduction proof, verified by the installed root approval control;
+- operator evidence for credential rotation/history cleanup and complete removal of legacy runner credentials;
+- an OOB-authenticated installed control tree, exact active UFW policy, reviewed runtime configuration, and root-only systemd units;
+- a verified offsite archive/metadata/`$OFFSITE_DIR/.gshsapp-receipts` generation with a separately recorded receipt digest, fresh-host import marker, and candidate-bound restore-drill receipt;
+- a reviewed SQLite migration, followed by container health and public smoke checks.
 - an imported authoritative roster and resolved legacy duplicate student identity before member services are re-enabled.
 
 Membership remains suspended until this entire gate and the post-deploy security verification are complete.
+
+The executable host order is documented in `docs/root-operations-bootstrap.md` and `docs/production-launch-runbook.md`: OOB bootstrap, root configuration, exact approval, verified offsite import, restore drill, then `systemctl start gshsapp-deploy.service`.

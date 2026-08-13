@@ -1,6 +1,6 @@
 const DEFAULT_LIMITS = {
   maxEntries: 10_000,
-  maxTotalBytes: 1024 * 1024 * 1024,
+  maxTotalBytes: 512 * 1024 * 1024,
   maxFileBytes: 512 * 1024 * 1024,
   maxPathBytes: 512,
   maxDepth: 32,

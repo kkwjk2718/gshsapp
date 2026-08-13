@@ -1,83 +1,79 @@
 # 저장소 운영 규칙
 
-이 문서는 저장소 운영 규칙의 단일 정본입니다.
+이 문서는 저장소 보호와 릴리스 승격 규칙의 정본입니다. 배포 명령은 [운영 배포 런북](./production-launch-runbook.md), 신규 호스트 신뢰 설정은 [Root operations 신뢰 부트스트랩](./root-operations-bootstrap.md)을 따릅니다.
 
-함께 읽을 문서:
+## 1. 신뢰 경계
 
-- [CONTRIBUTING.md](../CONTRIBUTING.md)
-- [docs/cicd-setup.md](./cicd-setup.md)
-- [docs/production-launch-runbook.md](./production-launch-runbook.md)
-- [AGENTS.md](../AGENTS.md)
+모든 GitHub Actions job은 GitHub-hosted `ubuntu-latest`에서 실행합니다. Actions가 담당하는 범위는 CI, exact SHA 이미지 publish와 provenance, 공개 URL 검증, semver Release 생성뿐입니다.
 
-## 1. 이 문서의 역할
+- Actions는 테스트·운영 호스트에 로그인하지 않습니다.
+- Actions는 호스트의 배포·백업·복원·import를 실행하지 않습니다.
+- 테스트·운영 호스트에는 self-hosted runner나 Actions용 Docker 권한 계정을 두지 않습니다.
+- 호스트 변경은 OOB로 인증한 root 콘솔과 설치된 `/usr/local/lib/gshsapp-operations` control/systemd unit만 수행합니다.
+- 이미지 승격 기준은 mutable `latest`가 아니라 exact `sha-<40-hex>`와 `sha256:<64-hex>` digest입니다.
 
-이 저장소에는 이미 아래 체계가 들어 있습니다.
+## 2. `main` 필수 보호 정책
 
-- CI/CD
-- 테스트 서버 자동 배포
-- Playwright E2E
-- 복원 리허설
-- 운영 배포 workflow
-- semver 릴리스 정책
+아래 GitHub branch protection 또는 동등한 ruleset이 실제로 활성화되지 않았다면 릴리스 준비 미완료이며 테스트·운영 배포를 시작하지 않습니다.
 
-이 문서는 위 구조를 안전하게 유지하기 위한 저장소 운영 기준을 정의합니다.
+- 변경은 Pull Request로만 반영
+- approving review 최소 1개 필수
+- 새 commit이 push되면 오래된 approval 무효화
+- 최신 reviewable push 뒤 승인 요구
+- 미해결 review conversation이 있으면 merge 금지
+- branch가 최신 `main`과 동기화된 상태에서만 merge하는 strict status checks
+- 필수 CI:
+  - `lint` (`CI` workflow)
+  - `test` (`CI` workflow)
+  - `firewall-policy` (`CI` workflow)
+  - `build` (`CI` workflow)
+  - `gitleaks` (`Secret scan` workflow)
+- force push 금지
+- branch deletion 금지
+- 관리자에게도 보호 정책 적용
 
-## 2. 현재 `main` 브랜치 보호 상태
+GitHub UI에 표시되는 check context는 workflow 이름을 함께 표시할 수 있습니다. 규칙을 저장하기 전에 최근 정상 PR에서 위 다섯 job의 실제 context를 정확히 선택하고, 의도적으로 실패시킨 검증 PR이 merge되지 않는지 확인합니다.
 
-현재 `main`은 아래 기준으로 보호됩니다.
+## 3. 보호된 GitHub Environments
 
-- 일반 변경은 Pull Request를 통해 들어오는 것을 전제로 함
-- 필수 status check 통과 전 머지 불가
-- 필수 체크:
-  - `lint`
-  - `test`
-  - `build`
-- strict status check 활성화
-- 미해결 리뷰 대화가 있으면 머지 불가
-- `main`에 대한 force push 금지
-- `main` branch deletion 금지
+다음 네 environment를 정확한 이름으로 생성합니다.
 
-현재 예외 모델:
+| Environment | 사용 workflow | 필수 보호 |
+| --- | --- | --- |
+| `publish` | `Publish Candidate Image` | `main`만 허용, required reviewer 1명 이상, self-review 방지 |
+| `preproduction-verification` | `Preproduction Public Verification` | `main`만 허용, required reviewer 1명 이상, self-review 방지 |
+| `production-verification` | `Production Release Verification` | `main`만 허용, required reviewer 1명 이상, self-review 방지 |
+| `production-monitor` | `Production Health Monitor` | `main`만 허용, required reviewer 없음(무인 10분 schedule) |
 
-- admin enforcement 비활성화
-- required approving review count는 `0`
+앞의 세 배포 environment에서 보호 규칙/reviewer가 비어 있거나 어느 environment든 `main` 이외 ref가 허용되면 launch blocker입니다. `production-monitor`에 reviewer를 추가해 schedule이 승인 대기 상태가 되는 경우도 운영 blocker입니다.
 
-즉, 평상시에는 PR + 초록 CI 흐름을 따르고, 관리자 우회는 사고 대응용으로만 사용합니다.
+`.github/CODEOWNERS`의 두 owner가 실제 repository write 권한을 갖는 서로 다른 사람인지 확인하고, workflow·`deploy/`·인증·보안·migration 변경은 작성자가 아닌 CODEOWNER가 승인해야 합니다. 계정이 없거나 동일 운영자를 가리키면 protected-main 승인 근거가 성립하지 않으므로 launch blocker입니다.
 
-## 3. 기본 개발 흐름
+`publish`에만 Docker Hub publish용 `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN`을 둡니다. 선택적 alert webhook은 `production-monitor` environment secret으로만 두고 repository-scoped 사본은 삭제·회전합니다. 서버 SSH key, root token, runtime `.env`, backup·restore credential은 GitHub Environment나 repository secret에 두지 않습니다. `preproduction-verification`과 `production-verification`은 공개 URL만 검사하며 서버 credential이 필요하지 않습니다.
 
-일반적인 변경은 아래 절차를 따릅니다.
+## 4. 우회 권한
 
-1. 기능 브랜치 생성
-2. 브랜치에서 변경 진행
-3. 변경에 맞는 로컬 검증 실행
-4. `main` 대상 Pull Request 생성
-5. 필수 체크 통과 대기
-6. 리뷰 코멘트와 대화 스레드 정리
-7. 브랜치가 최신 `main` 기준일 때만 머지
+기본 bypass 목록은 비워 둡니다. 저장소 소유자와 관리자도 PR, review, strict CI, conversation resolution을 따라야 합니다.
 
-## 4. 머지 조건
+조직 정책상 비상 bypass가 불가피한 경우에만 다음을 모두 적용합니다.
 
-Pull Request는 아래 조건을 모두 만족할 때만 머지 준비 완료로 봅니다.
+- 개인이 아닌 최소 인원의 명명된 incident-response team으로 제한
+- 평시 비활성 또는 시간 제한 access로 운영
+- 사용 사유, 승인자, commit SHA, 시작·종료 시각을 외부 감사 기록에 남김
+- 사용 직후 credential 회전, ruleset 복구, 독립 사후 review 수행
 
-- `lint` 초록
-- `test` 초록
-- `build` 초록
-- 미해결 리뷰 대화 없음
-- PR 브랜치가 최신 `main` 기준으로 갱신됨
-- 변경 설명에 사용자 영향과 배포 영향이 포함됨
-- 동작, 인프라, 프로세스를 바꿨다면 관련 문서가 함께 업데이트됨
+서비스 장애는 branch protection 해제 사유가 아닙니다. 호스트 장애는 root 운영 런북으로 복구하고, 긴급 코드 수정도 보호된 PR 흐름을 사용합니다.
 
-머지하지 않는 경우:
+## 5. 변경과 merge 흐름
 
-- CI가 빨간 상태
-- 기능 회귀가 해결되지 않음
-- 인증, 환경 변수, 배포, 백업 변경이 문서화되지 않음
-- 시크릿, 비밀번호, 토큰, `.env` 내용이 포함됨
+1. 기능 branch에서 변경합니다.
+2. 관련 로컬 검증을 실행합니다.
+3. `main` 대상 Pull Request를 생성합니다.
+4. 변경 설명에 사용자 영향, 보안 영향, 배포·백업 영향을 기록합니다.
+5. required checks, 최신 `main` 동기화, review 승인, conversation resolution을 모두 충족합니다.
+6. merge 후 `Publish Candidate Image`가 exact SHA 이미지를 만들고 GitHub provenance를 발행합니다.
 
-## 5. PR 전 기본 검증
-
-기본 검증:
+기본 로컬 검증:
 
 ```bash
 npm run lint
@@ -85,115 +81,60 @@ npm test
 npm run build
 ```
 
-배포 또는 핵심 흐름에 영향이 있다면:
+공개 흐름, 인증, 배포에 영향이 있으면 다음도 실행합니다.
 
 ```bash
 npm run test:e2e:smoke
 ```
 
-## 6. 리뷰 기준
+CI가 실패했거나, 기능 회귀가 남았거나, 시크릿이 포함되었거나, 운영 변경이 문서화되지 않았다면 merge하지 않습니다.
 
-리뷰는 스타일보다 위험을 우선합니다.
+## 6. 테스트에서 운영으로 승격
 
-핵심 질문:
+Actions의 검증과 호스트의 root 작업은 서로 다른 승인 경계입니다. 순서는 다음과 같습니다.
 
-- 로그인, 관리자 접근, 역할 검사가 깨지지 않는가?
-- SQLite 쓰기, 백업, 복원 흐름을 깨지 않는가?
-- 테스트/운영 도메인 동작을 섞지 않는가?
-- Docker 배포, smoke check, 릴리스 흐름을 깨지 않는가?
-- 최근 기능 명세와 운영 문서가 여전히 맞는가?
+1. 보호된 PR을 `main`에 merge합니다.
+2. 보호된 `publish` environment에서 exact SHA 이미지 publish와 provenance를 완료합니다.
+3. 테스트 호스트 root 콘솔에서 후보를 승인하고, 검증된 offsite backup을 import하고, restore drill을 통과한 뒤 `gshsapp-deploy.service`를 시작합니다.
+4. 보호된 `preproduction-verification` environment에서 동일 SHA·digest의 `test.gshs.app` 공개 검증을 완료합니다.
+5. 운영 호스트 root 콘솔에서 그 run ID와 동일 SHA·digest를 승인하고, offsite import와 restore drill을 통과한 뒤 `gshsapp-deploy.service`를 시작합니다.
+6. 보호된 `production-verification` environment에서 동일 SHA·digest의 테스트·운영 공개 상태를 검증하고 `vX.Y.Z` Release를 생성합니다.
 
-## 7. 문서 갱신 규칙
+Workflow 성공은 호스트 배포 성공을 의미하지 않습니다. 각 호스트의 approval, import marker, restore-drill receipt, deploy service 결과를 별도로 확인합니다. 같은 semver tag를 다른 SHA에 재사용하지 않습니다.
 
-아래 항목에 영향을 주는 변경은 같은 PR에서 문서도 함께 갱신합니다.
+## 7. 신규 호스트와 자격증명 회전
 
-- 환경 변수
-- GitHub Actions 동작
-- 배포 스크립트 또는 배포 자산 구조
-- 서버 부트스트랩 절차
-- 브랜치 보호 또는 머지 정책
-- 테스트/운영 도메인
-- 백업, 복원, 롤백 절차
-- 관리자 운영 워크플로우
-- 토큰 배부 포털과 메일 발송 구조
-- 릴리스 버전 정책
-- AI 에이전트 작업 규칙
+과거 self-hosted runner를 사용한 호스트는 in-place 전환하지 않습니다. 신뢰 매체로 재이미징하고 다음을 launch blocker로 처리합니다.
 
-최소한 아래 문서 중 가장 관련 있는 파일은 갱신합니다.
+- runner service·계정, checkout, Docker state, SSH key 삭제
+- 과거 Docker Hub, GitHub, SSH, webhook, Brevo, E2E, runtime secret 전부 폐기·회전
+- 새 OOB bootstrap digest 검증과 불변 `test|prod` host role 설치
+- root-only config와 최소 read-only GitHub token 설치
+- exact `$OFFSITE_DIR/.gshsapp-receipts` 세대 검증, import, restore drill
+- branch protection과 세 protected environments의 실제 enforcement 확인
+
+세부 절차는 [서버 신뢰 부트스트랩](./server-bootstrap.md)을 따릅니다.
+
+## 8. 시크릿과 민감 데이터
+
+절대 commit하지 않는 항목:
+
+- `.env`, `.env.local`, 서버 config 원문
+- API key, Docker Hub token, GitHub token, SSH private key
+- 비밀번호와 E2E credential
+- backup archive, receipt 원문, 테스트·운영 DB
+
+문서와 예제에는 `REPLACE_WITH_...` placeholder만 사용합니다. 사고 대응 중에도 실제 값이나 digest가 포함된 private 운영 기록을 PR, Actions artifact, issue에 복사하지 않습니다.
+
+## 9. 문서 갱신
+
+환경 변수, workflow, root control, branch/environment protection, 배포·백업·복원, 서버 bootstrap, semver 정책을 바꾸는 PR은 관련 문서를 같은 PR에서 갱신합니다.
 
 - [README.md](../README.md)
-- [docs/product-overview.md](./product-overview.md)
-- [docs/features/public-features.md](./features/public-features.md)
-- [docs/features/account-and-access.md](./features/account-and-access.md)
-- [docs/features/admin-features.md](./features/admin-features.md)
 - [DEPLOY.md](../DEPLOY.md)
-- [docs/cicd-setup.md](./cicd-setup.md)
-- [docs/server-bootstrap.md](./server-bootstrap.md)
-- [docs/production-launch-runbook.md](./production-launch-runbook.md)
-- [AGENTS.md](../AGENTS.md)
+- [CI/CD 설정](./cicd-setup.md)
+- [서버 신뢰 부트스트랩](./server-bootstrap.md)
+- [Root operations 신뢰 부트스트랩](./root-operations-bootstrap.md)
+- [운영 배포 런북](./production-launch-runbook.md)
 
-## 8. 시크릿 및 민감 정보 규칙
-
-절대 커밋하지 않는 항목:
-
-- `.env`
-- `.env.local`
-- 서버에서 복사한 시크릿 백업 파일
-- API 키
-- Docker Hub 토큰
-- SSH 비밀키
-- 비밀번호
-- 통제되지 않은 테스트/운영 DB 원본 파일
-
-## 9. 테스트에서 운영으로 승격하는 규칙
-
-운영 배포는 항상 불변 SHA 승격 방식으로 진행합니다.
-
-필수 순서:
-
-1. 변경이 `main`에 반영됨
-2. 테스트 서버 자동 배포 성공
-3. 같은 `sha-<commit>`로 `Preproduction Rehearsal` 성공
-4. `test.gshs.app`에서 사람 확인 통과
-5. 운영 배포는 같은 `sha-<commit>` 사용
-
-추가 규칙:
-
-- 운영 Release는 `vX.Y.Z` semver 기준
-- 같은 버전 태그를 다른 SHA에 재사용하지 않음
-
-## 10. 긴급 예외 규칙
-
-현재 admin enforcement가 비활성화되어 있으므로, 실제 장애 상황에서는 저장소 소유자가 정상 PR 흐름을 우회할 수 있습니다.
-
-허용되는 상황:
-
-- 운영 서비스가 내려감
-- 로그인 또는 관리자 접근이 깨짐
-- 배포 자동화가 복구를 막고 있음
-- 시크릿 교체나 인프라 복구를 즉시 해야 함
-
-긴급 우회가 발생하면 반드시 후속 조치를 남깁니다.
-
-1. 관련 PR, 이슈, 사고 노트 중 하나에 상황 요약 작성
-2. 표준 리뷰 흐름 밖에서 코드가 바뀌었다면 후속 PR 생성
-3. 이번 사고로 드러난 누락 규칙이 있다면 문서 업데이트
-
-## 11. AI 에이전트용 추가 규칙
-
-AI 에이전트도 사람과 같은 저장소 규칙을 따릅니다.
-
-추가 요구 사항:
-
-- 비사소한 변경 전 [AGENTS.md](../AGENTS.md) 확인
-- 기능 명세와 운영 문서를 기준으로 동작 확인
-- SHA 기반 배포와 semver 릴리스 구조를 깨뜨리지 않기
-- 저장소 프로세스나 인프라 동작을 바꾸면 문서 동시 갱신
-
-## 12. 향후 더 엄격하게 하고 싶을 때
-
-추후 강화 후보:
-
-1. approving review 최소 1개 필수
-2. 관리자에게도 동일한 브랜치 보호 강제
-3. 인증, 배포, DB 위험 변경에는 두 번째 유지보수자 승인 필수
+AI 에이전트도 [AGENTS.md](../AGENTS.md)와 동일한 보호·검증·문서화 규칙을 따릅니다.

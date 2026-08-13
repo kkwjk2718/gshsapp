@@ -17,10 +17,20 @@ runtime_env="$runtime_env_root/.env"
 touch "$runtime_env"
 chmod 600 "$runtime_env"
 runtime_env_test_mode=600
+runtime_env_test_owner=0
+runtime_env_test_group="$(id -g)"
 stat() {
   local target="${!#}"
   if [[ "$target" == "$runtime_env" && "$*" == *"%a"* ]]; then
     printf '%s\n' "$runtime_env_test_mode"
+    return 0
+  fi
+  if [[ "$target" == "$runtime_env" && "$*" == *"%u"* ]]; then
+    printf '%s\n' "$runtime_env_test_owner"
+    return 0
+  fi
+  if [[ "$target" == "$runtime_env" && "$*" == *"%g"* ]]; then
+    printf '%s\n' "$runtime_env_test_group"
     return 0
   fi
   command stat "$@"
@@ -41,6 +51,40 @@ valid_runtime_env() {
 }
 valid_runtime_env >"$runtime_env"
 validate_runtime_env_file "$runtime_env"
+
+valid_runtime_env | sed '/^AUTH_TRUST_HOST=true$/a UPLOADS_ROOT=/app/data/custom-uploads' >"$runtime_env"
+if validate_runtime_env_file "$runtime_env" >/dev/null 2>&1; then
+  echo "runtime content-root remapping must be rejected so host and app backups remain complete" >&2
+  exit 1
+fi
+valid_runtime_env >"$runtime_env"
+
+runtime_env_test_owner=1001
+if validate_runtime_env_file "$runtime_env" >/dev/null 2>&1; then
+  echo "deploy-account-owned runtime secrets must be rejected; only root may own .env" >&2
+  exit 1
+fi
+runtime_env_test_owner=0
+
+chmod 640 "$runtime_env"
+runtime_env_test_mode=640
+validate_runtime_env_file "$runtime_env"
+runtime_env_test_group=99999
+if validate_runtime_env_file "$runtime_env" >/dev/null 2>&1; then
+  echo "group-readable runtime secrets must use the dedicated deploy primary group" >&2
+  exit 1
+fi
+runtime_env_test_group="$(id -g)"
+chmod 600 "$runtime_env"
+runtime_env_test_mode=600
+
+valid_runtime_env | sed '/^AUTH_TRUST_HOST=true$/a NODE_OPTIONS=--require=/app/data/persist.js' >"$runtime_env"
+if validate_runtime_env_file "$runtime_env" >/dev/null 2>&1; then
+  echo "unknown executable runtime environment keys must be rejected" >&2
+  exit 1
+fi
+
+valid_runtime_env >"$runtime_env"
 
 chmod 644 "$runtime_env"
 runtime_env_test_mode=644

@@ -1,108 +1,189 @@
-﻿# 운영 배포 런북
+# 운영 배포 런북
 
-이 문서는 `gshs.app` 첫 운영 배포를 위한 최종 런북입니다.
+이 문서는 재이미징된 호스트에서 첫 강화 배포를 수행하는 최종 순서입니다. GitHub Actions는 호스트를 배포하지 않습니다. 모든 host mutation은 OOB 인증을 거친 root 콘솔과 설치된 systemd unit에서 수행합니다.
 
-## 이미 준비된 것
+## 1. 수동 시작 차단 조건
 
-- `main` push 시 CI가 돌고 `test.gshs.app`으로 자동 배포됨
-- `Preproduction Rehearsal`은 `main` 조상인 후보만 받고 Docker Hub digest와 GitHub Sigstore build provenance가 정확히 일치할 때만 테스트 서버에서 재검증
-- `deploy/restore-drill.sh`로 라이브 DB를 건드리지 않는 복원 리허설 가능
-- `/api/health`와 `/admin/test`를 운영 전 최종 판단 기준으로 사용
+다음 항목이 모두 완료되기 전에는 후보 승인이나 systemd deploy를 시작하지 않습니다.
 
-## 운영 배포 전 필수 준비
+- 노출된 Ubuntu/SSH, `AUTH_SECRET`, Docker Hub, Brevo, API, E2E/admin, webhook, 과거 runner·deploy credential 회전 및 session 폐기
+- 민감한 Playwright artifact 삭제, public Git history 정리, full-history와 working-tree gitleaks scan 통과
+- 과거 self-hosted runner service/계정/등록 토큰/deploy key/broker credential 제거; 새 호스트에는 runner를 설치하지 않음
+- OS patch와 reboot 완료, 예약된 UID/GID `61001:61001` 사용 가능
+- `main`에 review 1개 이상, strict required CI, conversation resolution, admin enforcement, force-push/deletion 금지 적용
+- GitHub `publish`, `preproduction-verification`, `production-verification` environment는 `main` only, required reviewer 1명 이상, self-review 방지를 적용하고, 무인 `production-monitor`는 `main` only이되 required reviewer를 두지 않음
+- exact admin SSH key, 두 번째 key-only session, proxy/admin CIDR UFW와 Docker bridge `DOCKER-USER` 정책 검증
+- runtime secret, origin, proxy hop, offsite mount identity와 file permission 검토
+- legacy 중복 학생 identity 해결 계획과 authoritative roster 준비
 
-첫 운영 배포 전에 아래 조건이 모두 충족되어야 합니다.
+실제 secret, IP, token 또는 사용자 credential을 이 문서의 placeholder에 치환해 저장하지 않습니다.
 
-- 운영 VM에 `gshs-prod` self-hosted runner가 설치되어 있음
-- 운영 VM에 `/opt/gshsapp/{data,backup,.env}`가 준비되어 있음
-- 운영 `.env`가 `AUTH_URL`, `NEXTAUTH_URL`, `NEXT_PUBLIC_APP_URL`에 모두 `https://gshs.app`을 사용함
-- `DATABASE_URL=file:/app/data/dev.db`
-- 운영 `.env`의 `TRUSTED_PROXY_HOPS`가 전달 헤더를 덮어쓰는 통제된 프록시 수(1~3)와 정확히 일치함
-- 리버스 프록시가 클라이언트의 `Forwarded`, `X-Forwarded-For`, `X-Real-IP`를 제거한 뒤 자체 전달 헤더를 기록함
-- 리버스 프록시가 `gshs.app`을 운영 VM `1234` 포트로 전달함
-- GitHub `production` environment에 승인 규칙이 활성화되어 있음
-- GitHub `production` environment에 아래 값이 준비되어 있음
-  - `DOCKERHUB_USERNAME`
-  - `DOCKERHUB_TOKEN`
-  - `E2E_ADMIN_USER`
-  - `E2E_ADMIN_PASSWORD`
-- 필요하다면 repository secret `MONITOR_ALERT_WEBHOOK_URL`도 준비되어 있음
+## 2. 후보 식별
 
-## 운영 배포 직전 필수 순서
+보호된 `main` push의 `Publish Candidate Image`가 성공한 뒤 다음 값을 운영 기록에 남깁니다.
 
-배포할 정확한 `sha-<commit>`와 `sha256:<digest>` 기준으로 아래 순서를 지킵니다. 수동 입력은 선택 기준일 뿐 신뢰 기준이 아닙니다. 워크플로가 Docker Hub의 `sha-<commit>` manifest digest를 다시 조회하고, `publish-and-deploy-test.yml`이 동일 `main` commit에서 GitHub-hosted runner로 만든 Sigstore provenance를 검증해야 다음 단계가 열립니다.
-
-1. `Publish And Deploy Test`가 해당 SHA에서 초록인지 확인
-2. 같은 SHA와 publish job이 출력한 digest로 `Preproduction Rehearsal` 실행 후 provenance 검증을 포함해 초록 확인하고 run ID 기록
-3. `test.gshs.app/admin/test`에서 모든 항목이 `PASS`인지 확인
-4. 최신 백업 시각이 충분히 최근인지 확인
-5. `test.gshs.app`에서 아래 수동 점검 수행
-   - 로그인
-   - 관리자 설정
-   - 공지 작성 / 조회
-   - 급식
-   - 학사일정
-6. 오프호스트 백업 복사 또는 Proxmox 스냅샷 1회 생성
-
-## 오프호스트 백업 내보내기
-
-백업 엔진이 만든 최신 스냅샷만 내보냅니다. 생성 백업이 없으면 작업을 중단하며 라이브 SQLite 파일 복사본을 만들지 않습니다.
-
-```bash
-cd /opt/gshsapp
-OFFSITE_TARGET=/mnt/backups/gshsapp ./offsite-backup.sh
+```text
+CANDIDATE_SHA=<40 lowercase hex>
+IMAGE_TAG=sha-<same 40 lowercase hex>
+IMAGE_DIGEST=sha256:<64 lowercase hex>
 ```
 
-원격 저장소 예시:
+`latest`, `main`, 로컬 image ID 또는 workflow run 이름은 승격 identity가 아닙니다.
+
+## 3. 테스트 호스트 선행 배포
+
+운영 전에 test 역할의 fresh host에서 [Root operations 신뢰 부트스트랩](./root-operations-bootstrap.md)을 끝냅니다. 순서는 반드시 다음과 같습니다.
+
+1. 독립 채널의 `root-bootstrap.sha256` digest로 bundle 확인 후 root control 설치
+2. `/opt/gshsapp/.env`, `/etc/gshsapp-operations/{backup.env,deploy.env,github-token}`, offsite mount, SSH/UFW 구성
+3. 설치된 backup timer와 deploy service 설치
+4. test 후보 승인
+5. `$OFFSITE_DIR/.gshsapp-receipts`의 기존 receipt와 별도 기록의 digest로 검증한 offsite generation을 빈 data root에 import
+6. 같은 후보의 isolated restore drill
+7. root systemd deploy
+
+Test 승인에는 preproduction run ID를 넣지 않습니다.
 
 ```bash
-cd /opt/gshsapp
-OFFSITE_TARGET=backup-user@backup-host:/srv/backups/gshsapp/ ./offsite-backup.sh
+set -Eeuo pipefail
+CANDIDATE_SHA=REPLACE_WITH_40_HEX
+IMAGE_DIGEST=sha256:REPLACE_WITH_64_HEX
+/bin/bash /usr/local/lib/gshsapp-operations/approve-release.sh \
+  "$CANDIDATE_SHA" "$IMAGE_DIGEST"
 ```
 
-로컬 백업은 새 검증 세대 생성 후 count·age·total-bytes 정책에 따라 정리되므로 오프사이트 복사를 정기 백업 직후 별도 단계로 실행합니다. `offsite-backup.sh`는 전송만 담당하고 성공 receipt를 로컬 보존 정책에 연결하지 않습니다. 원격 대상은 immutable/versioned 보존과 독립된 retention을 사용하고 로컬 삭제를 `rsync --delete`로 전파하지 않습니다. 최신 archive/metadata 쌍의 원격 checksum과 격리 restore drill을 확인하기 전에는 `OFFSITE_BACKUP_READY=true`로 두지 않습니다.
+Import·restore·deploy 명령은 5~7절과 같으며 test `deploy.env`의 `EXPECTED_APP_ORIGIN`만 `https://test.gshs.app`입니다.
 
-## 운영 배포 절차
+배포 후 GitHub Actions의 `Preproduction Public Verification`을 현재 `main`에서 수동 실행합니다.
 
-1. GitHub Actions에서 `Deploy Production` 실행
-2. 이미 리허설을 통과한 동일한 `sha-<commit>`, `sha256:<digest>`, `Preproduction Rehearsal` run ID 입력(운영 workflow와 리허설의 control SHA 또는 후보/digest가 다르면 즉시 중단)
-3. `production` environment 승인
-4. 워크플로우가 `deploy -> smoke -> e2e`까지 끝날 때까지 대기
-5. `https://gshs.app/api/health`가 배포한 SHA와 정확한 immutable image digest를 반환하는지 확인
-6. 관리자 계정으로 `gshs.app` 로그인
-7. `/admin/test`에서 모든 항목이 `PASS`인지 확인
+- `candidate_sha=$CANDIDATE_SHA`
+- `image_digest=$IMAGE_DIGEST`
 
-## 롤백 규칙
+Workflow가 `test.gshs.app`의 exact health/digest와 익명 public E2E를 확인해 만든 run ID를 기록합니다. 이 workflow는 test host를 변경하지 않습니다.
 
-배포 실패 시, 새롭고 검증되지 않은 SHA를 올리지 않습니다. 아래 순서로 되돌립니다.
+## 4. 운영 호스트 OOB bootstrap과 root 구성
 
-1. 마지막 정상 `sha-<commit>`와 정확한 digest를 다시 배포
-2. `https://gshs.app/api/health` 재확인
-3. 데이터 문제일 때만 검증된 `backup-YYYYMMDD-HHMMSS-<random>.tar.gz`의 격리 restore drill 수행
-4. 라우팅 또는 TLS 문제면 DB를 건드리기 전에 프록시 수정 및 smoke check 재실행
+운영 호스트를 fresh image에서 시작하고 [Root operations 신뢰 부트스트랩](./root-operations-bootstrap.md) 1~5절을 `prod` role로 수행합니다.
 
-관리자 웹 업로드는 복원을 적용하지 않고 검증된 보류 항목만 생성합니다. 실행 중인 DB를 덮어쓰거나 시작 시 자동 적용하지 마십시오. 실제 복구는 서비스가 중지된 상태에서 별도 검토된 오프라인 절차와 사전 백업·롤백 계획으로 수행합니다.
+필수 상태:
 
-## 운영 모니터링 기준
+- `/usr/local/lib/gshsapp-operations`가 installed manifest 검증을 통과
+- `/etc/gshsapp-operations/host-role`이 정확히 `prod`
+- `/opt/gshsapp/.env`가 root:root `0600`, 운영 URL 세 값이 모두 `https://gshs.app`
+- `/etc/gshsapp-operations/deploy.env`가 exact 후보와 운영 origin/network/offsite policy를 포함
+- `/etc/gshsapp-operations/backup.env`가 exact offsite mount와 retention policy를 포함
+- `/etc/gshsapp-operations/github-token`이 최소 read 권한의 root:root `0600` 파일
+- offsite mount가 root:root `0700`, 별도 filesystem, exact source/type/options와 일치
+- `gshsapp-backup.timer`가 enabled이고 `gshsapp-deploy.service`가 설치됨
 
-저장소에는 [`.github/workflows/production-health-monitor.yml`](../.github/workflows/production-health-monitor.yml)이 포함되어 있습니다.
+`HOST_BIND_IP`가 non-RFC1918이면 routing owner가 확인한 경우에만 `ALLOW_PUBLIC_BIND=true`를 사용합니다. `PROTECTED_INTERNAL_CIDRS`에는 `HOST_BIND_IP`가 속한 prefix와 모든 routed campus/management IPv4 CIDR을 정렬된 canonical 목록으로 고정합니다. `host-hardening.sh --apply` 후 현재 세션을 닫기 전에 두 번째 key-only SSH session을 확인합니다.
 
-현재 규칙:
+## 5. 운영 후보 승인
 
-- `PRODUCTION_MONITOR_ENABLED=true`일 때만 실제 운영 헬스 체크 수행
-- 운영 도메인이 실제 앱이 아니면 활성화하지 않음
-- `MONITOR_ALERT_WEBHOOK_URL`이 있으면 실패 시 웹훅 알림 전송 가능
-
-운영 전환이 완료되면 아래를 확인합니다.
-
-- `PRODUCTION_MONITOR_ENABLED=true`
-- `https://gshs.app/api/health`가 JSON 응답 반환
-- `gshs.app` 루트도 정상 `200` 응답
-
-## 운영 첫 주 권장 수동 점검 명령
+Preproduction proof는 같은 candidate/control/digest의 성공한 `workflow_dispatch` run이어야 하며 24시간보다 오래될 수 없습니다. Root approval도 24시간 유효합니다.
 
 ```bash
-cd /opt/gshsapp
-docker compose ps
-docker compose logs --tail=200
+set -Eeuo pipefail
+CANDIDATE_SHA=REPLACE_WITH_40_HEX
+IMAGE_DIGEST=sha256:REPLACE_WITH_64_HEX
+PREPRODUCTION_RUN_ID=REPLACE_WITH_SUCCESSFUL_RUN_ID
+/bin/bash /usr/local/lib/gshsapp-operations/approve-release.sh \
+  "$CANDIDATE_SHA" "$IMAGE_DIGEST" "$PREPRODUCTION_RUN_ID"
 ```
+
+설치본은 현재 protected `main`, branch protection, registry bytes, GitHub provenance, preproduction run과 proof artifact를 다시 조회한 뒤 `/opt/gshsapp/approved-release.json`을 root:root `0400`으로 기록합니다.
+
+## 6. Offsite generation 검증과 fresh-host import
+
+이 단계는 fresh host의 빈 `/opt/gshsapp/data`에만 허용됩니다. In-place restore가 아닙니다.
+
+Offsite mount에는 exact archive/metadata pair와 이전 root host가 같은 세대에 영속화한 `*.receipt.json`이 있어야 합니다. Receipt의 고정 위치는 `$OFFSITE_DIR/.gshsapp-receipts`이며 archive/metadata와 함께 immutable 또는 versioned retention으로 보호합니다. Receipt는 checksum 기록이지 서명이 아니므로 fresh host에서 재생성하지 않고, 그 SHA-256을 별도 인증 운영 기록과 대조합니다.
+
+```bash
+set -Eeuo pipefail
+BACKUP_NAME=backup-YYYYMMDD-HHMMSS-REPLACE8.tar.gz
+EXPECTED_OFFSITE_RECEIPT_SHA256=REPLACE_WITH_SEPARATELY_AUTHENTICATED_64_HEX
+set -a
+. /etc/gshsapp-operations/deploy.env
+set +a
+
+RECEIPT="$OFFSITE_DIR/.gshsapp-receipts/$BACKUP_NAME.receipt.json"
+/usr/bin/test -f "$RECEIPT"
+/usr/bin/test "$(/usr/bin/stat -c '%u:%g:%a:%h' "$RECEIPT")" = 0:0:600:1
+/usr/bin/test "$(/usr/bin/stat -c '%u:%g:%a' "$OFFSITE_DIR/.gshsapp-receipts")" = 0:0:700
+/usr/bin/python3 /usr/local/lib/gshsapp-operations/bootstrap-backup.py verify-receipt \
+  --offsite-dir "$OFFSITE_DIR" \
+  --receipt-dir "$OFFSITE_DIR/.gshsapp-receipts" \
+  --name "$BACKUP_NAME"
+
+BACKUP_NAME="$BACKUP_NAME" EXPECTED_OFFSITE_RECEIPT_SHA256="$EXPECTED_OFFSITE_RECEIPT_SHA256" \
+  /bin/bash /usr/local/lib/gshsapp-operations/pin-offsite-operation.sh import
+```
+
+`import-backup.sh`는 approval과 exact candidate를 다시 확인하고, application container가 없고 data root가 비어 있을 때만 후보 image의 isolated migration validator를 실행합니다. 성공하면 `/opt/gshsapp/bootstrap-complete.json`을 기록하지만 앱은 시작하지 않습니다.
+
+## 7. 같은 후보의 restore drill
+
+Restore drill은 같은 approval, image tag/digest, fresh offsite receipt를 사용하고 live data를 변경하지 않습니다. 전용 최소권한 검증 계정의 자격증명은 root 콘솔에서 비표시 입력하며 shell history나 파일에 적지 않습니다.
+
+```bash
+set -Eeuo pipefail
+set -a
+. /etc/gshsapp-operations/deploy.env
+set +a
+
+IFS= read -r -p 'Restore-drill admin user: ' E2E_ADMIN_USER
+IFS= read -r -s -p 'Restore-drill admin password: ' E2E_ADMIN_PASSWORD
+printf '\n'
+export E2E_ADMIN_USER E2E_ADMIN_PASSWORD
+/bin/bash /usr/local/lib/gshsapp-operations/pin-offsite-operation.sh restore
+unset E2E_ADMIN_USER E2E_ADMIN_PASSWORD
+```
+
+성공하면 exact candidate/control/offsite receipt에 결합된 `/opt/gshsapp/restore-drill-receipt.json`이 root:root `0400`으로 생성됩니다. 운영 deploy는 approval 이후 생성되고 24시간 이내인 이 receipt가 없으면 중단합니다.
+
+## 8. Root systemd deploy
+
+직접 `/usr/local/lib/gshsapp-operations/deploy.sh`를 실행하거나 mutable checkout의 스크립트를 `sudo`로 실행하지 않습니다.
+
+```bash
+systemctl start gshsapp-deploy.service
+systemctl status --no-pager gshsapp-deploy.service
+journalctl -u gshsapp-deploy.service --since '-30 minutes' --no-pager
+```
+
+Unit은 installed manifest와 config를 재검증하고 active firewall, bootstrap marker, approval, restore receipt, offsite generation을 확인한 뒤 lifecycle lock 안에서 backup·migration·candidate health를 수행합니다.
+
+완료 후 확인:
+
+```bash
+curl --fail --silent --show-error https://gshs.app/api/health
+systemctl status --no-pager gshsapp-backup.timer
+```
+
+응답의 `version`과 `imageDigest`가 승인한 값과 정확히 같아야 합니다. 관리자 로그인과 `/admin/test`, 공지 조회, 급식, 학사일정도 수동 확인합니다.
+
+## 9. Production Release Verification
+
+운영 host 배포 확인 뒤 GitHub Actions의 `Production Release Verification`을 수동 실행합니다.
+
+- `image_tag=sha-$CANDIDATE_SHA`
+- `image_digest=$IMAGE_DIGEST`
+
+`production-verification` required reviewer 승인 후 workflow는 test와 production 공개 origin, exact version/digest, 익명 E2E를 확인하고 exact proof를 게시합니다. 기본 브랜치의 별도 `workflow_run` publisher가 run·proof·provenance·현재 production을 재검증한 뒤 SHA-bound `vX.Y.Z` Release를 생성합니다. Host mutation은 수행하지 않습니다.
+
+## 10. 백업과 장애 대응
+
+`gshsapp-backup.timer`는 매일 예약과 1시간 재확인으로 먼저 exact offsite mount의 완전 archive/metadata/receipt freshness를 검증합니다. Fresh하면 writer를 건드리지 않고 종료하고, stale일 때만 host systemd에서 writer를 quiesce해 새 archive/metadata를 만든 뒤 `$OFFSITE_DIR/.gshsapp-receipts`의 root checksum receipt까지 검증합니다. GitHub Actions backup schedule이나 임의 ad-hoc 전송 대상을 사용하지 않습니다.
+
+배포 실패 시 lifecycle recovery와 journal을 먼저 확인합니다. Durable schema transition 뒤에는 과거 바이너리를 자동 재시작하지 않습니다. 임의 `docker compose up`, live SQLite `cp`, 검증되지 않은 archive 적용을 금지합니다. 복구는 다음 중 하나로 별도 승인합니다.
+
+- 같은 강화 후보의 배포 transaction 재실행
+- 새로 검증된 강화 후보 배포
+- 서비스를 멈춘 상태의 검증된 pre-deployment/offsite generation 복원 계획
+
+라우팅/TLS 문제는 DB를 건드리기 전에 reverse proxy와 firewall을 수정합니다.
+
+## 11. 공개 health monitor
+
+운영 전환 뒤 repository variable `PRODUCTION_MONITOR_ENABLED=true`를 설정하면 GitHub-hosted schedule이 공개 `/api/health`와 `/`만 확인합니다. 선택적 `MONITOR_ALERT_WEBHOOK_URL`은 `main` only인 `production-monitor` environment secret으로만 관리하고 repository-scoped 사본은 삭제·회전합니다. 10분 schedule이 무인 실행되도록 이 environment에는 required reviewer를 두지 않습니다. 이 monitor는 host 배포·복구·백업 권한이 없습니다.

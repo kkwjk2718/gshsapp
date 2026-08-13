@@ -57,10 +57,18 @@ validate_runtime_env_file() {
   runtime_owner="$(stat -c '%u' -- "$runtime_env_file")" || return 1
   runtime_mode="$(stat -c '%a' -- "$runtime_env_file")" || return 1
   current_uid="$(id -u)"
-  if [[ "$runtime_owner" != "0" && "$runtime_owner" != "$current_uid" ]] ||
-     [[ "$runtime_mode" =~ [1-7][0-7]$ ]]; then
-    echo "The production runtime environment must be owned by root or the deploy account and mode 0600 or stricter." >&2
+  if [[ "$runtime_owner" != "0" ]] || [[ "$runtime_mode" != "640" && "$runtime_mode" != "600" && "$runtime_mode" != "400" ]]; then
+    echo "The production runtime environment must be root-owned and mode 0640, 0600, or 0400." >&2
     return 1
+  fi
+  if [[ "$runtime_mode" == "640" ]]; then
+    local runtime_group expected_group
+    runtime_group="$(stat -c '%g' -- "$runtime_env_file")" || return 1
+    expected_group="$(id -g)"
+    [[ "$runtime_group" == "$expected_group" ]] || {
+      echo "A group-readable runtime environment must use the dedicated deploy account primary group." >&2
+      return 1
+    }
   fi
   trusted_root="${RUNTIME_ENV_TRUST_ROOT:-$(dirname -- "$runtime_env_file")}"
   [[ "$trusted_root" == /* && "$runtime_env_file" == "$trusted_root"/* ]] || {
@@ -87,6 +95,39 @@ validate_runtime_env_file() {
     }
     current_path="$(dirname -- "$current_path")"
   done
+
+  local -A allowed_runtime_keys=(
+    [DATA_ROOT]=1 [DATABASE_URL]=1 [BACKUP_DIR]=1 [RESTORE_ROOT]=1
+    [WEATHER_CACHE_PATH]=1
+    [BACKUP_RETENTION_MIN_GENERATIONS]=1 [BACKUP_RETENTION_MAX_GENERATIONS]=1
+    [BACKUP_RETENTION_MAX_AGE_DAYS]=1 [BACKUP_RETENTION_MAX_TOTAL_BYTES]=1
+    [BACKUP_RESERVE_FREE_BYTES]=1 [BACKUP_STALE_WORK_MAX_AGE_HOURS]=1
+    [BACKUP_MAX_AGE_HOURS]=1 [RESTORE_MAX_UPLOAD_BYTES]=1
+    [AUTH_SECRET]=1 [AUTH_URL]=1 [NEXTAUTH_URL]=1 [NEXT_PUBLIC_APP_URL]=1
+    [AUTH_TRUST_HOST]=1 [TRUSTED_PROXY_HOPS]=1
+    [NEXT_PUBLIC_NEIS_API_KEY]=1 [ICAL_ALLOWED_HOSTS]=1
+    [BREVO_API_KEY]=1 [BREVO_SENDER_EMAIL]=1 [BREVO_SENDER_NAME]=1
+  )
+  local -A seen_runtime_keys=()
+  local raw_line env_key
+  while IFS= read -r raw_line || [[ -n "$raw_line" ]]; do
+    raw_line="${raw_line%$'\r'}"
+    [[ -z "$raw_line" || "$raw_line" == \#* ]] && continue
+    if [[ ! "$raw_line" =~ ^([A-Z][A-Z0-9_]*)=.*$ ]]; then
+      echo "The production runtime environment contains a malformed line." >&2
+      return 1
+    fi
+    env_key="${BASH_REMATCH[1]}"
+    if [[ -z "${allowed_runtime_keys[$env_key]:-}" ]]; then
+      echo "The production runtime environment contains a non-allowlisted key: $env_key" >&2
+      return 1
+    fi
+    if [[ -n "${seen_runtime_keys[$env_key]:-}" ]]; then
+      echo "The production runtime environment contains a duplicate key: $env_key" >&2
+      return 1
+    fi
+    seen_runtime_keys[$env_key]=1
+  done <"$runtime_env_file"
 
   local matches
   matches="$(grep -E '^TRUSTED_PROXY_HOPS=' "$runtime_env_file" || true)"

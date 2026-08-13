@@ -10,8 +10,27 @@ HOST_BIND_IP="10.40.0.12"
 APP_PORT="1234"
 UFW_RULE_VALIDATOR="$SCRIPT_DIR/validate-ufw-rules.py"
 
+if direct_output="$(
+  PROXY_SOURCE_CIDR="$PROXY_SOURCE_CIDR" \
+  SSH_SOURCE_CIDR="$SSH_SOURCE_CIDR" \
+  SSH_ADMIN_USER="testadmin" \
+  HOST_BIND_IP="$HOST_BIND_IP" \
+  /bin/bash "$SCRIPT_DIR/host-hardening.sh" --dry-run 2>&1
+)"; then
+  echo "Mutable checkout host-hardening execution must be refused." >&2
+  exit 1
+fi
+[[ "$direct_output" == *"installed authenticated control"* ]] || {
+  echo "Direct host-hardening refusal did not identify the trust boundary: $direct_output" >&2
+  exit 1
+}
+
 if ! python3 -c 'raise SystemExit(0)' >/dev/null 2>&1; then
-  python_fallback="$(command -v python)"
+  python_fallback="${PYTHON_BIN:-$(command -v python || true)}"
+  [[ -n "$python_fallback" ]] || {
+    echo "host-hardening test requires Python 3." >&2
+    exit 1
+  }
   python3() {
     "$python_fallback" "$@"
   }

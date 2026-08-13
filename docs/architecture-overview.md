@@ -84,7 +84,7 @@ Route group 기준:
 - Google Calendar iCal: 일정 소스 일부
 - Brevo API: 토큰 메일 발송
 - Docker Hub: 배포 이미지 저장소
-- GitHub Actions: CI/CD, 릴리스, 정기 작업
+- GitHub Actions: GitHub-hosted CI, 후보 이미지 publish·attestation, 공개 origin 검증, 릴리스, 공개 health monitor
 - OpenClaw / Telegram / 기타 운영 도구는 서버 운영 보조 용도로 별도 존재
 
 연동 관련 주의점:
@@ -127,26 +127,39 @@ Route group 기준:
 배포 흐름:
 
 1. PR / push에서 CI 실행
-2. `main` push 시 Docker 이미지 빌드
+2. 보호된 `main` push 시 GitHub-hosted job이 Docker 이미지를 빌드하고 provenance를 생성
 3. Docker Hub에 `sha-<40-hex commit>` 이미지를 푸시하고 digest 고정
-4. 테스트 서버 self-hosted runner가 자동 배포
-5. 운영 서버는 수동 `Deploy Production`으로 승격
+4. 독립 채널로 인증한 root control이 테스트 호스트에서 승인·offsite import·restore drill·systemd deploy 수행
+5. GitHub-hosted `Preproduction Public Verification`이 이미 배포된 테스트 origin의 exact 후보를 검증하고 proof 생성
+6. 같은 proof로 운영 root 승인을 만든 뒤 운영 호스트에서 동일한 root-only 절차 수행
+7. GitHub-hosted `Production Release Verification`이 공개 운영 origin을 검증하고 semver Release 생성
+
+Actions에는 호스트 SSH, Docker socket, runtime secret, SQLite, backup mount 접근 경로가 없습니다. 테스트·운영 호스트에는 GitHub Actions runner를 설치하지 않습니다.
 
 서버 구조:
 
 ```text
+/usr/local/lib/gshsapp-operations/
+/etc/gshsapp-operations/
+  host-role
+  deploy.env
+  backup.env
+  github-token
 /opt/gshsapp
   .env
-  .deploy.env
-  compose.yml
-  deploy.sh
   data/
   backup/
+  root-backup/       # 앱과 분리된 root-only DR 세대
+$OFFSITE_DIR/                  # 별도 exact mount
+  .gshsapp-receipts/           # immutable/versioned root receipt
 ```
 
 핵심 규칙:
 
 - 실제 배포 기준은 검증된 `sha-<commit>` 출처와 immutable image digest
+- 실행 control은 OOB bootstrap으로 `/usr/local/lib/gshsapp-operations`에 root:root `0400`으로 설치된 exact manifest 집합만 사용
+- 배포와 백업은 root-only systemd unit이며 `/run/lock/gshsapp/lifecycle.lock`을 공유
+- web은 격리된 Docker bridge에서 exact host IP에만 publish되고, 지속되는 `DOCKER-USER`/`GSHSAPP-INGRESS` 정책이 reverse proxy source 이외의 전달을 차단
 - GitHub Release는 `package.json` semver 기준 `vX.Y.Z`
 - 운영 릴리스가 다른 SHA에 이미 사용된 semver를 재사용하면 배포 실패
 - 배포 컨테이너 시간대는 `TZ=Asia/Seoul`, UI 시간 표시는 KST helper 기준으로 통일
@@ -155,10 +168,11 @@ Route group 기준:
 
 현재 백업 구조:
 
-- 정기 백업은 웹 요청이 아니라 scheduler 기반
-- 테스트 서버 정기 백업 workflow 존재
+- 정기 백업은 GitHub Actions가 아니라 host의 `gshsapp-backup.timer`와 root-only service가 수행하며, hourly freshness 재확인은 writer 정지 전에 검증되어 mount 장애 복구를 같은 날 재시도
+- timer는 writer를 quiesce하고 archive/metadata pair와 root checksum receipt를 exact offsite mount의 고정 `.gshsapp-receipts`에 영속화·검증
 - 복원 리허설은 라이브 DB를 덮어쓰지 않는 임시 컨테이너 방식
-- 운영 직전에는 최신 백업과 restore drill 상태를 확인
+- fresh-host import는 빈 data root, exact approval, offsite pair·고정 receipt와 별도 운영 기록의 receipt digest가 모두 일치할 때만 허용
+- 운영 직전에는 approval 뒤 생성된 exact restore-drill receipt를 확인
 - 이전 DB를 복원하면 세션 버전도 과거로 돌아갈 수 있으므로 복원 후 `AUTH_SECRET`을 회전해 전역 로그아웃
 
 주요 파일:
@@ -169,7 +183,7 @@ Route group 기준:
 - `deploy/restore-drill.sh`
 - `deploy/offsite-backup.sh`
 
-백업은 라이브 SQLite 파일 복사가 아니라 `VACUUM INTO`/SQLite online-backup 스냅샷과 버전 2 manifest로 생성됩니다. manual/scheduled/일반 pre-deployment writer는 backup directory의 cross-process heartbeat lease로 직렬화됩니다. 구형 컨테이너에 ops 런타임이 없는 최초 강화 배포만 `.deploy.lock` 아래의 호스트 online-backup을 사용하고, 후보 이미지는 네트워크 없이 생성 아카이브만 읽어 legacy/current 스키마의 격리 migration을 검증합니다. 후보에 라이브 DB, data root, runtime secret은 전달하지 않습니다. 아카이브는 허용된 논리 루트, 일반 파일/디렉터리, 경로·항목 수·크기·깊이 제한, manifest SHA-256을 모두 통과해야 합니다. 생성 전에 snapshot과 archive가 동시에 존재할 최악의 공간 및 reserve를 검사하고, 성공한 최신 세대와 최소 세대 수를 보호한 채 완전한 archive/metadata 쌍만 count·age·total-bytes 기준으로 정리합니다. 웹 복원은 이 검증을 거친 보류 항목을 비공개 데이터 디렉터리에 스테이징할 뿐 라이브 DB를 교체하지 않습니다. 보류 descriptor 만료를 소비하고 원자적 lock directory의 heartbeat가 끊긴 crash lock만 회수하며 정확한 opaque ID의 감사된 취소를 제공하지만, 자동 적용은 crash-safe 오프라인 저널 설치기가 별도 검토되기 전까지 비활성화됩니다.
+백업은 라이브 SQLite 파일 복사가 아니라 `VACUUM INTO`/SQLite online-backup 스냅샷과 버전 2 manifest로 생성됩니다. Host deployment, scheduled backup, import, restore와 control update는 `/run/lock/gshsapp/lifecycle.lock`으로 직렬화되고 backup engine 내부 writer도 cross-process heartbeat lease를 사용합니다. Pre-deployment 경계는 old container의 자동 재시작을 끄고 exact stopped container를 보존한 채 호스트 online-backup을 만들며, 후보 이미지는 output tmpfs와 resource/time limit 안에서 생성 아카이브만 읽어 legacy/current 스키마의 격리 migration을 검증합니다. 후보에 라이브 DB, data root, runtime secret은 전달하지 않습니다. 아카이브는 허용된 논리 루트, 일반 파일/디렉터리, 경로·항목 수·크기·깊이 제한, manifest SHA-256을 모두 통과해야 합니다. 생성 전에 snapshot과 archive가 동시에 존재할 최악의 공간 및 reserve를 검사하고, 성공한 최신 세대와 최소 세대 수를 보호한 채 완전한 archive/metadata 쌍만 count·age·total-bytes 기준으로 정리합니다. 웹 복원은 이 검증을 거친 보류 항목을 비공개 데이터 디렉터리에 스테이징할 뿐 라이브 DB를 교체하지 않습니다. Fresh-host `import-backup.sh`만 빈 data root와 exact approval/offsite receipt를 요구해 검증된 세대를 원자 승격합니다.
 
 런타임의 모든 파일 경로는 `DATA_ROOT` 아래 정적 매핑으로 계산합니다. 프로덕션 standalone 산출물은 원본 `src`, 로컬 DB, 문서, seed/repair/debug 도구, 공개 디버그 캡처를 포함할 수 없으며 빌드 후 assertion이 이를 검사합니다.
 

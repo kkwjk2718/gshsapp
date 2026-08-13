@@ -10,7 +10,7 @@ Change boundary: this branch is local only. It has not been pushed, deployed, or
 
 The repository has been converted from a set of page-level protections and mutable deployment conventions to explicit handler authorization, narrow DTOs, bounded public inputs and writes, transaction-backed identity claims, authenticated immutable deployment provenance, reviewed SQLite migrations, and fail-closed operational gates.
 
-The source tree is not yet release-authorized. Historic credentials remain in old Git objects, and several controls require operator-owned state that code cannot safely invent: credential rotation, history cleanup, trusted-runner reprovisioning, a reviewed SSH key and firewall source ranges, an authoritative student roster, and a fresh offsite-tested backup. The workflows and deployment scripts deliberately refuse production promotion until those gates are satisfied.
+The source tree is not yet release-authorized. Historic credentials remain in old Git objects, and several controls require operator-owned state that code cannot safely invent: credential rotation, history cleanup, removal of legacy runner/deploy credentials, a freshly reimaged host, a reviewed SSH key and firewall source ranges, an authoritative student roster, and a fresh offsite backup whose fixed receipt and separately recorded digest verify. The GitHub-hosted workflows and installed root controls deliberately separate publication from host deployment until those gates are satisfied.
 
 ## Fixed repository findings
 
@@ -51,7 +51,7 @@ The source tree is not yet release-authorized. Historic credentials remain in ol
 - Backup count, age, and byte retention preserve minimum/newest generations, clean bounded orphans, check free space, serialize across processes, and sync directory metadata before reporting durability.
 - Restore staging has strict leases, expiry cleanup, exact audited cancellation, and crash recovery without automatic live replacement.
 - Production migration fingerprints the complete SQLite executable schema, including canonical `sqlite_master` SQL, and rejects unexpected tables, indexes, triggers, views, foreign-key errors, or fingerprints.
-- Deployment removes the old writer before the final snapshot and migration. Once schema transition begins, a failed candidate remains offline instead of restarting a pre-hardening binary against the new schema. The first hardened deployment has a reviewed offline bootstrap path for older images without operations bundles.
+- Deployment disables auto-restart and preserves the stopped exact old writer through backup, offsite verification, candidate validation, and environment staging. It durably records the schema-transition boundary immediately before migration and removes the old container only after migration succeeds. Once that boundary begins, a failed candidate remains offline instead of restarting a pre-hardening binary against the new schema. A fresh hardened host has a reviewed, receipt-bound offline import path.
 
 ### Browser, dependencies, build, and container
 
@@ -63,11 +63,12 @@ The source tree is not yet release-authorized. Historic credentials remain in ol
 
 ### CI/CD and origin controls
 
-- Images are promoted by exact commit and manifest digest, with pinned actions, trusted-main ancestry, GitHub attestation verification, matching test health identity, successful immutable rehearsal proof, and protected environment gates.
-- Candidate-controlled scripts never run on a self-hosted runner before the trusted control workflow verifies source and provenance. Docker credentials use temporary configuration or are omitted for public pulls.
+- Images are promoted by exact commit and manifest digest, with pinned actions, protected-main ancestry, GitHub attestation verification, matching test health identity, successful immutable preproduction proof, and protected environment gates.
+- All Actions jobs use GitHub-hosted runners. They perform CI, publish/attestation, public-origin verification, release, and public health monitoring only; they cannot reach host Docker, runtime secrets, SQLite, backup mounts, or `/opt/gshsapp`.
 - Runtime environment validation checks strong non-placeholder `AUTH_SECRET`, exact canonical origin variables, proxy-hop policy, trusted-host policy, file ownership/mode, and path-component permissions.
-- Host hardening validates the complete UFW rule set, proxy-only application access, key-only SSH, exact administrator/key/effective sshd policy, and restores the previous drop-in on validation failure.
-- Self-hosted runner policy is designed as a root-owned trust anchor with a reviewed current-main approval and fail-closed workflow/event restrictions. The operator must install it from an independently verified offline bundle after clean runner reprovisioning.
+- Host hardening validates the complete UFW and Docker `DOCKER-USER` rule sets, proxy-only bridge-published application access, key-only SSH, exact administrator/key/effective sshd policy, and restores the previous drop-in on validation failure.
+- Host mutation is available only to a trusted root console through an out-of-band authenticated, exact-manifest control tree and root-only systemd deploy/backup units. Exact approval revalidates protected main, registry bytes, provenance, and production preproduction evidence.
+- The current incident requires a trusted host reimage, complete removal and revocation of former self-hosted runner/deploy state, a reserved non-account app UID/GID, and out-of-band installation of the root controls. In-place blessing of prior runner/Docker state or registering a replacement host runner is forbidden.
 
 ## Read-only live observations
 
@@ -81,21 +82,21 @@ These observations are deployment blockers, not repository regressions. Apply th
 - Full Vitest suite, TypeScript no-emit check, zero-warning ESLint, and Next production build.
 - Operations bundles and standalone boundary inspection.
 - Production-only and complete dependency audits.
-- Deployment quiescence, first-deployment backup, migration fingerprint, provenance, rehearsal proof, environment policy, UFW, SSH, runner-policy, and runner-install shell/Python tests.
+- Deployment quiescence and recovery, fresh-host import, pre-deployment/offsite backup, migration fingerprint, provenance, preproduction proof, root configuration, UFW, SSH, and root-control installer shell/Python tests.
 - Workflow YAML parsing and action pin checks.
 - Gitleaks scan of the tracked source tree and redacted full-history scan.
 
-Fresh final counts and the exact head commit are recorded in the handoff after the final runner-trust integration and clean full verification.
+Fresh final counts and the exact head commit are recorded in the handoff after the final root-control integration and clean full verification.
 
 ## Mandatory pre-push and pre-deploy actions
 
 1. Rotate every credential and password that ever appeared in source, chat, logs, E2E traces, or GitHub artifacts; revoke sessions and remove historic Playwright artifacts.
 2. Rewrite all public refs in an isolated mirror with `git filter-repo --sensitive-data-removal`, coordinate the force-push/fork cleanup, and require both tracked-tree and full-history Gitleaks scans to return zero.
-3. Clean-reprovision each self-hosted runner from a pinned upstream package; install and verify the root-owned offline trust bundle and current-main approval before allowing any job.
-4. Install and verify a passphrase-protected SSH key through a second session/console path, then apply the exact proxy/admin CIDR firewall policy and disable password SSH.
+3. Reimage each former runner/deploy host, remove and revoke every runner service/token/deploy credential, provision the reserved app UID storage on the empty host, and install the exact root control bundle using an independently delivered bootstrap-manifest digest. Do not install a replacement Actions runner.
+4. Install and verify a passphrase-protected SSH key through a second session/console path, then apply the exact UFW and Docker `DOCKER-USER` proxy/admin CIDR policies and disable password SSH.
 5. Patch/reboot the host, rotate runtime environment secrets, set exact production origins/proxy hops, and verify private file ownership/modes.
 6. Resolve the duplicate student identity, import the root-reviewed roster while membership remains suspended, and test active/omitted accounts before a separate unsuspension release.
-7. Create a fresh canonical backup, copy it to immutable offsite storage, and complete the isolated restore drill for the exact candidate digest.
-8. Publish a fresh image from protected main, deploy to test, produce a successful rehearsal proof, and only then approve production promotion.
+7. Create a fresh canonical backup through the root systemd service, preserve its root receipt at the exact `$OFFSITE_DIR/.gshsapp-receipts` path under immutable/versioned retention, record the receipt digest through a separate authenticated channel, and complete the isolated restore drill for the exact candidate digest.
+8. Publish a fresh image from protected main, use the OOB-installed root controls to approve/import/restore/deploy it to test, produce a successful public preproduction proof, and only then repeat the root sequence for production.
 
-Detailed commands and ordering are in `docs/infrastructure-security-runbook.md`, `docs/self-hosted-runner-trust.md`, `docs/cicd-setup.md`, and `docs/production-launch-runbook.md`.
+Detailed commands and ordering are in `docs/infrastructure-security-runbook.md`, `docs/root-operations-bootstrap.md`, `docs/cicd-setup.md`, and `docs/production-launch-runbook.md`.

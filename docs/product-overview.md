@@ -81,8 +81,8 @@ GSHS.app은 경남과학고등학교 구성원이 자주 확인하는 학교 정
 1. 관리자가 `/admin`에서 운영 도구 진입
 2. 사용자/공지/토큰/설정/로그/리포트/백업 상태 확인
 3. 기존 계정의 역할 변경, 기수 변경, 사용자 삭제 수행
-3. `/admin/test`로 운영 준비 상태 점검
-4. 배포는 GitHub Actions와 self-hosted runner 기준으로 진행
+4. `/admin/test`로 운영 준비 상태 점검
+5. GitHub-hosted Actions가 후보를 검증·publish하고, OOB 인증된 root control과 systemd가 테스트·운영 호스트를 배포
 
 ## 4. 정보 구조
 

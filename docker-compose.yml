@@ -7,7 +7,7 @@ services:
         APP_VERSION: local
         VCS_REF: local
     image: gshsapp-local:dev
-    user: "1001:1001"
+    user: "61001:61001"
     restart: "no"
     read_only: true
     init: true
@@ -15,17 +15,20 @@ services:
       - ALL
     security_opt:
       - no-new-privileges:true
+    network_mode: none
     env_file:
       - .env
     environment:
       NODE_ENV: production
+      NODE_OPTIONS: ""
+      NODE_PATH: ""
       DATA_ROOT: /app/data
       DATABASE_URL: file:/app/data/dev.db
       TMPDIR: /tmp
     volumes:
       - ./data:/app/data:rw
     tmpfs:
-      - /tmp:rw,noexec,nosuid,nodev,size=32m,uid=1001,gid=1001,mode=1700
+      - /tmp:rw,noexec,nosuid,nodev,size=32m,uid=61001,gid=61001,mode=1700
     command:
       - node
       - scripts/migrate-production.mjs
@@ -43,7 +46,7 @@ services:
     depends_on:
       migrate:
         condition: service_completed_successfully
-    user: "1001:1001"
+    user: "61001:61001"
     read_only: true
     init: true
     cap_drop:
@@ -70,8 +73,8 @@ services:
       TMPDIR: /tmp
       APP_VERSION: local
     tmpfs:
-      - /tmp:rw,noexec,nosuid,nodev,size=64m,uid=1001,gid=1001,mode=1700
-      - /app/.next/cache:rw,noexec,nosuid,nodev,size=128m,uid=1001,gid=1001,mode=1700
+      - /tmp:rw,noexec,nosuid,nodev,size=64m,uid=61001,gid=61001,mode=1700
+      - /app/.next/cache:rw,noexec,nosuid,nodev,size=128m,uid=61001,gid=61001,mode=1700
     healthcheck:
       test:
         - CMD

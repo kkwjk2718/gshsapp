@@ -1,0 +1,44 @@
+[Unit]
+Description=Install fail-closed GSHS Docker quarantine before daemon startup
+BindsTo=docker.service
+PartOf=docker.service
+Requires=gshsapp-control-update-recovery.service
+After=gshsapp-control-update-recovery.service
+Before=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+RuntimeDirectory=lock/gshsapp
+RuntimeDirectoryMode=0700
+RuntimeDirectoryPreserve=yes
+ExecStart=/bin/bash /usr/local/lib/gshsapp-operations/docker-user-firewall.sh --boot-quarantine
+User=root
+Group=root
+UMask=0077
+PrivateTmp=true
+PrivateDevices=true
+ProtectHome=true
+ProtectSystem=strict
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+ReadOnlyPaths=/usr/local/lib/gshsapp-operations /etc/gshsapp-operations
+ReadWritePaths=/run/lock/gshsapp
+NoNewPrivileges=true
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_RAW
+AmbientCapabilities=CAP_NET_ADMIN CAP_NET_RAW
+RestrictSUIDSGID=true
+RestrictNamespaces=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_NETLINK
+LockPersonality=true
+RestrictRealtime=true
+MemoryDenyWriteExecute=true
+SystemCallArchitectures=native
+TimeoutStartSec=2min
+
+[Install]
+RequiredBy=docker.service

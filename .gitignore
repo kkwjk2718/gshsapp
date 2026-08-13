@@ -54,6 +54,7 @@ gshsapp-web.tar
 *.db
 *.db-shm
 *.db-wal
+*.db-journal
 
 # local runtime paths
 /data/

@@ -1,8 +1,70 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
+PATH=/usr/sbin:/usr/bin:/sbin:/bin
+LC_ALL=C
+export PATH LC_ALL
+IFS=$' \t\n'
+umask 077
+
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 UFW_RULE_VALIDATOR="$SCRIPT_DIR/validate-ufw-rules.py"
+CONTROL_ROOT=/usr/local/lib/gshsapp-operations
+
+assert_authenticated_host_hardening_control() {
+  local lock_root lock_file
+  [[ "$EUID" -eq 0 ]] || {
+    echo "Host hardening must run as root from the installed authenticated control." >&2
+    return 1
+  }
+  [[ "$SCRIPT_DIR" == "$CONTROL_ROOT" && "${BASH_SOURCE[0]}" == "$CONTROL_ROOT/host-hardening.sh" ]] || {
+    echo "Host hardening must use the installed authenticated control." >&2
+    return 1
+  }
+  lock_root=/run/lock/gshsapp
+  lock_file=$lock_root/lifecycle.lock
+  [[ -d "$lock_root" && ! -L "$lock_root" && "$(stat -c '%u:%g:%a' "$lock_root")" == "0:0:700" ]] || {
+    echo "The installed lifecycle lock directory is unsafe." >&2
+    return 1
+  }
+  if [[ -e "$lock_file" || -L "$lock_file" ]]; then
+    [[ -f "$lock_file" && ! -L "$lock_file" && "$(stat -c '%u:%g:%a:%h' "$lock_file")" == "0:0:600:1" ]] || {
+      echo "The installed lifecycle lock file is unsafe." >&2
+      return 1
+    }
+  fi
+  if [[ "${LIFECYCLE_LOCK_HELD:-0}" == 1 ]]; then
+    [[ "$(readlink -f -- /proc/self/fd/9 2>/dev/null || true)" == "$lock_file" ]] || {
+      echo "The inherited lifecycle lock descriptor is missing or unsafe." >&2
+      return 1
+    }
+    # An inherited descriptor shares the parent's open-file description. This
+    # succeeds only when fd 9 is usable, and preserves/acquires the lock for
+    # the entire hardening check without opening a second racing descriptor.
+    flock -n 9 || {
+      echo "The inherited lifecycle lock is not held safely." >&2
+      return 1
+    }
+  else
+    [[ "${LIFECYCLE_LOCK_HELD:-0}" == 0 ]] || {
+      echo "The lifecycle lock inheritance marker is invalid." >&2
+      return 1
+    }
+    exec 9>"$lock_file"
+    chown root:root "$lock_file"
+    chmod 0600 "$lock_file"
+    flock -n 9 || {
+      echo "Deployment, backup, restore, import, or control installation is active." >&2
+      return 1
+    }
+  fi
+  [[ -f "$CONTROL_ROOT/host-hardening.sh" && ! -L "$CONTROL_ROOT/host-hardening.sh" &&
+     "$(stat -c '%u:%g:%a:%h' "$CONTROL_ROOT/host-hardening.sh")" == "0:0:400:1" ]] || {
+    echo "The installed authenticated control is unsafe." >&2
+    return 1
+  }
+  /bin/bash "$CONTROL_ROOT/install-root-operations.sh" --verify-installed
+}
 
 read_current_ufw_rule_count() {
   local allow_empty="$1"
@@ -204,19 +266,14 @@ main() {
   local mode="${1:---dry-run}"
   PROXY_SOURCE_CIDR="${PROXY_SOURCE_CIDR:?PROXY_SOURCE_CIDR is required}"
   SSH_SOURCE_CIDR="${SSH_SOURCE_CIDR:?SSH_SOURCE_CIDR is required}"
-  SSH_ADMIN_USER="${SSH_ADMIN_USER:?SSH_ADMIN_USER is required}"
   HOST_BIND_IP="${HOST_BIND_IP:?HOST_BIND_IP is required}"
   APP_PORT="${APP_PORT:-1234}"
   ALLOW_NON_RFC1918_INTERNAL="${ALLOW_NON_RFC1918_INTERNAL:-false}"
 
-  if [[ "$mode" != "--dry-run" && "$mode" != "--apply" ]]; then
-    echo "Usage: host-hardening.sh [--dry-run|--apply]" >&2
+  if [[ "$mode" != "--dry-run" && "$mode" != "--apply" && "$mode" != "--verify-firewall" ]]; then
+    echo "Usage: host-hardening.sh [--dry-run|--apply|--verify-firewall]" >&2
     return 2
   fi
-  [[ "$SSH_ADMIN_USER" =~ ^[a-z_][a-z0-9_-]{0,31}$ && "$SSH_ADMIN_USER" != "root" ]] || {
-    echo "SSH_ADMIN_USER must be a non-root local account name." >&2
-    return 1
-  }
   [[ "$APP_PORT" =~ ^[0-9]+$ ]] && (( APP_PORT >= 1 && APP_PORT <= 65535 )) || {
     echo "APP_PORT must be between 1 and 65535." >&2
     return 1
@@ -242,6 +299,23 @@ if not (proxy.is_private and ssh.is_private and bind.is_private):
 print("validated")
 PY
   } 2>&1)" || { echo "$network_policy" >&2; return 1; }
+
+  if [[ "$mode" == "--verify-firewall" ]]; then
+    [[ "$EUID" -eq 0 ]] || { echo "--verify-firewall must run as root." >&2; return 1; }
+    command -v ufw >/dev/null 2>&1 && command -v python3 >/dev/null 2>&1 || {
+      echo "Firewall verification commands are unavailable." >&2
+      return 1
+    }
+    verify_ufw_policy
+    echo "Active UFW policy matches the exact root-configured ingress boundary."
+    return 0
+  fi
+
+  SSH_ADMIN_USER="${SSH_ADMIN_USER:?SSH_ADMIN_USER is required}"
+  [[ "$SSH_ADMIN_USER" =~ ^[a-z_][a-z0-9_-]{0,31}$ && "$SSH_ADMIN_USER" != "root" ]] || {
+    echo "SSH_ADMIN_USER must be a non-root local account name." >&2
+    return 1
+  }
 
   print_plan
   if [[ "$mode" == "--dry-run" ]]; then
@@ -285,5 +359,6 @@ PY
 }
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  assert_authenticated_host_hardening_control
   main "$@"
 fi

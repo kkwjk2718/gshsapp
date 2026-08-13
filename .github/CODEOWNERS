@@ -1,0 +1,24 @@
+# Security-critical policy and privileged host controls require an independent reviewer.
+/.github/CODEOWNERS @kkwjk2718 @kkwjk9534
+/.github/workflows/ @kkwjk2718 @kkwjk9534
+/.gitleaks.toml @kkwjk2718 @kkwjk9534
+/deploy/ @kkwjk2718 @kkwjk9534
+/Dockerfile @kkwjk2718 @kkwjk9534
+/docker-compose.yml @kkwjk2718 @kkwjk9534
+/package.json @kkwjk2718 @kkwjk9534
+/package-lock.json @kkwjk2718 @kkwjk9534
+/next.config.mjs @kkwjk2718 @kkwjk9534
+/eslint.config.mjs @kkwjk2718 @kkwjk9534
+/vitest.config.mjs @kkwjk2718 @kkwjk9534
+/playwright.config.ts @kkwjk2718 @kkwjk9534
+/tsconfig.json @kkwjk2718 @kkwjk9534
+/scripts/ @kkwjk2718 @kkwjk9534
+/prisma/migrations/ @kkwjk2718 @kkwjk9534
+/prisma/schema.prisma @kkwjk2718 @kkwjk9534
+/scripts/migrate-production.mjs @kkwjk2718 @kkwjk9534
+/e2e/public.spec.ts @kkwjk2718 @kkwjk9534
+/src/auth.ts @kkwjk2718 @kkwjk9534
+/src/auth.config.ts @kkwjk2718 @kkwjk9534
+/proxy.ts @kkwjk2718 @kkwjk9534
+/src/app/ @kkwjk2718 @kkwjk9534
+/src/lib/ @kkwjk2718 @kkwjk9534

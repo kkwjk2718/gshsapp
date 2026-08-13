@@ -1,218 +1,170 @@
 # GitHub Actions CI/CD 설정 가이드
 
-이 문서는 현재 저장소 구조를 기준으로 GitHub Actions, Docker Hub, 테스트 서버, 운영 서버를 연결하는 방법을 설명합니다.
+이 문서는 현재 workflow와 GitHub 설정을 설명합니다. 핵심 원칙은 **GitHub-hosted verification, OOB-authenticated root deployment**입니다. Actions는 호스트를 변경하지 않습니다.
 
-이 문서가 다루는 것:
+## 1. Workflow 역할
 
-- repository secrets와 environments
-- Docker Hub 연동
-- self-hosted runner 구성
-- 테스트/운영 배포 workflow 구조
-- semver 릴리스와 SHA 배포의 관계
+| Workflow | Trigger | 역할 |
+| --- | --- | --- |
+| `ci.yml` | PR, push | lint, test, build, 운영 control 검증 |
+| `secret-scan.yml` | PR, push, 수동 | 전체 Git 이력과 checkout gitleaks scan |
+| `publish-and-deploy-test.yml` | 보호된 `main` push | exact SHA 이미지 publish와 build provenance 생성 |
+| `preproduction-rehearsal.yml` | 수동 | 이미 배포된 테스트 origin의 exact 후보 공개 검증과 proof 생성 |
+| `deploy-prod.yml` | 수동 | 이미 배포된 운영 origin 검증과 SHA-bound semver Release 생성 |
+| `production-health-monitor.yml` | 10분 schedule | 선택적으로 공개 운영 URL만 조회하고 실패 알림 |
 
-이 문서가 다루지 않는 것:
+모든 job은 `runs-on: ubuntu-latest`입니다. workflow 이름에 남은 역사적 파일명과 관계없이 `publish-and-deploy-test.yml`은 publish만, `deploy-prod.yml`은 production release verification만 수행합니다.
 
-- 새 서버 OS 부트스트랩 절차
-- 운영 직전 수동 체크리스트
+다음 기능은 GitHub Actions에 없습니다.
 
-위 두 항목은 각각 [docs/server-bootstrap.md](./server-bootstrap.md), [docs/production-launch-runbook.md](./production-launch-runbook.md)를 봅니다.
+- 테스트 또는 운영 호스트 SSH/배포
+- Docker socket 또는 `/opt/gshsapp` 접근
+- SQLite backup, offsite export, import, restore drill
+- root control 설치 또는 systemd 시작
 
-## 1. 목표 구조
+정기 백업은 호스트의 `gshsapp-backup.timer`가 담당합니다. 공개 health monitor schedule과 백업 schedule을 혼동하지 않습니다.
 
-- PR / push: CI 실행
-- `main` push: Docker 이미지 빌드 및 Docker Hub 푸시
-- `main` push: 테스트 서버 self-hosted runner 자동 배포
-- 수동 실행: 운영 서버 self-hosted runner 배포
-- 운영 배포 성공 후 `vX.Y.Z` GitHub Release 생성
+## 2. Docker Hub와 `publish` environment
 
-## 2. 워크플로우 파일
-
-- [`.github/workflows/ci.yml`](../.github/workflows/ci.yml)
-- [`.github/workflows/publish-and-deploy-test.yml`](../.github/workflows/publish-and-deploy-test.yml)
-- [`.github/workflows/preproduction-rehearsal.yml`](../.github/workflows/preproduction-rehearsal.yml)
-- [`.github/workflows/deploy-prod.yml`](../.github/workflows/deploy-prod.yml)
-- [`.github/workflows/production-health-monitor.yml`](../.github/workflows/production-health-monitor.yml)
-- [`.github/workflows/scheduled-backup-test.yml`](../.github/workflows/scheduled-backup-test.yml)
-- [`.github/workflows/scheduled-backup-prod.yml`](../.github/workflows/scheduled-backup-prod.yml)
-
-## 3. Docker Hub 준비
-
-필요한 것:
-
-- Docker Hub 계정
-- `gshsapp` 이미지 저장소
-- push 가능한 access token
-
-Repository secrets:
+Docker Hub repository는 `docker.io/kkwjk2718git/gshsapp`입니다. `publish` GitHub Environment에만 다음 secret을 둡니다.
 
 - `DOCKERHUB_USERNAME`
 - `DOCKERHUB_TOKEN`
 
-이미지 태그 정책:
+Token은 해당 repository에 image를 push하는 최소 권한으로 발급하고 일반 repository secret이나 호스트에 복제하지 않습니다. `publish` environment에는 `main` only deployment branch rule, required reviewer 1명 이상, self-review 방지를 설정합니다.
 
-- `sha-<40-hex commit>`
+`main` push가 publish하는 유일한 배포 후보 태그는 다음 형식입니다.
 
-실제 배포 기준:
+```text
+sha-<40 lowercase hex commit>
+```
 
-- 테스트 서버: workflow가 빌드한 `sha-<commit>`와 출력 digest
-- 운영 서버: 리허설을 통과한 동일 commit과 동일 digest
+Workflow output의 `sha256:<64 lowercase hex>` digest와 GitHub attestation을 함께 기록합니다. mutable `latest` 또는 `main` 태그를 승격 근거로 사용하지 않습니다.
 
-## 4. GitHub Environments
+## 3. Protected branch와 environment
 
-기본 environment:
+`main` branch protection은 최소한 다음을 강제합니다.
 
-- `test`
-- `production`
+- approving review 1개 이상, stale approval dismissal, latest reviewable push 승인
+- `ci.yml`의 `lint`, `test`, `firewall-policy`, `build`와 `secret-scan.yml`의 `gitleaks`를 strict required checks로 설정
+- review conversation resolution
+- force push와 branch deletion 금지
+- 관리자에게도 보호 정책 적용, 기본 bypass 목록 비움
 
-권장 설정:
+현재 workflow가 사용하는 environment 이름은 정확히 다음 넷입니다.
 
-- `production`에 Required reviewers 활성화
-- `test`, `production`에 URL 설정
+- `publish`
+- `preproduction-verification`
+- `production-verification`
+- `production-monitor`
 
-권장 URL:
+`publish`, `preproduction-verification`, `production-verification`에는 `main` only branch rule, required reviewer 1명 이상, self-review 방지를 적용합니다. `production-monitor`는 `main` only로 제한하되 10분 schedule이 무인 실행되도록 required reviewer를 두지 않습니다. 하나라도 이 정책과 다르거나 다른 ref가 허용되면 publish·검증·배포를 시작하지 않습니다.
 
-- `test`: `https://test.gshs.app`
-- `production`: `https://gshs.app`
+과거 문서의 `test`/`production` deployment environment secret, host deploy gate 변수, E2E 관리자 자격증명은 현재 workflow에서 사용하지 않습니다. 공개 검증 Playwright는 익명 페이지만 실행합니다.
 
-## 5. Self-hosted runner 구조
+## 4. Publish Candidate Image
 
-현재 구조:
+보호된 `main` push에서 다음 순서로 실행됩니다.
 
-- 빌드/테스트/Docker Hub 푸시: GitHub-hosted runner
-- 테스트 서버 배포와 smoke check: 테스트 서버 self-hosted runner
-- 운영 서버 배포와 smoke check: 운영 서버 self-hosted runner
+1. `npm ci`, lint, Vitest, production build
+2. exact `${{ github.sha }}` checkout
+3. Docker Hub 로그인
+4. `sha-${{ github.sha }}` image build/push
+5. `org.opencontainers.image.revision=${{ github.sha }}` label 기록
+6. GitHub OIDC 기반 build provenance attestation 생성
+7. workflow summary에 tag/digest와 `Host deployment performed: no` 기록
 
-권장 label:
+이 완료는 후보를 publish했음을 뜻할 뿐 테스트 호스트에 설치됐음을 뜻하지 않습니다.
 
-- 테스트 서버: `gshs-test`
-- 운영 서버: `gshs-prod`
+## 5. 테스트 호스트와 Preproduction Public Verification
 
-runner가 필요한 이유:
+Root 운영자가 [Root operations 신뢰 부트스트랩](./root-operations-bootstrap.md)의 순서로 테스트 호스트를 먼저 배포합니다. 그 다음 `Preproduction Public Verification`을 `main`에서 수동 실행합니다.
 
-- 테스트/운영 서버가 사설망 VM일 수 있음
-- GitHub-hosted runner가 직접 SSH 배포하기 어려움
-- 서버 안의 runner가 배포 스크립트를 실행하는 모델이 더 안정적임
+입력:
 
-## 6. 테스트 서버 자동 배포 흐름
+- `candidate_sha`: 40자리 commit SHA
+- `image_digest`: publish가 출력한 exact digest
 
-`main`에 push하면 아래 순서로 진행됩니다.
+Workflow는 다음을 확인합니다.
 
-1. `lint`
-2. `test`
-3. 방화벽 정책 검증기와 host-hardening shell 회귀 테스트
-4. `build`
-5. Docker Hub 푸시
-6. `gshs-test` runner가 테스트 서버 배포 수행
-7. `/opt/gshsapp`에 `compose.yml`, `deploy.sh`, UFW 정책 검증기 등 최신 자산 반영
-8. `deploy.sh` 실행
-9. 서버 내부 smoke check
-10. `test.gshs.app` 기준 Playwright E2E 실행
+1. 입력 SHA가 현재 `main` ancestry에 있고 이미지 provenance가 정확함
+2. `test.gshs.app/api/health`의 version과 image digest가 입력과 같음
+3. `/`, `/menu`, `/notices`가 test origin을 벗어나지 않음
+4. 익명 public Playwright suite가 통과함
+5. exact run ID/attempt/SHA/control SHA/digest를 담은 7일 보존 proof artifact를 생성함
 
-## 7. 운영 서버 수동 배포 흐름
+Host deploy, restore 또는 root operation은 수행하지 않습니다. 운영 승인은 완료 후 24시간 이내의 이 run ID를 사용합니다.
 
-`Deploy Production` workflow를 수동 실행합니다.
+## 6. 운영 호스트와 Production Release Verification
 
-입력값:
+Root 운영자가 preproduction run ID로 운영 후보를 승인하고 운영 호스트의 import·restore drill·systemd deploy까지 완료한 뒤 `Production Release Verification`을 수동 실행합니다.
+
+입력:
 
 - `image_tag=sha-<40-hex commit>`
 - `image_digest=sha256:<64-hex>`
-- `rehearsal_run_id=<successful Preproduction Rehearsal run ID>`
 
-진행 순서:
+Workflow는 같은 후보가 `test.gshs.app`과 `gshs.app` 양쪽에 배포됐는지 확인하고 익명 public E2E를 실행한 뒤 exact proof만 게시합니다. 기본 브랜치에 고정된 별도 `workflow_run` publisher가 성공 run·현재 `main`·proof·provenance·공개 production identity를 다시 검증한 뒤에만 `package.json` version의 `vX.Y.Z` Release를 exact commit에 생성하거나 갱신합니다. 같은 semver tag가 다른 commit에 묶여 있으면 중단합니다.
 
-1. `production` environment 승인
-2. `gshs-prod` runner가 배포 수행
-3. 지정한 SHA 이미지 pull
-4. DB 백업
-5. 컨테이너 갱신
-6. 서버 내부 smoke check
-7. 공개 도메인 기준 Playwright smoke
-8. semver GitHub Release 생성 또는 갱신
+이 workflow도 호스트를 변경하지 않습니다. `production-verification` 승인은 이미 수행된 root 배포를 공개 검증하고 Release를 허용하는 gate입니다.
 
-## 8. semver 릴리스 정책
+## 7. Public health monitor
 
-버전 소스:
+Repository variable `PRODUCTION_MONITOR_ENABLED=true`일 때만 `production-health-monitor.yml`이 `https://gshs.app/api/health`와 `/`를 조회합니다. 실패 알림이 필요하면 `main` only·required-reviewer 없음 정책의 `production-monitor` environment에만 environment secret `MONITOR_ALERT_WEBHOOK_URL`을 설정합니다. 같은 이름의 repository secret은 삭제하고 기존 값은 회전합니다.
 
-- `package.json`
+이 schedule은 공개 HTTPS GET만 수행합니다. 앱 host, DB, backup 또는 systemd에 접근하지 않습니다.
 
-릴리스 규칙:
+## 8. 호스트 측 GitHub read token
 
-- 운영 배포 성공 시 `vX.Y.Z` 태그 기준 GitHub Release 생성
-- 릴리스 본문에는 서비스 버전, 배포 SHA, 헬스 버전, 실행 기록을 함께 남김
-- 같은 `vX.Y.Z`가 이미 다른 SHA에 사용되었으면 운영 배포는 실패
-- 이 경우 `package.json` 버전을 먼저 올린 뒤 다시 배포해야 함
+`approve-release.sh`는 Actions secret이 아니라 각 호스트의 root-only 파일을 읽습니다.
 
-중요:
+```text
+/etc/gshsapp-operations/github-token  root:root 0600
+```
 
-- semver 릴리스는 사용자에게 보이는 버전 추적용
-- 실제 서버는 commit 출처 확인용 태그와 변경 불가능한 registry digest를 함께 사용
+이 token은 현재 보호된 `main`, branch protection, workflow run/artifact, attestation을 읽는 데 필요한 최소 read 권한만 가집니다. Docker Hub push 권한과 repository write 권한을 부여하지 않습니다. 값은 secret manager에서 root 콘솔로 전달하며 문서, command line, shell history 또는 Actions log에 쓰지 않습니다.
 
-## 9. Environment secrets
+## 9. 첫 수동 실행 전 차단 조건
 
-### 공통 repository secrets
+다음 항목이 하나라도 남으면 publish 이후의 운영 절차를 시작하지 않습니다.
 
-- `DOCKERHUB_USERNAME`
-- `DOCKERHUB_TOKEN`
+- 과거 노출 credential/session 회전과 Actions artifact 삭제 미완료
+- 공개 Git 이력 정리 및 full-history gitleaks scan 미완료
+- 과거 self-hosted runner service, 등록 토큰, deploy key 또는 broker credential 미폐기
+- `main`의 review/strict CI/conversation/admin enforcement, 세 배포 environment의 reviewer 보호, 또는 monitor environment의 `main` only 무인 정책 미구성
+- Docker Hub publish token 최소 권한/회전 미완료
+- fresh host의 OOB control bootstrap, SSH/UFW, runtime config 미검증
+- `$OFFSITE_DIR/.gshsapp-receipts` 세대와 별도 receipt digest 기록, fresh import marker, restore-drill receipt 미확보
 
-### `test` environment secrets
+호스트 실행 순서는 [운영 배포 런북](./production-launch-runbook.md)을 따릅니다.
 
-- `E2E_ADMIN_USER`
-- `E2E_ADMIN_PASSWORD`
+## 10. 문제 확인 순서
 
-### `production` environment secrets
+Publish 문제:
 
-- `E2E_ADMIN_USER`
-- `E2E_ADMIN_PASSWORD`
+1. `ci.yml`/`secret-scan.yml` required check
+2. `publish` environment approval/branch rule
+3. Docker Hub secret과 repository 권한
+4. image digest 및 attestation
 
-선택:
+공개 verification 문제:
 
-- `MONITOR_ALERT_WEBHOOK_URL`
+1. workflow input과 현재 protected `main` SHA
+2. `/api/health` version/digest
+3. test/production origin redirect 경계
+4. protected environment approval
 
-## 10. 프리프로덕션 리허설
+호스트 배포 문제는 Actions runner 상태가 아니라 다음을 확인합니다.
 
-`Preproduction Rehearsal`의 역할:
+1. `systemctl status gshsapp-deploy.service`
+2. `journalctl -u gshsapp-deploy.service`
+3. 설치된 control manifest와 `/etc/gshsapp-operations/deploy.env`
+4. lifecycle phase와 offsite receipt
+5. Docker/health 응답
 
-- 후보 SHA를 테스트 서버에 재배포
-- smoke check 실행
-- Playwright E2E 실행
-- restore drill 실행
-
-운영 승격 조건:
-
-- 테스트 자동 배포 초록
-- 같은 SHA의 `Preproduction Rehearsal` 초록
-- `/admin/test`가 PASS
-
-## 11. 운영 모니터링과 정기 백업
-
-운영 모니터링:
-
-- `PRODUCTION_MONITOR_ENABLED=true`일 때만 실제 헬스 체크 수행
-- `gshs.app`이 아직 점검 페이지면 활성화하지 않음
-
-정기 백업:
-
-- 더 이상 웹 요청 경로에서 실행되지 않음
-- `scheduled-backup-test.yml` + `run-scheduled-backup.sh` + `run-scheduled-backup.mjs` 구조 사용
-- 정기·일반 배포 전 백업은 실행 중인 신뢰 이미지의 동일한 SQLite 스냅샷/아카이브 엔진을 사용
-- 최초 강화 배포에서 구형 이미지에 ops가 없을 때만 호스트 online-backup을 사용하고, 후보 이미지는 라이브 DB 없이 생성 아카이브의 격리 migration 검증만 수행
-
-비밀정보 검사는 `.github/workflows/secret-scan.yml`에서 전체 Git 이력과 체크아웃 디렉터리를 모두 redacted 모드로 검사합니다. 이력에 노출된 값이 발견되면 allowlist로 숨기지 말고 먼저 발급처에서 회전·폐기한 뒤 `SECURITY.md`의 협업 이력 정리 절차를 따릅니다.
-
-## 12. 문제 발생 시 우선 확인 순서
-
-1. workflow 로그
-2. Docker Hub push 로그
-3. self-hosted runner online 상태
-4. 서버 `.env` 누락 여부
-5. 서버 `docker compose logs`
-6. `/api/health` 응답
-
-운영 `.env`는 `install -o <deploy-user> -g <deploy-user> -m 600`으로 설치하고, `AUTH_SECRET` 회전은 모든 기존 세션을 폐기한다는 점을 반영해 유지보수 창에서 수행합니다. 학생 자가가입을 켜기 전에는 `/admin/settings`에서 학교가 통제하는 `academicYear,gisu,studentId,name,email` CSV 명부를 원자적으로 가져오고 기존 중복 학번을 먼저 해소합니다. 학년도마다 새 세대를 가져오며 과거 세대는 비활성 증적으로 보존합니다.
-
-## 13. 관련 문서
+## 관련 문서
 
 - [DEPLOY.md](../DEPLOY.md)
-- [docs/server-bootstrap.md](./server-bootstrap.md)
-- [docs/production-launch-runbook.md](./production-launch-runbook.md)
-- [deploy/README.md](../deploy/README.md)
+- [Root operations 신뢰 부트스트랩](./root-operations-bootstrap.md)
+- [운영 배포 런북](./production-launch-runbook.md)
+- [배포 자산 안내](../deploy/README.md)
