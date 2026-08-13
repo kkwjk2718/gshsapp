@@ -15,13 +15,13 @@
 
 1. Pull Request 또는 push에서 CI 실행
 2. `main` push 시 Docker 이미지 빌드
-3. Docker Hub에 `sha-<commit>`, `main`, `latest` 태그 푸시
+3. Docker Hub에 `sha-<40-hex commit>` 태그를 푸시하고 registry digest 기록
 4. 테스트 서버 self-hosted runner가 자동 배포
 5. 운영 서버는 GitHub Actions 수동 실행 + `production` 승인 후 배포
 
 핵심 원칙:
 
-- 실제 배포 기준은 항상 `sha-<commit>`
+- 실제 배포는 정확한 `sha-<40-hex commit>` 출처와 `sha256:<64-hex>` image digest를 모두 검증
 - 테스트와 운영 서버는 분리
 - 서버 시크릿은 GitHub가 아니라 서버 `.env`에서 관리
 - SQLite는 영속 볼륨 위에서 운영
@@ -102,11 +102,12 @@ NEXT_PUBLIC_NEIS_API_KEY=
 
 입력값:
 
-- `image_tag=sha-<commit>`
+- `image_tag=sha-<40-hex commit>`
+- `image_digest=sha256:<64-hex>`
 
 원칙:
 
-- `latest`가 아니라 검증된 `sha-<commit>`만 사용
+- mutable 태그가 아니라 검증된 digest를 사용하고, 이미지 revision label이 입력 commit과 같은지 확인
 - 같은 SHA가 테스트 서버와 프리프로덕션 리허설에서 초록이어야 함
 - 운영 Release는 `vX.Y.Z` semver 기준으로 생성됨
 - 같은 버전 태그가 다른 SHA에 이미 쓰였으면 배포를 멈추고 버전 bump를 먼저 수행
@@ -117,8 +118,8 @@ NEXT_PUBLIC_NEIS_API_KEY=
 
 기본 순서:
 
-1. 마지막 정상 `sha-<commit>` 확인
-2. `Deploy Production`을 그 SHA로 다시 실행
+1. 마지막 정상 `sha-<commit>`와 정확한 image digest 확인
+2. `Deploy Production`을 그 SHA와 digest로 다시 실행
 3. 필요 시 최신 백업에서 DB 복원
 4. 라우팅/TLS 문제라면 DB보다 프록시를 먼저 확인
 

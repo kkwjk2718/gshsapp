@@ -49,14 +49,12 @@ Repository secrets:
 
 이미지 태그 정책:
 
-- `sha-<commit>`
-- `main`
-- `latest`
+- `sha-<40-hex commit>`
 
 실제 배포 기준:
 
-- 테스트 서버: `sha-<commit>`
-- 운영 서버: `sha-<commit>`
+- 테스트 서버: workflow가 빌드한 `sha-<commit>`와 출력 digest
+- 운영 서버: 리허설을 통과한 동일 commit과 동일 digest
 
 ## 4. GitHub Environments
 
@@ -114,7 +112,8 @@ runner가 필요한 이유:
 
 입력값:
 
-- `image_tag=sha-<commit>`
+- `image_tag=sha-<40-hex commit>`
+- `image_digest=sha256:<64-hex>`
 
 진행 순서:
 
@@ -143,7 +142,7 @@ runner가 필요한 이유:
 중요:
 
 - semver 릴리스는 사용자에게 보이는 버전 추적용
-- 실제 서버 배포 이미지는 계속 `sha-<commit>`를 사용
+- 실제 서버는 commit 출처 확인용 태그와 변경 불가능한 registry digest를 함께 사용
 
 ## 9. Environment secrets
 

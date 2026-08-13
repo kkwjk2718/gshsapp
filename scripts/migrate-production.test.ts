@@ -5,7 +5,7 @@ import { DatabaseSync } from "node:sqlite";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import { getDatabasePath, inspectDatabase, schemaFingerprint } from "./migrate-production.mjs";
+import { getDatabasePath, inspectDatabase, schemaFingerprint, validatePreMigrationState } from "./migrate-production.mjs";
 
 const roots: string[] = [];
 
@@ -70,5 +70,11 @@ describe("production migration preflight", () => {
     db.close();
     expect(driftFingerprint).not.toBe("1518f3d3ccb7b305bcd59d6ff916dce66002bfcac8b028c2b2dc50c83d88e609");
     expect(driftFingerprint).not.toBe("3462920d8439a76ba1ee9471d10f10350837df815692cd09f74ed2c1913eac2f");
+    expect(() => validatePreMigrationState({ kind: "unmanaged", fingerprint: driftFingerprint })).toThrow(
+      "Refusing to baseline an unknown SQLite schema",
+    );
+    expect(() => validatePreMigrationState({ kind: "managed", fingerprint: driftFingerprint })).toThrow(
+      "Refusing to migrate an unknown SQLite schema",
+    );
   });
 });

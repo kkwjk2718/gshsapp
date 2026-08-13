@@ -1,0 +1,95 @@
+# Infrastructure security runbook
+
+Repository hardening cannot safely infer the reverse-proxy source address, rotate credentials, rewrite public Git history, or mutate DNS. Complete this checklist before setting the protected production environment variables to `true`.
+
+## 1. Mandatory credential incident response
+
+The former public history contained operational credentials and user password material. Treat every value ever committed, pasted into issue/CI logs, or shared during this review as compromised.
+
+1. Rotate the Ubuntu account password immediately and replace password SSH with a newly generated, passphrase-protected administrator key.
+2. Rotate `AUTH_SECRET`, Docker Hub token, Brevo API key, NEIS/API credentials, E2E administrator credentials, portal shared secret, webhook URLs, and every affected user/admin password.
+3. Increment/revoke sessions for all accounts and require password rotation for affected users.
+4. Use `git filter-repo --sensitive-data-removal` in an isolated mirror to purge the identified files/values from every ref. Coordinate the force-push and invalidate existing forks/clones; do not run a history rewrite from a working production checkout.
+5. Run both scans until clean:
+
+   ```bash
+   gitleaks git --redact --config .gitleaks.toml --log-opts="--all"
+   gitleaks dir --redact --config .gitleaks.toml .
+   ```
+
+6. Only after rotation, session revocation, history cleanup, and clean scans set production environment variable `SECURITY_ROTATION_COMPLETE=true`.
+
+## 2. Origin and SSH restriction
+
+The supplied address `172.15.10.34` is **not** RFC1918 private space (`172.16.0.0/12` is private). Confirm the intended subnet with the network owner before applying firewall rules. If it is intentionally routed as internal space, the explicit exception below documents that decision.
+
+Dry-run first:
+
+```bash
+cd /opt/gshsapp
+PROXY_SOURCE_CIDR=REPLACE_WITH_PROXY_CIDR \
+SSH_SOURCE_CIDR=REPLACE_WITH_ADMIN_CIDR \
+SSH_ADMIN_USER=REPLACE_WITH_NON_ROOT_USER \
+HOST_BIND_IP=172.15.10.34 \
+ALLOW_NON_RFC1918_INTERNAL=true \
+./host-hardening.sh --dry-run
+```
+
+Before `--apply`, verify console/out-of-band access and that the administrator has a non-empty `~/.ssh/authorized_keys`. Keep the current SSH session open while opening a second key-only session. The script then permits port 1234 only from the named reverse-proxy CIDR, SSH only from the named admin CIDR, disables password/root SSH, and denies all other inbound traffic.
+
+Set the test/production GitHub Environment values:
+
+- `HOST_BIND_IP`: exact proxy-facing host interface, never `0.0.0.0`.
+- `ALLOW_PUBLIC_BIND=true` only for reviewed non-RFC1918 topology with the source-restricted UFW rule above.
+- `ORIGIN_FIREWALL_READY=true` only after rules and second SSH session are verified.
+- `TRUSTED_PROXY_HOPS`: exact number of controlled proxies that overwrite, rather than append untrusted, forwarding headers.
+
+## 3. Backup and recovery
+
+Configure a private off-host destination, run the backup workflow, and complete the isolated restore drill for the exact image digest. Confirm backup directories are `0700`, files are `0600`, and restoration only creates a staged pending restore. Never automatically replace the live database from an uploaded archive.
+
+Set `OFFSITE_BACKUP_READY=true` only after a fresh off-host copy and successful restore drill.
+
+## 4. DNS and mail policy
+
+Observed on 2026-08-13:
+
+- apex SPF uses soft fail (`~all`);
+- DMARC is monitor-only (`p=none`);
+- no CAA answer was present;
+- no `gshs.app` DS record was present at the `.app` parent.
+
+After confirming every authorized sender (currently Cloudflare Email Routing/Service and Brevo where still used), publish exactly one apex SPF record and test delivery before tightening it. A likely combined final record is:
+
+```text
+@ TXT "v=spf1 include:_spf.mx.cloudflare.net include:spf.brevo.com -all"
+```
+
+Do not copy that record if Brevo uses a delegated bounce domain instead of the apex, or if another legitimate sender exists. Preserve only one SPF TXT record.
+
+Move DMARC from monitoring to enforcement after reviewing aggregate reports:
+
+```text
+_dmarc TXT "v=DMARC1; p=reject; sp=reject; adkim=s; aspf=s; pct=100; rua=mailto:SECURITY_REPORT_MAILBOX"
+```
+
+Add a restrictive certificate authority authorization policy for the CA actually used at the edge (the current public certificate was issued by Let's Encrypt):
+
+```text
+@ CAA 0 issue "letsencrypt.org"
+@ CAA 0 issuewild ";"
+@ CAA 0 iodef "mailto:SECURITY_REPORT_MAILBOX"
+```
+
+Enable DNSSEC in Cloudflare, add/confirm the generated DS at the registrar, wait through the DS TTL, then verify `AD=true` and the expected DS from multiple validating resolvers. Do not change nameservers while stale DS data exists.
+
+## 5. Release gate
+
+Production deployment now requires:
+
+- an exact `sha-<40 hex>` source identity plus a matching `sha256:<64 hex>` image digest;
+- the same candidate version already healthy at `test.gshs.app`;
+- `SECURITY_ROTATION_COMPLETE=true`, `ORIGIN_FIREWALL_READY=true`, and `OFFSITE_BACKUP_READY=true` in the protected production environment;
+- a reviewed SQLite backup and migration, followed by container health and public smoke checks.
+
+Membership remains suspended until this entire gate and the post-deploy security verification are complete.

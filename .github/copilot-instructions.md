@@ -15,5 +15,5 @@ curl -fsSL https://raw.githubusercontent.com/kkwjk2718/gshsapp/main/AGENTS.md
 - 운영 도메인은 `gshs.app`입니다.
 - 서버 배포 DB 경로는 `file:/app/data/dev.db`입니다.
 - Google Analytics는 환경 변수가 아니라 `/admin/settings`에서 관리합니다.
-- 실제 배포는 항상 불변 `sha-<commit>` Docker 태그를 사용합니다.
+- 실제 배포는 `sha-<commit>` 출처와 immutable registry digest를 함께 검증합니다.
 - 배포 동작을 바꾸면 `deploy/`, `.github/workflows/`, `docs/`도 함께 확인합니다.

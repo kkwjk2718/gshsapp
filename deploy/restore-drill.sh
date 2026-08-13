@@ -9,6 +9,7 @@ BACKUP_DIR="${BACKUP_DIR:-$DEPLOY_ROOT/backup}"
 DB_FILE="${DB_FILE:-$DATA_DIR/dev.db}"
 
 IMAGE_TAG="${IMAGE_TAG:?IMAGE_TAG is required}"
+IMAGE_DIGEST="${IMAGE_DIGEST:?IMAGE_DIGEST is required}"
 DOCKER_IMAGE="${DOCKER_IMAGE:-kkwjk2718git/gshsapp}"
 APP_VERSION="${APP_VERSION:-$IMAGE_TAG}"
 RESTORE_DRILL_PORT="${RESTORE_DRILL_PORT:-1235}"
@@ -79,6 +80,7 @@ EOF
 write_compose_env() {
   cat >"$DEPLOY_ENV_FILE" <<EOF
 IMAGE_TAG=$IMAGE_TAG
+IMAGE_DIGEST=$IMAGE_DIGEST
 DOCKER_IMAGE=$DOCKER_IMAGE
 APP_VERSION=$APP_VERSION
 HOST_BIND_IP=$HOST_BIND_IP
@@ -160,7 +162,7 @@ prepare_restore_source() {
     --tmpfs /tmp:rw,noexec,nosuid,nodev,size=1536m \
     --mount "type=bind,src=$BACKUP_DIR,dst=/input,readonly" \
     --mount "type=bind,src=$TEMP_DIR/validated,dst=/output" \
-    "${DOCKER_IMAGE}:${IMAGE_TAG}" \
+    "${DOCKER_IMAGE}@${IMAGE_DIGEST}" \
     node .next/ops/validate-backup.mjs "/input/$RESTORE_SOURCE_NAME" /output
 
   mv "$TEMP_DIR/validated/data" "$TEMP_DIR/data"
@@ -316,13 +318,19 @@ if [[ -n "${DOCKERHUB_USERNAME:-}" && -n "${DOCKERHUB_TOKEN:-}" ]]; then
   printf '%s' "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
 fi
 
-echo "Pulling image ${DOCKER_IMAGE}:${IMAGE_TAG} for restore drill..."
-docker pull "${DOCKER_IMAGE}:${IMAGE_TAG}"
+image_ref="${DOCKER_IMAGE}@${IMAGE_DIGEST}"
+[[ "$IMAGE_TAG" =~ ^sha-[0-9a-f]{40}$ ]] || { echo "IMAGE_TAG must be sha-<40 lowercase hex>." >&2; exit 1; }
+[[ "$IMAGE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "IMAGE_DIGEST must be sha256:<64 lowercase hex>." >&2; exit 1; }
+echo "Pulling immutable image ${image_ref} for restore drill..."
+docker pull "$image_ref"
+image_revision="$(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' "$image_ref")"
+[[ "$image_revision" == "${IMAGE_TAG#sha-}" ]] || { echo "Restore image revision does not match IMAGE_TAG." >&2; exit 1; }
 
 prepare_restore_source
 
 echo "Starting isolated restore drill container on ${RESTORE_BASE_URL}..."
-compose up -d --remove-orphans
+compose run --rm --no-deps migrate
+compose up -d --remove-orphans --wait web
 
 if ! wait_for_health; then
   echo "Restore drill health check failed for $RESTORE_BASE_URL/api/health" >&2

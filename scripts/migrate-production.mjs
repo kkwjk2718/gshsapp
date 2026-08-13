@@ -87,6 +87,14 @@ export function inspectDatabase(databasePath) {
   }
 }
 
+export function validatePreMigrationState(state) {
+  if (state.kind === "empty") return;
+  if (state.fingerprint === LEGACY_SCHEMA_FINGERPRINT || state.fingerprint === CURRENT_SCHEMA_FINGERPRINT) return;
+
+  const verb = state.kind === "managed" ? "migrate" : "baseline";
+  throw new Error(`Refusing to ${verb} an unknown SQLite schema: ${state.fingerprint}`);
+}
+
 function runPrisma(args) {
   const cli = join(process.cwd(), "node_modules", "prisma", "build", "index.js");
   if (!existsSync(cli)) throw new Error("The lockfile-resolved Prisma CLI is missing from the migration image");
@@ -122,6 +130,7 @@ export function migrateProduction() {
   }
   const databasePath = getDatabasePath();
   const before = inspectDatabase(databasePath);
+  validatePreMigrationState(before);
 
   if (before.kind === "unmanaged") {
     if (before.fingerprint === LEGACY_SCHEMA_FINGERPRINT) {
@@ -129,8 +138,6 @@ export function migrateProduction() {
     } else if (before.fingerprint === CURRENT_SCHEMA_FINGERPRINT) {
       runPrisma(["migrate", "resolve", "--applied", BASELINE_MIGRATION]);
       runPrisma(["migrate", "resolve", "--applied", SECURITY_MIGRATION]);
-    } else {
-      throw new Error(`Refusing to baseline an unknown SQLite schema: ${before.fingerprint}`);
     }
   }
 

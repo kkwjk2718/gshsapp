@@ -27,4 +27,14 @@ fi
 
 ALLOW_PUBLIC_BIND=true
 validate_bind_policy
+
+HOST_BIND_IP=172.15.10.34
+ALLOW_PUBLIC_BIND=false
+if validate_bind_policy >/dev/null 2>&1; then
+  echo "globally routed 172.15/16 must not be mistaken for RFC1918 space" >&2
+  exit 1
+fi
+
+ALLOW_PUBLIC_BIND=true
+validate_bind_policy
 echo "deploy policy tests: ok"

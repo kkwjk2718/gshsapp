@@ -5,7 +5,7 @@
 ## 이미 준비된 것
 
 - `main` push 시 CI가 돌고 `test.gshs.app`으로 자동 배포됨
-- `Preproduction Rehearsal`로 후보 `sha-<commit>`를 테스트 서버에서 재검증 가능
+- `Preproduction Rehearsal`로 후보 `sha-<commit>`와 image digest를 테스트 서버에서 재검증 가능
 - `deploy/restore-drill.sh`로 라이브 DB를 건드리지 않는 복원 리허설 가능
 - `/api/health`와 `/admin/test`를 운영 전 최종 판단 기준으로 사용
 
@@ -28,7 +28,7 @@
 
 ## 운영 배포 직전 필수 순서
 
-배포할 정확한 `sha-<commit>` 기준으로 아래 순서를 지킵니다.
+배포할 정확한 `sha-<commit>`와 `sha256:<digest>` 기준으로 아래 순서를 지킵니다.
 
 1. `Publish And Deploy Test`가 해당 SHA에서 초록인지 확인
 2. 같은 SHA로 `Preproduction Rehearsal` 실행 후 초록 확인
@@ -61,7 +61,7 @@ OFFSITE_TARGET=backup-user@backup-host:/srv/backups/gshsapp/ ./offsite-backup.sh
 ## 운영 배포 절차
 
 1. GitHub Actions에서 `Deploy Production` 실행
-2. 이미 리허설을 통과한 동일한 `sha-<commit>` 입력
+2. 이미 리허설을 통과한 동일한 `sha-<commit>`와 `sha256:<digest>` 입력
 3. `production` environment 승인
 4. 워크플로우가 `deploy -> smoke -> e2e`까지 끝날 때까지 대기
 5. `https://gshs.app/api/health`가 배포한 SHA를 반환하는지 확인
@@ -72,7 +72,7 @@ OFFSITE_TARGET=backup-user@backup-host:/srv/backups/gshsapp/ ./offsite-backup.sh
 
 배포 실패 시, 새롭고 검증되지 않은 SHA를 올리지 않습니다. 아래 순서로 되돌립니다.
 
-1. 마지막 정상 `sha-<commit>`를 다시 배포
+1. 마지막 정상 `sha-<commit>`와 정확한 digest를 다시 배포
 2. `https://gshs.app/api/health` 재확인
 3. 데이터 문제일 때만 검증된 `backup-YYYYMMDD-HHMMSS-<random>.tar.gz`의 격리 restore drill 수행
 4. 라우팅 또는 TLS 문제면 DB를 건드리기 전에 프록시 수정 및 smoke check 재실행

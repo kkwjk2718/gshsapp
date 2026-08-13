@@ -133,7 +133,7 @@ sudo ufw enable
 sudo ufw status
 ```
 
-현재 기본 배포는 `0.0.0.0:1234` 바인딩을 사용합니다. 이는 프록시가 다른 호스트에 있을 수 있기 때문입니다.
+기본 배포는 `127.0.0.1:1234`에만 바인딩합니다. 프록시가 다른 호스트에 있으면 프록시 전용 인터페이스 주소를 `HOST_BIND_IP`로 명시하고, `deploy/host-hardening.sh`로 프록시 source CIDR만 앱 포트에 허용합니다. `0.0.0.0` 공개 바인딩은 사용하지 않습니다. 상세 절차는 [인프라 보안 런북](./infrastructure-security-runbook.md)을 따릅니다.
 
 ## 7. 리버스 프록시 가정
 

@@ -37,7 +37,7 @@ GSHS.app은 학교 생활에서 자주 확인하는 정보를 한곳에 모은 N
 
 배포 기본 원칙:
 
-- Docker 이미지는 `sha-<commit>` 불변 태그를 기준으로 배포합니다.
+- Docker 이미지는 `sha-<commit>` 출처와 immutable registry digest를 함께 검증하여 배포합니다.
 - GitHub Release는 `vX.Y.Z` semver 태그를 기준으로 관리합니다.
 - 테스트와 운영은 self-hosted runner가 각각 분리되어 있습니다.
 - SQLite는 `/app/data/dev.db` 영속 볼륨 경로를 사용합니다.
@@ -86,7 +86,7 @@ ICAL_ALLOWED_HOSTS=calendar.google.com
 ### 데이터베이스 초기화
 
 ```bash
-npx prisma db push
+npx prisma migrate dev
 ```
 
 ### 실행
@@ -209,7 +209,7 @@ npm run test:e2e:smoke
 ## 핵심 운영 원칙
 
 - 테스트/운영 도메인 값은 절대 섞지 않습니다.
-- 운영 배포는 항상 검증된 `sha-<commit>`만 사용합니다.
+- 운영 배포는 검증된 `sha-<commit>`와 정확한 image digest를 함께 사용합니다.
 - semver 릴리스는 `package.json` 버전을 기준으로 생성합니다.
 - 백업, 복원, 릴리스, runner 구조를 바꾸면 문서를 함께 수정합니다.
 - 시크릿, 비밀번호, API 키, 서버 `.env`는 저장소에 커밋하지 않습니다.

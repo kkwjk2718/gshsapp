@@ -20,12 +20,29 @@ validate_deploy_identity() {
 }
 
 validate_bind_policy() {
+  local first second third fourth
+  IFS=. read -r first second third fourth <<<"${HOST_BIND_IP:-}"
+  if [[ ! "$first" =~ ^[0-9]+$ || ! "$second" =~ ^[0-9]+$ || ! "$third" =~ ^[0-9]+$ || ! "$fourth" =~ ^[0-9]+$ ]] ||
+     (( first > 255 || second > 255 || third > 255 || fourth > 255 )); then
+    echo "HOST_BIND_IP must be an explicit IPv4 address." >&2
+    return 1
+  fi
+
+  local is_private=false
+  if (( first == 127 || first == 10 || (first == 192 && second == 168) || (first == 172 && second >= 16 && second <= 31) )); then
+    is_private=true
+  fi
+
   case "${HOST_BIND_IP:-}" in
-    ""|0.0.0.0|::|"[::]")
+    0.0.0.0)
       if [[ "${ALLOW_PUBLIC_BIND:-false}" != "true" ]]; then
         echo "Wildcard/blank bind refused. Set a private interface address, or explicitly set ALLOW_PUBLIC_BIND=true with a source-restricted firewall." >&2
         return 1
       fi
       ;;
   esac
+  if [[ "$is_private" != "true" && "${ALLOW_PUBLIC_BIND:-false}" != "true" ]]; then
+    echo "A non-private bind requires ALLOW_PUBLIC_BIND=true and a source-restricted firewall." >&2
+    return 1
+  fi
 }

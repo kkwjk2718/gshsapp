@@ -5,8 +5,7 @@ on:
   schedule:
     - cron: "*/10 * * * *"
 
-permissions:
-  contents: read
+permissions: {}
 
 env:
   BASE_URL: https://gshs.app

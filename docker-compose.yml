@@ -1,28 +1,84 @@
-version: '3.8'
-
 services:
-  web:
-    container_name: gshsapp-web
+  migrate:
     build:
       context: .
       dockerfile: Dockerfile
-    restart: always
-    # ports:        <-- host 모드에서는 포트 매핑이 무시됩니다.
-    #   - "1234:3000"
-    network_mode: "host" # 호스트 네트워크 직접 사용 (리눅스 전용 해결책)
+      args:
+        APP_VERSION: local
+        VCS_REF: local
+    image: gshsapp-local:dev
+    user: "1001:1001"
+    restart: "no"
+    read_only: true
+    init: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      DATA_ROOT: /app/data
+      DATABASE_URL: file:/app/data/dev.db
+      TMPDIR: /tmp
     volumes:
-      - ./data:/app/data
-      - ./backup:/app/data/backup
+      - ./data:/app/data:rw
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=32m,uid=1001,gid=1001,mode=1700
+    command:
+      - node
+      - scripts/migrate-production.mjs
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        APP_VERSION: local
+        VCS_REF: local
+    image: gshsapp-local:dev
+    container_name: gshsapp-web
+    restart: unless-stopped
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    user: "1001:1001"
+    read_only: true
+    init: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 256
+    ports:
+      - "127.0.0.1:1234:3000"
+    volumes:
+      - ./data:/app/data:rw
+      - ./backup:/app/data/backup:rw
     env_file:
       - .env
     environment:
       NODE_OPTIONS: --dns-result-order=ipv4first
-      PORT: "1234" # 앱이 직접 1234 포트로 실행되도록 설정
+      PORT: "3000"
+      HOSTNAME: 0.0.0.0
       DATA_ROOT: /app/data
       DATABASE_URL: file:/app/data/dev.db
       BACKUP_DIR: /app/data/backup
       RESTORE_ROOT: /app/data/restore
       WEATHER_CACHE_PATH: /app/data/weather-cache.json
-    dns:
-      - 8.8.8.8
-      - 8.8.4.4
+      TMPDIR: /tmp
+      APP_VERSION: local
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=64m,uid=1001,gid=1001,mode=1700
+      - /app/.next/cache:rw,noexec,nosuid,nodev,size=128m,uid=1001,gid=1001,mode=1700
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3000/api/health').then(async r=>{const b=await r.json();if(!r.ok||b.ok!==true)process.exit(1)}).catch(()=>process.exit(1))"
+      interval: 15s
+      timeout: 5s
+      start_period: 30s
+      retries: 4

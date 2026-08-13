@@ -15,7 +15,7 @@ await build({
   bundle: true,
   platform: "node",
   format: "esm",
-  target: "node20",
+  target: "node24",
   sourcemap: false,
   packages: "bundle",
   external: ["@prisma/client", ".prisma/client"],

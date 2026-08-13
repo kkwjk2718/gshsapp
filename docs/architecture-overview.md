@@ -127,7 +127,7 @@ Route group 기준:
 
 1. PR / push에서 CI 실행
 2. `main` push 시 Docker 이미지 빌드
-3. Docker Hub에 `sha-<commit>`, `main`, `latest` 푸시
+3. Docker Hub에 `sha-<40-hex commit>` 이미지를 푸시하고 digest 고정
 4. 테스트 서버 self-hosted runner가 자동 배포
 5. 운영 서버는 수동 `Deploy Production`으로 승격
 
@@ -145,7 +145,7 @@ Route group 기준:
 
 핵심 규칙:
 
-- 실제 배포 기준은 `sha-<commit>`
+- 실제 배포 기준은 검증된 `sha-<commit>` 출처와 immutable image digest
 - GitHub Release는 `package.json` semver 기준 `vX.Y.Z`
 - 운영 릴리스가 다른 SHA에 이미 사용된 semver를 재사용하면 배포 실패
 - 배포 컨테이너 시간대는 `TZ=Asia/Seoul`, UI 시간 표시는 KST helper 기준으로 통일

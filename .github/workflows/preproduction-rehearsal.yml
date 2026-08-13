@@ -73,6 +73,7 @@ jobs:
           install -m 644 deploy/compose.yml "$DEPLOY_PATH/compose.yml"
           install -m 755 deploy/deploy.sh "$DEPLOY_PATH/deploy.sh"
           install -m 644 deploy/deploy-policy.sh "$DEPLOY_PATH/deploy-policy.sh"
+          install -m 755 deploy/host-hardening.sh "$DEPLOY_PATH/host-hardening.sh"
           install -m 755 deploy/offsite-backup.sh "$DEPLOY_PATH/offsite-backup.sh"
           install -m 755 deploy/run-scheduled-backup.sh "$DEPLOY_PATH/run-scheduled-backup.sh"
           install -m 755 deploy/restore-drill.sh "$DEPLOY_PATH/restore-drill.sh"
@@ -119,15 +120,19 @@ jobs:
         shell: bash
         env:
           EXPECTED_VERSION: ${{ needs.prepare.outputs.image_tag }}
+          SMOKE_HOST: ${{ vars.HOST_BIND_IP }}
         run: |
           set -euo pipefail
           health_version="$(
           EXPECTED_VERSION="$EXPECTED_VERSION" python3 - <<'PY'
           import json
+          import ipaddress
           import os
           import urllib.request
 
-          base_url = "http://127.0.0.1:1234"
+          smoke_host = os.environ["SMOKE_HOST"]
+          ipaddress.ip_address(smoke_host)
+          base_url = f"http://{smoke_host}:1234"
           expected_version = os.environ["EXPECTED_VERSION"]
           paths = ["/api/health", "/", "/menu", "/notices"]
           health_payload = None

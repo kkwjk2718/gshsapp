@@ -41,13 +41,13 @@
 서버용 compose는 아래 원칙으로 작성되어 있습니다.
 
 - `build:` 대신 `image:` 사용
-- `sha-<commit>` 기준 이미지 배포
+- `sha-<40-hex commit>` 출처와 `sha256:<64-hex>` 이미지 digest를 함께 검증하여 배포
 - `${HOST_BIND_IP}:${HOST_PORT}:3000` 방식 포트 바인딩
 - `./data:/app/data`, `./backup:/app/data/backup` 영속 볼륨 사용
 - `DATA_ROOT=/app/data` 아래에서 DB, 백업, 복원 스테이징, 날씨 캐시 경로를 고정
 - `APP_VERSION`을 컨테이너에 주입
 
-현재 기본값은 프록시가 다른 서버에서 접근할 수 있도록 `0.0.0.0:${HOST_PORT}:3000`입니다.
+기본 바인딩은 `127.0.0.1:${HOST_PORT}:3000`입니다. 프록시가 별도 서버라면 `HOST_BIND_IP`를 프록시 전용 인터페이스로 명시하고, 호스트 방화벽에서 프록시 source CIDR만 허용해야 합니다. 전체 인터페이스 바인딩은 기본적으로 거부됩니다.
 
 ## `deploy.sh` 실행 순서
 
@@ -57,17 +57,19 @@
 2. `data/`, `backup/` 디렉터리 준비
 3. 임시 `.deploy.env` 생성
 4. 필요 시 Docker Hub 로그인
-5. 지정한 `sha-<commit>` 이미지 pull
-6. 기존 SQLite DB 백업
-7. `docker compose up -d --remove-orphans`
-8. `/api/health` 응답 확인
-9. 실패 시 compose 상태와 로그 출력
+5. digest로 이미지를 pull하고 revision label이 `sha-<commit>`와 일치하는지 검증
+6. 기존 SQLite DB의 일관된 사전 백업 생성
+7. 검토된 Prisma migration을 일회성 컨테이너에서 적용
+8. `docker compose up -d --remove-orphans --wait web`
+9. `/api/health` 버전 응답 확인
+10. 실패 시 이전 digest의 애플리케이션만 롤백(DB 자동 복원 금지)
 
 ## `deploy.sh` 주요 환경 변수
 
 필수:
 
 - `IMAGE_TAG`
+- `IMAGE_DIGEST`
 
 선택:
 
@@ -82,7 +84,7 @@
 현재 기본값:
 
 - `DOCKER_IMAGE=kkwjk2718git/gshsapp`
-- `HOST_BIND_IP=0.0.0.0`
+- `HOST_BIND_IP=127.0.0.1`
 - `HOST_PORT=1234`
 - `APP_VERSION=$IMAGE_TAG`
 
@@ -122,7 +124,8 @@ Runner labels:
 
 ## 운영 시 주의 사항
 
-- `latest`가 아니라 `sha-<commit>`를 배포 기준으로 사용합니다.
+- 태그만 신뢰하지 않고, 검증한 `sha-<commit>` 출처와 immutable image digest를 함께 배포 기준으로 사용합니다.
+- 별도 프록시 호스트를 쓰는 경우 [`host-hardening.sh`](./host-hardening.sh)와 [인프라 보안 런북](../docs/infrastructure-security-runbook.md)을 먼저 적용합니다.
 - `backup/` 디렉터리는 삭제하지 않습니다.
 - `.env`는 서버에서 직접 관리하며 저장소에는 올리지 않습니다.
 - SQLite를 사용하므로 대규모 변경 전에는 백업 상태를 먼저 확인합니다.
