@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   requireAdmin: vi.fn(),
   stageRestoreUpload: vi.fn(),
+  cancelPendingRestore: vi.fn(),
   auditCreate: vi.fn(),
 }));
 
@@ -15,6 +16,7 @@ vi.mock("@/lib/current-user", () => ({
 vi.mock("@/lib/backup/restore-staging", () => ({
   getMaxRestoreUploadBytes: () => 100,
   stageRestoreUpload: mocks.stageRestoreUpload,
+  cancelPendingRestore: mocks.cancelPendingRestore,
   RestoreStagingError: class RestoreStagingError extends Error { constructor(readonly code: string) { super(code); } },
 }));
 vi.mock("@/lib/backup/paths", () => ({ getRestoreRoot: () => "C:\\data\\restore" }));
@@ -28,6 +30,7 @@ function request(overrides: Partial<{
   filename: string;
   contentLength: string;
   body: ReadableStream<Uint8Array>;
+  restoreId: string;
 }> = {}) {
   const headers = new Headers({
     origin: overrides.origin ?? "https://gshs.app",
@@ -37,6 +40,7 @@ function request(overrides: Partial<{
     "content-type": overrides.contentType ?? "application/octet-stream",
     "x-gshs-restore-confirm": overrides.confirm ?? "RESTORE",
     "x-gshs-restore-filename": overrides.filename ?? "backup.db",
+    "x-gshs-restore-id": overrides.restoreId ?? "opaque-restore-id-123456",
   });
   if (overrides.contentLength !== undefined) headers.set("content-length", overrides.contentLength);
   return {
@@ -58,6 +62,7 @@ describe("restore upload route", () => {
       sha256: "a".repeat(64),
       expiresAt: "2026-08-14T00:00:00.000Z",
     });
+    mocks.cancelPendingRestore.mockResolvedValue({ id: "opaque-restore-id-123456" });
   });
 
   it("authorizes against current database state before reading or staging a body", async () => {
@@ -109,5 +114,28 @@ describe("restore upload route", () => {
     const payload = await response.json();
     expect(payload).toEqual(expect.objectContaining({ ok: true, restoreId: "opaque-restore-id-123456" }));
     expect(JSON.stringify(payload)).not.toContain("C:\\data");
+  });
+
+  it("authorizes and audits an exact-id cancellation before deleting staged restore data", async () => {
+    mocks.requireAdmin.mockResolvedValue({ id: "admin", role: "ADMIN" });
+    const route = await import("./route") as typeof import("./route") & {
+      DELETE: (request: Request) => Promise<Response>;
+    };
+    const response = await route.DELETE(request({ restoreId: "opaque-restore-id-123456" }));
+
+    expect(response.status).toBe(200);
+    expect(mocks.auditCreate.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.cancelPendingRestore.mock.invocationCallOrder[0],
+    );
+    expect(mocks.auditCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({ action: "BACKUP_RESTORE_CANCEL_REQUESTED", targetId: "opaque-restore-id-123456" }),
+    });
+    expect(mocks.cancelPendingRestore).toHaveBeenCalledWith(expect.objectContaining({
+      restoreRoot: "C:\\data\\restore",
+      expectedId: "opaque-restore-id-123456",
+    }));
+    expect(mocks.auditCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({ action: "BACKUP_RESTORE_CANCELLED", targetId: "opaque-restore-id-123456" }),
+    });
   });
 });

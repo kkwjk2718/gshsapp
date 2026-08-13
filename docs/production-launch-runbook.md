@@ -60,6 +60,8 @@ cd /opt/gshsapp
 OFFSITE_TARGET=backup-user@backup-host:/srv/backups/gshsapp/ ./offsite-backup.sh
 ```
 
+로컬 백업은 새 검증 세대 생성 후 count·age·total-bytes 정책에 따라 정리되므로 오프사이트 복사를 정기 백업 직후 별도 단계로 실행합니다. `offsite-backup.sh`는 전송만 담당하고 성공 receipt를 로컬 보존 정책에 연결하지 않습니다. 원격 대상은 immutable/versioned 보존과 독립된 retention을 사용하고 로컬 삭제를 `rsync --delete`로 전파하지 않습니다. 최신 archive/metadata 쌍의 원격 checksum과 격리 restore drill을 확인하기 전에는 `OFFSITE_BACKUP_READY=true`로 두지 않습니다.
+
 ## 운영 배포 절차
 
 1. GitHub Actions에서 `Deploy Production` 실행

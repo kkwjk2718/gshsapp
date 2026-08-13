@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { writeAuditLog } from "@/lib/audit";
 import { getRestoreRoot } from "@/lib/backup/paths";
 import {
+  cancelPendingRestore,
   getMaxRestoreUploadBytes,
   RestoreStagingError,
   stageRestoreUpload,
@@ -53,7 +54,9 @@ function parseContentLength(request: Request): number | null | "invalid" {
 function mapStagingError(error: RestoreStagingError) {
   switch (error.code) {
     case "UPLOAD_TOO_LARGE": return response(413, error.code);
-    case "RESTORE_PENDING": return response(409, error.code);
+    case "RESTORE_PENDING":
+    case "RESTORE_ID_MISMATCH": return response(409, error.code);
+    case "RESTORE_NOT_FOUND": return response(404, error.code);
     case "INVALID_BODY":
     case "INVALID_LENGTH":
     case "INVALID_FILENAME":
@@ -124,5 +127,33 @@ export async function POST(request: Request) {
       return mapStagingError(error);
     }
     return response(500, "RESTORE_STAGE_FAILED");
+  }
+}
+
+export async function DELETE(request: Request) {
+  try {
+    const actor = await requireAdmin();
+    const metadata = validRequestMetadata(request);
+    if (!metadata.ok) return response(metadata.status, metadata.code);
+    const restoreId = request.headers.get("x-gshs-restore-id") ?? "";
+    await writeAuditLog(prisma, {
+      actorId: actor.id,
+      action: "BACKUP_RESTORE_CANCEL_REQUESTED",
+      target: { type: "BACKUP", id: restoreId },
+    });
+    const descriptor = await cancelPendingRestore({
+      restoreRoot: getRestoreRoot(),
+      expectedId: restoreId,
+    });
+    await writeAuditLog(prisma, {
+      actorId: actor.id,
+      action: "BACKUP_RESTORE_CANCELLED",
+      target: { type: "BACKUP", id: descriptor.id },
+    });
+    return response(200, "RESTORE_CANCELLED", { restoreId: descriptor.id });
+  } catch (error) {
+    if (error instanceof AuthorizationError) return response(403, "FORBIDDEN");
+    if (error instanceof RestoreStagingError) return mapStagingError(error);
+    return response(500, "RESTORE_CANCEL_FAILED");
   }
 }

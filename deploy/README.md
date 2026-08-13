@@ -97,6 +97,13 @@ DATA_ROOT=/app/data
 DATABASE_URL=file:/app/data/dev.db
 BACKUP_DIR=/app/data/backup
 RESTORE_ROOT=/app/data/restore
+BACKUP_RETENTION_MIN_GENERATIONS=3
+BACKUP_RETENTION_MAX_GENERATIONS=30
+BACKUP_RETENTION_MAX_AGE_DAYS=90
+BACKUP_RETENTION_MAX_TOTAL_BYTES=21474836480
+BACKUP_RESERVE_FREE_BYTES=268435456
+BACKUP_STALE_WORK_MAX_AGE_HOURS=24
+RESTORE_MAX_UPLOAD_BYTES=134217728
 WEATHER_CACHE_PATH=/app/data/weather-cache.json
 AUTH_SECRET=<openssl-rand-base64-48-output>
 TRUSTED_PROXY_HOPS=1
@@ -135,6 +142,8 @@ Runner labels:
 - private registry 자격증명이 필요한 경우에도 배포/복원 스크립트는 `0700` 임시 `DOCKER_CONFIG`만 사용하고 종료 시 삭제합니다. publish 권한 토큰을 runner의 기본 `~/.docker/config.json`에 남기지 않습니다.
 - SQLite를 사용하므로 대규모 변경 전에는 백업 상태를 먼저 확인합니다.
 
+백업 보존은 완전한 archive/metadata 쌍을 세대 단위로 다루며 새 백업이 검증·영속화된 뒤에만 실행됩니다. manual, scheduled, pre-deployment가 다른 Node process에서 겹쳐도 backup directory의 원자적 lock directory와 heartbeat lease를 획득한 한 writer만 전체 생명주기를 수행하고 나머지는 `BACKUP_BUSY`로 중단합니다. 기본값은 최소 3세대, 최대 30세대, 90일, 총 20 GiB이고 최신 검증 세대와 최소 세대 수가 age/bytes 제한보다 우선합니다. 생성 전에는 DB와 선택된 content root를 기준으로 snapshot+archive 동시 점유량과 256 MiB reserve를 보수적으로 검사합니다. 24시간이 지난 정해진 이름의 `.create-*`, `.partial`, unpaired archive/metadata만 일반 파일·디렉터리와 inode를 재검증한 뒤 정리합니다.
+
 ## 복원 리허설
 
 `restore-drill.sh`는 정해진 이름의 최신 백업이 freshness 기준을 만족할 때만 사용합니다. 새 이미지 내부의 공용 검증기로 아카이브를 격리 검증한 뒤 별도 포트에서 컨테이너를 띄우며, 라이브 DB 복사본이나 호스트 `tar` 폴백은 사용하지 않습니다.
@@ -148,6 +157,8 @@ Runner labels:
 ## 오프호스트 백업 내보내기
 
 `offsite-backup.sh`는 백업 엔진이 생성한 정해진 이름의 최신 스냅샷과 companion metadata만 외부 저장소로 보냅니다. 크기와 SHA-256이 metadata와 일치하지 않거나 스냅샷이 없으면 실패하며 라이브 DB를 복사하지 않습니다.
+
+로컬 보존 정리는 오프사이트 전송 성공 여부를 기록하거나 보장하지 않습니다. 따라서 정기 백업 직후 이 스크립트를 실행하고, 원격 저장소는 별도의 immutable/versioned 보존 정책을 가져야 합니다. 로컬에서 삭제된 세대를 원격에서도 `--delete`로 지우지 마십시오. `OFFSITE_BACKUP_READY`는 최신 쌍의 전송과 원격 checksum 검증 및 restore drill을 확인한 뒤에만 설정합니다.
 
 필수 환경 변수:
 

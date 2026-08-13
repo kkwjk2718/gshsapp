@@ -164,6 +164,206 @@ describe("restore upload staging", () => {
     expect(getReader).not.toHaveBeenCalled();
   });
 
+  it("consumes an expired strictly valid descriptor and only removes its opaque staged directory", async () => {
+    const restoreRoot = await temporaryRestoreRoot();
+    const expiredId = "ExpiredRestoreId1234567890";
+    const nextId = "NextRestoreOpaqueId123456789";
+    const expiredDirectory = path.join(restoreRoot, "staged", expiredId);
+    await fs.mkdir(expiredDirectory, { recursive: true });
+    await fs.writeFile(path.join(expiredDirectory, "artifact.db"), Buffer.from("SQLite format 3\0expired"));
+    await fs.writeFile(getPendingRestorePath(restoreRoot), JSON.stringify({
+      version: 1,
+      id: expiredId,
+      sha256: "a".repeat(64),
+      format: "db",
+      createdAt: "2026-08-11T00:00:00.000Z",
+      expiresAt: "2026-08-12T00:00:00.000Z",
+      roots: ["database"],
+    }));
+    const unrelated = path.join(restoreRoot, "staged", "UnrelatedOpaqueId1234567890");
+    await fs.mkdir(unrelated);
+    await fs.writeFile(path.join(unrelated, "keep"), "valuable");
+    const bytes = Buffer.from("SQLite format 3\0candidate");
+
+    const result = await stageRestoreUpload({
+      body: bodyFrom([bytes]),
+      contentLength: bytes.length,
+      originalName: "backup.db",
+      restoreRoot,
+      validateDatabase: vi.fn().mockResolvedValue(undefined),
+      now: () => new Date("2026-08-13T00:00:00.000Z"),
+      createId: () => nextId,
+    });
+
+    expect(result.id).toBe(nextId);
+    await expect(fs.access(expiredDirectory)).rejects.toThrow();
+    expect(await fs.readFile(path.join(unrelated, "keep"), "utf8")).toBe("valuable");
+    expect(JSON.parse(await fs.readFile(getPendingRestorePath(restoreRoot), "utf8"))).toEqual(
+      expect.objectContaining({ id: nextId }),
+    );
+  });
+
+  it("fails closed on a malformed expired descriptor without reading the body or escaping staged root", async () => {
+    const restoreRoot = await temporaryRestoreRoot();
+    await fs.mkdir(path.join(restoreRoot, "staged"), { recursive: true });
+    const outside = path.join(restoreRoot, "outside-marker");
+    await fs.writeFile(outside, "keep");
+    await fs.writeFile(getPendingRestorePath(restoreRoot), JSON.stringify({
+      version: 1,
+      id: "../../outside-marker",
+      sha256: "a".repeat(64),
+      format: "db",
+      createdAt: "2026-08-11T00:00:00.000Z",
+      expiresAt: "2026-08-12T00:00:00.000Z",
+      roots: ["database"],
+    }));
+    const getReader = vi.fn();
+
+    await expect(stageRestoreUpload({
+      body: { getReader } as unknown as ReadableStream<Uint8Array>,
+      contentLength: 32,
+      originalName: "backup.db",
+      restoreRoot,
+      validateDatabase: vi.fn(),
+      now: () => new Date("2026-08-13T00:00:00.000Z"),
+    })).rejects.toMatchObject({ code: "STAGING_FAILED" });
+    expect(getReader).not.toHaveBeenCalled();
+    expect(await fs.readFile(outside, "utf8")).toBe("keep");
+  });
+
+  it("atomically reclaims a stale heartbeat lock directory left by a crashed uploader", async () => {
+    const restoreRoot = await temporaryRestoreRoot();
+    await fs.mkdir(path.join(restoreRoot, "staged"), { recursive: true });
+    const lock = path.join(restoreRoot, "pending.lock");
+    await fs.mkdir(lock);
+    const stale = new Date(Date.now() - 31 * 60 * 1000);
+    await fs.utimes(lock, stale, stale);
+    const bytes = Buffer.from("SQLite format 3\0candidate");
+
+    await expect(stageRestoreUpload({
+      body: bodyFrom([bytes]),
+      contentLength: bytes.length,
+      originalName: "backup.db",
+      restoreRoot,
+      validateDatabase: vi.fn().mockResolvedValue(undefined),
+      now: () => new Date("2026-08-13T00:00:00.000Z"),
+      createId: () => "RecoveredRestoreId1234567890",
+    })).resolves.toEqual(expect.objectContaining({ id: "RecoveredRestoreId1234567890" }));
+    await expect(fs.access(path.join(restoreRoot, "pending.lock"))).rejects.toThrow();
+  });
+
+  it("keeps a fresh heartbeat lock and rejects before reading the upload body", async () => {
+    const restoreRoot = await temporaryRestoreRoot();
+    await fs.mkdir(path.join(restoreRoot, "staged"), { recursive: true });
+    await fs.mkdir(path.join(restoreRoot, "pending.lock"));
+    const getReader = vi.fn();
+
+    await expect(stageRestoreUpload({
+      body: { getReader } as unknown as ReadableStream<Uint8Array>,
+      contentLength: 32,
+      originalName: "backup.db",
+      restoreRoot,
+      validateDatabase: vi.fn(),
+      now: () => new Date("2026-08-13T00:00:00.000Z"),
+    })).rejects.toMatchObject({ code: "RESTORE_PENDING" });
+    expect(getReader).not.toHaveBeenCalled();
+  });
+
+  it("keeps an actively held upload lock exclusive while the first stream is slow", async () => {
+    const restoreRoot = await temporaryRestoreRoot();
+    const bytes = Buffer.from("SQLite format 3\0candidate");
+    let allowRead!: () => void;
+    let signalReadStarted!: () => void;
+    const readAllowed = new Promise<void>((resolve) => { allowRead = resolve; });
+    const readStarted = new Promise<void>((resolve) => { signalReadStarted = resolve; });
+    let reads = 0;
+    const firstBody = {
+      getReader: () => ({
+        async read() {
+          if (reads++ > 0) return { done: true, value: undefined };
+          signalReadStarted();
+          await readAllowed;
+          return { done: false, value: bytes };
+        },
+        cancel: vi.fn(),
+        releaseLock: vi.fn(),
+      }),
+    } as unknown as ReadableStream<Uint8Array>;
+    const first = stageRestoreUpload({
+      body: firstBody,
+      contentLength: bytes.length,
+      originalName: "backup.db",
+      restoreRoot,
+      validateDatabase: vi.fn().mockResolvedValue(undefined),
+      createId: () => "SlowActiveRestoreId1234567890",
+    });
+    await readStarted;
+    const secondGetReader = vi.fn();
+
+    await expect(stageRestoreUpload({
+      body: { getReader: secondGetReader } as unknown as ReadableStream<Uint8Array>,
+      contentLength: bytes.length,
+      originalName: "backup.db",
+      restoreRoot,
+      validateDatabase: vi.fn(),
+    })).rejects.toMatchObject({ code: "RESTORE_PENDING" });
+    expect(secondGetReader).not.toHaveBeenCalled();
+    allowRead();
+    await expect(first).resolves.toEqual(expect.objectContaining({ id: "SlowActiveRestoreId1234567890" }));
+  });
+
+  it("migrates a stale regular-file lock from the previous implementation", async () => {
+    const restoreRoot = await temporaryRestoreRoot();
+    await fs.mkdir(path.join(restoreRoot, "staged"), { recursive: true });
+    const lock = path.join(restoreRoot, "pending.lock");
+    await fs.writeFile(lock, "");
+    const stale = new Date(Date.now() - 31 * 60 * 1000);
+    await fs.utimes(lock, stale, stale);
+    const bytes = Buffer.from("SQLite format 3\0candidate");
+
+    await expect(stageRestoreUpload({
+      body: bodyFrom([bytes]),
+      contentLength: bytes.length,
+      originalName: "backup.db",
+      restoreRoot,
+      validateDatabase: vi.fn().mockResolvedValue(undefined),
+      createId: () => "LegacyRecoveredId12345678901",
+    })).resolves.toEqual(expect.objectContaining({ id: "LegacyRecoveredId12345678901" }));
+  });
+
+  it("cancels only the expected pending restore and removes its private staged directory", async () => {
+    const restoreRoot = await temporaryRestoreRoot();
+    const id = "CancelableRestoreId1234567890";
+    const bytes = Buffer.from("SQLite format 3\0candidate");
+    await stageRestoreUpload({
+      body: bodyFrom([bytes]),
+      contentLength: bytes.length,
+      originalName: "backup.db",
+      restoreRoot,
+      validateDatabase: vi.fn().mockResolvedValue(undefined),
+      now: () => new Date("2026-08-13T00:00:00.000Z"),
+      createId: () => id,
+    });
+    const lifecycle = await import("./restore-staging") as typeof import("./restore-staging") & {
+      cancelPendingRestore: (options: { restoreRoot: string; expectedId: string; now: () => Date }) => Promise<{ id: string }>;
+    };
+
+    await expect(lifecycle.cancelPendingRestore({
+      restoreRoot,
+      expectedId: "DifferentRestoreId1234567890",
+      now: () => new Date("2026-08-13T00:01:00.000Z"),
+    })).rejects.toMatchObject({ code: "RESTORE_ID_MISMATCH" });
+    expect(JSON.parse(await fs.readFile(getPendingRestorePath(restoreRoot), "utf8"))).toEqual(expect.objectContaining({ id }));
+
+    await expect(lifecycle.cancelPendingRestore({
+      restoreRoot,
+      expectedId: id,
+      now: () => new Date("2026-08-13T00:01:00.000Z"),
+    })).resolves.toEqual(expect.objectContaining({ id }));
+    await expect(fs.access(getPendingRestorePath(restoreRoot))).rejects.toThrow();
+    await expect(fs.access(path.join(restoreRoot, "staged", id))).rejects.toThrow();
+  });
+
   it("rejects a restore root that is itself a filesystem link", async (context) => {
     const root = await temporaryRestoreRoot();
     const real = path.join(root, "real");

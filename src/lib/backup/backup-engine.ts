@@ -2,15 +2,26 @@ import { createHash, randomBytes } from "node:crypto";
 import { createReadStream } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { lock as lockFile } from "proper-lockfile";
 import { create } from "tar";
 
 import { inspectBackupArchive } from "./archive-io";
 import { BACKUP_ARCHIVE_LIMITS } from "./archive-policy";
+import {
+  assertBackupCapacity,
+  BackupLifecycleError,
+  cleanupStaleBackupWork,
+  pruneBackupGenerations,
+  resolveBackupRetentionPolicy,
+  type BackupRetentionPolicy,
+} from "./backup-retention";
 import { copyRegularFileExclusive } from "./private-copy";
 import { createSqliteSnapshot, type SqliteSnapshotClient } from "./sqlite-snapshot";
 
 const GENERATED_BACKUP_NAME = /^backup-\d{8}-\d{6}-[a-f0-9]{8}\.tar\.gz$/u;
 const GENERATED_BACKUP_METADATA_NAME = /^backup-\d{8}-\d{6}-[a-f0-9]{8}\.tar\.gz\.json$/u;
+const BACKUP_LOCK_STALE_MS = 30 * 60 * 1000;
+const BACKUP_LOCK_UPDATE_MS = 60 * 1000;
 
 type ContentRootKey = "uploads" | "user-content" | "storage" | "logs";
 
@@ -41,6 +52,8 @@ export type CreateSafeBackupOptions = Readonly<{
   randomSuffix?: () => string;
   contentRoots?: ReadonlyMap<string, string>;
   reason?: string;
+  retention?: Partial<BackupRetentionPolicy>;
+  getAvailableBytes?: (directory: string) => Promise<number>;
 }>;
 
 async function hashFile(file: string) {
@@ -121,13 +134,69 @@ async function buildManifest(staging: string, createdAt: Date, contentRoots: rea
   await fs.writeFile(path.join(staging, "manifest.json"), JSON.stringify(manifest), { mode: 0o600, flag: "wx" });
 }
 
-export async function createSafeBackup(options: CreateSafeBackupOptions) {
-  const backupDir = path.resolve(options.backupDir);
-  await assertBackupDirectory(backupDir, true);
-  const work = await fs.mkdtemp(path.join(backupDir, ".create-"));
+async function acquireBackupLifecycleLease(backupDir: string) {
+  const lockPath = path.join(backupDir, ".backup-lifecycle.lock");
+  let compromised: Error | null = null;
+  let release: (() => Promise<void>);
+  try {
+    release = await lockFile(backupDir, {
+      lockfilePath: lockPath,
+      realpath: false,
+      retries: 0,
+      stale: BACKUP_LOCK_STALE_MS,
+      update: BACKUP_LOCK_UPDATE_MS,
+      onCompromised: (error) => { compromised = error; },
+    });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ELOCKED") {
+      throw new BackupLifecycleError("BACKUP_BUSY");
+    }
+    throw new BackupLifecycleError("UNSAFE_BACKUP_SOURCE");
+  }
+  return {
+    assertOwned() {
+      if (compromised) throw new BackupLifecycleError("BACKUP_BUSY");
+    },
+    async release() {
+      try {
+        await release();
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "ERELEASED") {
+          throw new BackupLifecycleError("UNSAFE_BACKUP_SOURCE");
+        }
+      }
+    },
+  };
+}
+
+async function createSafeBackupUnderLease(
+  options: CreateSafeBackupOptions,
+  backupDir: string,
+  assertLeaseOwned: () => void,
+) {
   const now = (options.now ?? (() => new Date()))();
   const suffix = (options.randomSuffix ?? (() => randomBytes(4).toString("hex")))();
   if (!Number.isFinite(now.getTime()) || !/^[a-f0-9]{8}$/u.test(suffix)) throw new Error("Invalid backup identity");
+  const retention = resolveBackupRetentionPolicy(options.retention);
+  const contentRoots = options.contentRoots ?? new Map();
+  assertLeaseOwned();
+  await cleanupStaleBackupWork(backupDir, retention, now);
+  const capacityInput = {
+    backupDir,
+    databasePath: options.databasePath,
+    contentRoots,
+    policy: retention,
+    getAvailableBytes: options.getAvailableBytes,
+  };
+  try {
+    await assertBackupCapacity(capacityInput);
+  } catch (error) {
+    if (!(error instanceof BackupLifecycleError) || error.code !== "INSUFFICIENT_SPACE") throw error;
+    assertLeaseOwned();
+    await pruneBackupGenerations({ backupDir, policy: retention, now });
+    await assertBackupCapacity(capacityInput);
+  }
+  const work = await fs.mkdtemp(path.join(backupDir, ".create-"));
   const file = `backup-${timestamp(now)}-${suffix}.tar.gz`;
   const partial = path.join(backupDir, `.${file}.partial`);
   const target = path.join(backupDir, file);
@@ -141,9 +210,10 @@ export async function createSafeBackup(options: CreateSafeBackupOptions) {
       options.databaseClient,
       path.join(staging, "database", "dev.db"),
     );
+    assertLeaseOwned();
 
     const includedRoots: string[] = [];
-    for (const [key, source] of options.contentRoots ?? new Map()) {
+    for (const [key, source] of contentRoots) {
       if (!["uploads", "user-content", "storage", "logs"].includes(key)) throw new Error("Invalid content root key");
       try {
         await copyContentTree(source, path.join(staging, "content", key));
@@ -154,6 +224,7 @@ export async function createSafeBackup(options: CreateSafeBackupOptions) {
       }
     }
 
+    assertLeaseOwned();
     await buildManifest(staging, now, includedRoots);
     await create({
       cwd: staging,
@@ -166,6 +237,7 @@ export async function createSafeBackup(options: CreateSafeBackupOptions) {
       mode: 0o600,
     }, ["manifest.json", "database", ...(includedRoots.length ? ["content"] : [])]);
     await (options.validateArchive ?? inspectBackupArchive)(partial);
+    assertLeaseOwned();
     await fs.chmod(partial, 0o600);
     const artifactHandle = await fs.open(partial, "r+");
     try { await artifactHandle.sync(); } finally { await artifactHandle.close(); }
@@ -188,12 +260,26 @@ export async function createSafeBackup(options: CreateSafeBackupOptions) {
     } finally {
       await metadataHandle.close();
     }
+    assertLeaseOwned();
     await fs.rename(metadataPartial, metadataTarget);
+    assertLeaseOwned();
+    await pruneBackupGenerations({ backupDir, protectedFile: file, policy: retention, now });
     return metadata;
   } finally {
     await fs.rm(work, { recursive: true, force: true });
     await fs.rm(partial, { force: true }).catch(() => undefined);
     await fs.rm(metadataPartial, { force: true }).catch(() => undefined);
+  }
+}
+
+export async function createSafeBackup(options: CreateSafeBackupOptions) {
+  const backupDir = path.resolve(options.backupDir);
+  await assertBackupDirectory(backupDir, true);
+  const lease = await acquireBackupLifecycleLease(backupDir);
+  try {
+    return await createSafeBackupUnderLease(options, backupDir, lease.assertOwned);
+  } finally {
+    await lease.release();
   }
 }
 

@@ -57,6 +57,8 @@ Before re-enabling membership or the token portal, resolve the known legacy dupl
 
 Configure a private off-host destination, run the backup workflow, and complete the isolated restore drill for the exact image digest. Confirm backup directories are `0700`, files are `0600`, and restoration only creates a staged pending restore. Never automatically replace the live database from an uploaded archive.
 
+Local pair-aware retention runs only after a new archive and metadata are validated and durable; it does not attest that `offsite-backup.sh` succeeded. Run the off-host export immediately after scheduled creation, keep remote immutable/versioned retention independent, never mirror local deletion with `rsync --delete`, and verify the remote checksum. Expired staged restores and stale upload locks are reclaimed automatically, while an administrator cancellation requires the exact opaque restore ID and creates audit records; neither path applies data to the live database.
+
 Set `OFFSITE_BACKUP_READY=true` only after a fresh off-host copy and successful restore drill.
 
 ## 4. DNS and mail policy

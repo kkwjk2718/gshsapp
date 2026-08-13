@@ -50,6 +50,13 @@ DATA_ROOT=/app/data
 DATABASE_URL=file:/app/data/dev.db
 BACKUP_DIR=/app/data/backup
 RESTORE_ROOT=/app/data/restore
+BACKUP_RETENTION_MIN_GENERATIONS=3
+BACKUP_RETENTION_MAX_GENERATIONS=30
+BACKUP_RETENTION_MAX_AGE_DAYS=90
+BACKUP_RETENTION_MAX_TOTAL_BYTES=21474836480
+BACKUP_RESERVE_FREE_BYTES=268435456
+BACKUP_STALE_WORK_MAX_AGE_HOURS=24
+RESTORE_MAX_UPLOAD_BYTES=134217728
 WEATHER_CACHE_PATH=/app/data/weather-cache.json
 AUTH_SECRET=replace-with-long-random-secret
 TRUSTED_PROXY_HOPS=1
@@ -75,9 +82,10 @@ NEXT_PUBLIC_NEIS_API_KEY=
 
 - DB 파일은 `/app/data/dev.db` 영속 볼륨 경로를 사용합니다.
 - 배포 전 백업은 새 이미지의 공용 백업 엔진이 `VACUUM INTO`로 만든 일관된 스냅샷이어야 합니다. 라이브 DB 파일을 `cp`하지 않습니다.
+- 백업 엔진은 backup directory의 cross-process heartbeat lease를 획득한 한 writer만 capacity check, snapshot, archive, retention을 수행합니다. 새 세대의 검증과 metadata 영속화가 끝난 뒤에만 완전한 archive/metadata 쌍을 count, age, total-bytes 정책으로 정리합니다. 최신 세대와 최소 3세대는 항상 남기며, 예상 스냅샷 공간과 256 MiB 여유를 확보하지 못하면 생성 전에 중단합니다.
 - 라이브 DB를 컨테이너 임시 경로에 두지 않습니다.
 - 복원 리허설은 라이브 DB를 직접 덮어쓰지 않습니다.
-- 웹 업로드는 검증된 보류 복원만 생성합니다. 자동 적용은 비활성화되어 있으며 운영자가 오프라인 절차를 별도로 검토해야 합니다.
+- 웹 업로드는 검증된 보류 복원만 생성합니다. 원자적 lock directory는 1분 heartbeat로 느린 활성 업로드를 보호하고 heartbeat가 30분 끊긴 crash lock만 회수합니다. 만료 descriptor는 엄격히 파싱하며, 관리자는 정확한 opaque restore ID를 사용해 감사 로그가 남는 취소를 할 수 있습니다. 자동 적용은 비활성화되어 있으며 운영자가 오프라인 절차를 별도로 검토해야 합니다.
 - 컨테이너 시작 스크립트는 스키마를 변경하지 않습니다. 배포 절차가 앱 시작 전에 스키마 동기화를 완료해야 합니다.
 
 ## 5. 테스트 서버 자동 배포

@@ -168,7 +168,7 @@ Route group 기준:
 - `deploy/restore-drill.sh`
 - `deploy/offsite-backup.sh`
 
-백업은 라이브 SQLite 파일 복사가 아니라 `VACUUM INTO` 스냅샷과 버전 2 manifest로 생성됩니다. 아카이브는 허용된 논리 루트, 일반 파일/디렉터리, 경로·항목 수·크기·깊이 제한, manifest SHA-256을 모두 통과해야 합니다. 웹 복원은 이 검증을 거친 보류 항목을 비공개 데이터 디렉터리에 스테이징할 뿐 라이브 DB를 교체하지 않습니다. 자동 적용은 crash-safe 오프라인 저널 설치기가 별도 검토되기 전까지 비활성화됩니다.
+백업은 라이브 SQLite 파일 복사가 아니라 `VACUUM INTO` 스냅샷과 버전 2 manifest로 생성됩니다. manual/scheduled/pre-deployment writer는 backup directory의 cross-process heartbeat lease로 직렬화됩니다. 아카이브는 허용된 논리 루트, 일반 파일/디렉터리, 경로·항목 수·크기·깊이 제한, manifest SHA-256을 모두 통과해야 합니다. 생성 전에 snapshot과 archive가 동시에 존재할 최악의 공간 및 reserve를 검사하고, 성공한 최신 세대와 최소 세대 수를 보호한 채 완전한 archive/metadata 쌍만 count·age·total-bytes 기준으로 정리합니다. 웹 복원은 이 검증을 거친 보류 항목을 비공개 데이터 디렉터리에 스테이징할 뿐 라이브 DB를 교체하지 않습니다. 보류 descriptor 만료를 소비하고 원자적 lock directory의 heartbeat가 끊긴 crash lock만 회수하며 정확한 opaque ID의 감사된 취소를 제공하지만, 자동 적용은 crash-safe 오프라인 저널 설치기가 별도 검토되기 전까지 비활성화됩니다.
 
 런타임의 모든 파일 경로는 `DATA_ROOT` 아래 정적 매핑으로 계산합니다. 프로덕션 standalone 산출물은 원본 `src`, 로컬 DB, 문서, seed/repair/debug 도구, 공개 디버그 캡처를 포함할 수 없으며 빌드 후 assertion이 이를 검사합니다.
 

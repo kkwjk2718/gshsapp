@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { lock as lockFile } from "proper-lockfile";
 
 import { extractAndVerifyBackupArchive, type InspectedBackupArchive } from "./archive-io";
 import { validateSqliteDatabase } from "./sqlite-snapshot";
@@ -8,9 +9,13 @@ import { validateSqliteDatabase } from "./sqlite-snapshot";
 const DEFAULT_MAX_UPLOAD_BYTES = 128 * 1024 * 1024;
 const HARD_MAX_UPLOAD_BYTES = 512 * 1024 * 1024;
 const PENDING_RESTORE_TTL_MS = 24 * 60 * 60 * 1000;
+const RESTORE_LOCK_STALE_MS = 30 * 60 * 1000;
+const RESTORE_LOCK_UPDATE_MS = 60 * 1000;
 const RESTORE_ID = /^[A-Za-z0-9_-]{20,64}$/u;
+const SHA256 = /^[a-f0-9]{64}$/u;
 const INVALID_FILENAME_CHARACTER = /[\u0000-\u001f\u007f-\u009f\ufeff\\/]/u;
 const SQLITE_HEADER = Buffer.from("SQLite format 3\0", "ascii");
+const RESTORE_ROOTS = new Set(["database", "uploads", "user-content", "storage", "logs"]);
 
 export type RestoreArtifactFormat = "db" | "tar.gz";
 
@@ -26,6 +31,8 @@ export type PendingRestoreDescriptor = Readonly<{
 
 export type RestoreStagingErrorCode =
   | "RESTORE_PENDING"
+  | "RESTORE_NOT_FOUND"
+  | "RESTORE_ID_MISMATCH"
   | "INVALID_BODY"
   | "INVALID_LENGTH"
   | "UPLOAD_TOO_LARGE"
@@ -124,20 +131,235 @@ function safeId(factory: () => string): string {
   return id;
 }
 
-async function pendingAlreadyExists(pendingPath: string): Promise<boolean> {
-  try {
-    const stats = await fs.lstat(pendingPath);
-    return stats.isFile() || stats.isSymbolicLink() || stats.isDirectory();
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;
+type FileIdentity = Readonly<{ dev: number; ino: number; size: number; mtimeMs: number }>;
+
+function identity(stats: Awaited<ReturnType<typeof fs.lstat>>): FileIdentity {
+  return { dev: Number(stats.dev), ino: Number(stats.ino), size: Number(stats.size), mtimeMs: Number(stats.mtimeMs) };
+}
+
+function sameIdentity(expected: FileIdentity, actual: Awaited<ReturnType<typeof fs.lstat>>) {
+  return expected.dev === actual.dev && expected.ino === actual.ino &&
+    expected.size === actual.size && expected.mtimeMs === actual.mtimeMs;
+}
+
+function parseTimestamp(value: unknown) {
+  if (typeof value !== "string") return null;
+  const parsed = new Date(value);
+  return Number.isFinite(parsed.getTime()) && parsed.toISOString() === value ? parsed : null;
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value) &&
+    (Object.getPrototypeOf(value) === Object.prototype || Object.getPrototypeOf(value) === null);
+}
+
+function canonicalRoots(roots: readonly string[]) {
+  return [...new Set(roots)].sort((left, right) =>
+    left === "database" ? -1 : right === "database" ? 1 : left.localeCompare(right));
+}
+
+function parsePendingDescriptor(value: unknown): PendingRestoreDescriptor {
+  if (!isPlainRecord(value)) throw new RestoreStagingError("STAGING_FAILED");
+  const keys = Object.keys(value).sort();
+  if (keys.join(",") !== "createdAt,expiresAt,format,id,roots,sha256,version") {
     throw new RestoreStagingError("STAGING_FAILED");
+  }
+  const createdAt = parseTimestamp(value.createdAt);
+  const expiresAt = parseTimestamp(value.expiresAt);
+  const roots = value.roots;
+  if (
+    value.version !== 1 || typeof value.id !== "string" || !RESTORE_ID.test(value.id) ||
+    typeof value.sha256 !== "string" || !SHA256.test(value.sha256) ||
+    (value.format !== "db" && value.format !== "tar.gz") || !createdAt || !expiresAt ||
+    expiresAt.getTime() - createdAt.getTime() !== PENDING_RESTORE_TTL_MS ||
+    !Array.isArray(roots) || roots.length < 1 || roots.length > RESTORE_ROOTS.size ||
+    roots.some((root) => typeof root !== "string" || !RESTORE_ROOTS.has(root)) ||
+    roots[0] !== "database" || JSON.stringify(roots) !== JSON.stringify(canonicalRoots(roots as string[]))
+  ) {
+    throw new RestoreStagingError("STAGING_FAILED");
+  }
+  return {
+    version: 1,
+    id: value.id,
+    sha256: value.sha256,
+    format: value.format,
+    createdAt: createdAt.toISOString(),
+    expiresAt: expiresAt.toISOString(),
+    roots: roots as string[],
+  };
+}
+
+async function readSmallRegularJson(file: string) {
+  const stats = await fs.lstat(file);
+  if (!stats.isFile() || stats.isSymbolicLink() || stats.size > 4_096) throw new RestoreStagingError("STAGING_FAILED");
+  let value: unknown;
+  try {
+    value = JSON.parse(await fs.readFile(file, "utf8"));
+  } catch {
+    throw new RestoreStagingError("STAGING_FAILED");
+  }
+  return { value, identity: identity(stats) };
+}
+
+async function validateRemovalTree(directory: string): Promise<void> {
+  for (const entry of await fs.readdir(directory, { withFileTypes: true })) {
+    const entryPath = path.join(directory, entry.name);
+    const stats = await fs.lstat(entryPath);
+    if (stats.isSymbolicLink() || (!stats.isFile() && !stats.isDirectory())) {
+      throw new RestoreStagingError("STAGING_FAILED");
+    }
+    if (stats.isDirectory()) await validateRemovalTree(entryPath);
+  }
+}
+
+async function removeOpaqueStageDirectory(restoreRoot: string, id: string) {
+  if (!RESTORE_ID.test(id)) throw new RestoreStagingError("STAGING_FAILED");
+  const directory = path.join(restoreRoot, "staged", id);
+  let stats: Awaited<ReturnType<typeof fs.lstat>>;
+  try {
+    stats = await fs.lstat(directory);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return;
+    throw new RestoreStagingError("STAGING_FAILED");
+  }
+  if (!stats.isDirectory() || stats.isSymbolicLink()) throw new RestoreStagingError("STAGING_FAILED");
+  const expected = identity(stats);
+  await validateRemovalTree(directory);
+  const current = await fs.lstat(directory);
+  if (!sameIdentity(expected, current)) throw new RestoreStagingError("STAGING_FAILED");
+  await fs.rm(directory, { recursive: true });
+}
+
+async function consumeExpiredPending(restoreRoot: string, now: Date) {
+  const pendingPath = getPendingRestorePath(restoreRoot);
+  let pending: Awaited<ReturnType<typeof readSmallRegularJson>>;
+  try {
+    pending = await readSmallRegularJson(pendingPath);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return;
+    throw error;
+  }
+  const descriptor = parsePendingDescriptor(pending.value);
+  if (now.getTime() < new Date(descriptor.expiresAt).getTime()) throw new RestoreStagingError("RESTORE_PENDING");
+  await removeOpaqueStageDirectory(restoreRoot, descriptor.id);
+  const current = await fs.lstat(pendingPath);
+  if (!current.isFile() || current.isSymbolicLink() || !sameIdentity(pending.identity, current)) {
+    throw new RestoreStagingError("STAGING_FAILED");
+  }
+  await fs.unlink(pendingPath);
+}
+
+async function removeStaleLegacyFileLock(lockPath: string) {
+  let observed: Awaited<ReturnType<typeof fs.lstat>>;
+  try {
+    observed = await fs.lstat(lockPath);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return;
+    throw new RestoreStagingError("STAGING_FAILED");
+  }
+  if (observed.isDirectory() && !observed.isSymbolicLink()) return;
+  if (!observed.isFile() || observed.isSymbolicLink()) throw new RestoreStagingError("STAGING_FAILED");
+  if (Date.now() - observed.mtimeMs <= RESTORE_LOCK_STALE_MS) throw new RestoreStagingError("RESTORE_PENDING");
+  const expected = identity(observed);
+  const current = await fs.lstat(lockPath);
+  if (!current.isFile() || current.isSymbolicLink() || !sameIdentity(expected, current)) {
+    throw new RestoreStagingError("RESTORE_PENDING");
+  }
+  try {
+    await fs.unlink(lockPath);
+  } catch (error) {
+    if (["EISDIR", "EPERM", "ENOENT"].includes((error as NodeJS.ErrnoException).code ?? "")) {
+      throw new RestoreStagingError("RESTORE_PENDING");
+    }
+    throw new RestoreStagingError("STAGING_FAILED");
+  }
+}
+
+async function acquireRestoreLock(restoreRoot: string) {
+  const lockPath = path.join(restoreRoot, "pending.lock");
+  await removeStaleLegacyFileLock(lockPath);
+  let compromised: Error | null = null;
+  let release: (() => Promise<void>);
+  try {
+    release = await lockFile(restoreRoot, {
+      lockfilePath: lockPath,
+      realpath: false,
+      retries: 0,
+      stale: RESTORE_LOCK_STALE_MS,
+      update: RESTORE_LOCK_UPDATE_MS,
+      onCompromised: (error) => { compromised = error; },
+    });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ELOCKED") throw new RestoreStagingError("RESTORE_PENDING");
+    throw new RestoreStagingError("STAGING_FAILED");
+  }
+  return {
+    assertOwned() {
+      if (compromised) throw new RestoreStagingError("STAGING_FAILED");
+    },
+    async release() {
+      try {
+        await release();
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "ERELEASED") throw new RestoreStagingError("STAGING_FAILED");
+      }
+    },
+  };
+}
+
+export async function cancelPendingRestore(options: Readonly<{
+  restoreRoot: string;
+  expectedId: string;
+  now?: () => Date;
+}>): Promise<PendingRestoreDescriptor> {
+  if (!RESTORE_ID.test(options.expectedId)) throw new RestoreStagingError("RESTORE_ID_MISMATCH");
+  const restoreRoot = path.resolve(options.restoreRoot);
+  const now = (options.now ?? (() => new Date()))();
+  if (!Number.isFinite(now.getTime())) throw new RestoreStagingError("STAGING_FAILED");
+  try {
+    const rootStats = await fs.lstat(restoreRoot);
+    const stagedStats = await fs.lstat(path.join(restoreRoot, "staged"));
+    if (
+      !rootStats.isDirectory() || rootStats.isSymbolicLink() ||
+      !stagedStats.isDirectory() || stagedStats.isSymbolicLink()
+    ) throw new RestoreStagingError("STAGING_FAILED");
+  } catch (error) {
+    if (error instanceof RestoreStagingError) throw error;
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") throw new RestoreStagingError("RESTORE_NOT_FOUND");
+    throw new RestoreStagingError("STAGING_FAILED");
+  }
+
+  const lock = await acquireRestoreLock(restoreRoot);
+  try {
+    const pendingPath = getPendingRestorePath(restoreRoot);
+    let pending: Awaited<ReturnType<typeof readSmallRegularJson>>;
+    try {
+      pending = await readSmallRegularJson(pendingPath);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") throw new RestoreStagingError("RESTORE_NOT_FOUND");
+      throw error;
+    }
+    const descriptor = parsePendingDescriptor(pending.value);
+    if (descriptor.id !== options.expectedId) throw new RestoreStagingError("RESTORE_ID_MISMATCH");
+    lock.assertOwned();
+    await removeOpaqueStageDirectory(restoreRoot, descriptor.id);
+    const current = await fs.lstat(pendingPath);
+    if (!current.isFile() || current.isSymbolicLink() || !sameIdentity(pending.identity, current)) {
+      throw new RestoreStagingError("STAGING_FAILED");
+    }
+    await fs.unlink(pendingPath);
+    return descriptor;
+  } finally {
+    await lock.release();
   }
 }
 
 export async function stageRestoreUpload(options: StageRestoreUploadOptions): Promise<StagedRestoreResult> {
   const restoreRoot = path.resolve(options.restoreRoot);
   const pendingPath = getPendingRestorePath(restoreRoot);
-  const lockPath = path.join(restoreRoot, "pending.lock");
+  const clock = options.now ?? (() => new Date());
+  const startedAt = clock();
+  if (!Number.isFinite(startedAt.getTime())) throw new RestoreStagingError("STAGING_FAILED");
   const maxBytes = options.maxBytes ?? getMaxRestoreUploadBytes();
   if (!Number.isSafeInteger(maxBytes) || maxBytes < 1 || maxBytes > HARD_MAX_UPLOAD_BYTES) {
     throw new RestoreStagingError("STAGING_FAILED");
@@ -168,24 +390,17 @@ export async function stageRestoreUpload(options: StageRestoreUploadOptions): Pr
     await fs.chmod(restoreRoot, 0o700).catch(() => { throw new RestoreStagingError("STAGING_FAILED"); });
     await fs.chmod(path.join(restoreRoot, "staged"), 0o700).catch(() => { throw new RestoreStagingError("STAGING_FAILED"); });
   }
-  if (await pendingAlreadyExists(pendingPath)) throw new RestoreStagingError("RESTORE_PENDING");
+  const lock = await acquireRestoreLock(restoreRoot);
 
-  let lockHandle: fs.FileHandle;
-  try {
-    lockHandle = await fs.open(lockPath, "wx", 0o600);
-    await lockHandle.sync();
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "EEXIST") throw new RestoreStagingError("RESTORE_PENDING");
-    throw new RestoreStagingError("STAGING_FAILED");
-  }
-
-  const id = safeId(options.createId ?? (() => randomBytes(18).toString("base64url")));
-  const stageDirectory = path.join(restoreRoot, "staged", id);
-  const partialPath = path.join(stageDirectory, "artifact.partial");
-  const artifactPath = path.join(stageDirectory, `artifact.${format}`);
+  let stageDirectory: string | null = null;
   let descriptorCommitted = false;
 
   try {
+    await consumeExpiredPending(restoreRoot, startedAt);
+    const id = safeId(options.createId ?? (() => randomBytes(18).toString("base64url")));
+    stageDirectory = path.join(restoreRoot, "staged", id);
+    const partialPath = path.join(stageDirectory, "artifact.partial");
+    const artifactPath = path.join(stageDirectory, `artifact.${format}`);
     await fs.mkdir(stageDirectory, { mode: 0o700 });
     const artifactHandle = await fs.open(partialPath, "wx", 0o600);
     const reader = options.body.getReader();
@@ -193,6 +408,7 @@ export async function stageRestoreUpload(options: StageRestoreUploadOptions): Pr
     let bytes = 0;
     try {
       for (;;) {
+        lock.assertOwned();
         const { done, value } = await reader.read();
         if (done) break;
         bytes += value.byteLength;
@@ -235,8 +451,9 @@ export async function stageRestoreUpload(options: StageRestoreUploadOptions): Pr
       throw new RestoreStagingError("INVALID_ARTIFACT");
     }
 
-    const now = (options.now ?? (() => new Date()))();
+    const now = clock();
     if (!Number.isFinite(now.getTime())) throw new RestoreStagingError("STAGING_FAILED");
+    lock.assertOwned();
     const sha256 = hash.digest("hex");
     const descriptor: PendingRestoreDescriptor = {
       version: 1,
@@ -257,12 +474,11 @@ export async function stageRestoreUpload(options: StageRestoreUploadOptions): Pr
     descriptorCommitted = true;
     return { id, format, bytes, sha256, expiresAt: descriptor.expiresAt };
   } catch (error) {
-    if (!descriptorCommitted) await fs.rm(stageDirectory, { recursive: true, force: true }).catch(() => undefined);
+    if (!descriptorCommitted && stageDirectory) await fs.rm(stageDirectory, { recursive: true, force: true }).catch(() => undefined);
     if (error instanceof RestoreStagingError) throw error;
     if ((error as NodeJS.ErrnoException).code === "EEXIST") throw new RestoreStagingError("RESTORE_PENDING");
     throw new RestoreStagingError("STAGING_FAILED");
   } finally {
-    await lockHandle.close().catch(() => undefined);
-    await fs.rm(lockPath, { force: true }).catch(() => undefined);
+    await lock.release();
   }
 }

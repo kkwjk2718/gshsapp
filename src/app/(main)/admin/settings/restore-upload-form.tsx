@@ -47,6 +47,32 @@ export function RestoreUploadForm() {
     }
   }
 
+  async function cancelPending() {
+    if (!result?.ok || !result.restoreId) return;
+    setPending(true);
+    const restoreId = result.restoreId;
+    try {
+      const response = await fetch("/admin/settings/restore-upload", {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/octet-stream",
+          "X-GSHS-Restore-Confirm": RESTORE_CONFIRM_TEXT,
+          "X-GSHS-Restore-Id": restoreId,
+        },
+        credentials: "same-origin",
+        cache: "no-store",
+      });
+      const payload = await response.json() as RestoreResult;
+      setResult(response.ok
+        ? { ok: true, message: `Staged restore ${restoreId} was cancelled.` }
+        : { ok: false, code: payload.code, message: "The staged restore could not be cancelled." });
+    } catch {
+      setResult({ ok: false, message: "The cancellation request failed." });
+    } finally {
+      setPending(false);
+    }
+  }
+
   return (
     <form onSubmit={submit} className="glass p-4 rounded-2xl space-y-3">
       <p className="font-semibold">Stage restore upload</p>
@@ -102,6 +128,16 @@ export function RestoreUploadForm() {
             ? `Restore ${result.restoreId ?? ""} is staged. Contact an operator for the offline procedure.`
             : "The restore could not be staged.")}
         </div>
+      )}
+      {result?.ok && result.restoreId && (
+        <button
+          type="button"
+          disabled={pending}
+          onClick={cancelPending}
+          className="px-4 py-2 rounded-xl font-semibold border border-rose-500 text-rose-500"
+        >
+          {pending ? "Cancelling..." : "Cancel staged restore"}
+        </button>
       )}
     </form>
   );
