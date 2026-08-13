@@ -12,7 +12,7 @@ import { BoundedRateLimiter } from "@/lib/security/rate-limit";
 import { canonicalizeYouTubeUrl } from "@/lib/security/youtube-url";
 import { getCurrentUser } from "@/lib/session";
 import { canAccessCoreMemberFeatures } from "@/lib/user-roles";
-import { readBoundedJsonResponse } from "@/lib/outbound-response";
+import { cancelResponseBody, readBoundedJsonResponse } from "@/lib/outbound-response";
 import { enforceSongRequestLifecycle } from "@/lib/submission-lifecycle";
 import {
   SONG_DAILY_CAP,
@@ -78,7 +78,7 @@ async function resolveVideoTitle(
       const data = await readBoundedJsonResponse<unknown>(response, {
         maxBytes: YOUTUBE_OEMBED_MAX_RESPONSE_BYTES,
       });
-      const title = typeof data === "object" && data !== null && !Array.isArray(data)
+      const title = typeof data === "object" && data !== null && !Array.isArray(data) && Object.hasOwn(data, "title")
         ? (data as { title?: unknown }).title
         : undefined;
       if (
@@ -87,6 +87,8 @@ async function resolveVideoTitle(
       ) {
         return validateSongTitle(title);
       }
+    } else {
+      await cancelResponseBody(response, "YouTube oEmbed request failed");
     }
   } catch {
     // Fall back to the default title when YouTube metadata is slow or unavailable.
@@ -146,6 +148,15 @@ export async function requestSong(formData: FormData) {
     }
   }
 
+  const quotaWindowStart = new Date(Date.now() - 86_400_000);
+  const [existingDailyCount, existingPendingCount] = await Promise.all([
+    prisma.songRequest.count({ where: { requesterId: user.id, createdAt: { gte: quotaWindowStart } } }),
+    prisma.songRequest.count({ where: { requesterId: user.id, status: "PENDING" } }),
+  ]);
+  if (existingDailyCount >= SONG_DAILY_CAP || existingPendingCount >= SONG_PENDING_CAP) {
+    throw new Error("Song request quota exceeded");
+  }
+
   const rawYoutubeUrl = formData.get("youtubeUrl");
   if (typeof rawYoutubeUrl !== "string") {
     throw new Error("Invalid YouTube URL.");
@@ -167,9 +178,8 @@ export async function requestSong(formData: FormData) {
 
   await prisma.$transaction(async (tx) => {
     await enforceSongRequestLifecycle(tx);
-    const since = new Date(Date.now() - 86_400_000);
     const [dailyCount, pendingCount] = await Promise.all([
-      tx.songRequest.count({ where: { requesterId: user.id, createdAt: { gte: since } } }),
+      tx.songRequest.count({ where: { requesterId: user.id, createdAt: { gte: quotaWindowStart } } }),
       tx.songRequest.count({ where: { requesterId: user.id, status: "PENDING" } }),
     ]);
     if (dailyCount >= SONG_DAILY_CAP || pendingCount >= SONG_PENDING_CAP) {

@@ -164,6 +164,20 @@ describe("requestSong", () => {
     expect(mocks.createSongRequest).not.toHaveBeenCalled();
   });
 
+  it("rejects an exhausted database quota before outbound title resolution", async () => {
+    const user = makeUser("db-quota-user");
+    mocks.getCurrentUser.mockResolvedValue(user);
+    mocks.findUser.mockResolvedValue(user);
+    mocks.countSongRequests.mockResolvedValueOnce(3).mockResolvedValueOnce(0);
+
+    await expect(
+      requestSong(makeForm("https://youtu.be/dQw4w9WgXcQ", "")),
+    ).rejects.toThrow("quota exceeded");
+
+    expect(fetch).not.toHaveBeenCalled();
+    expect(mocks.createSongRequest).not.toHaveBeenCalled();
+  });
+
   it("ignores oEmbed JSON served with a non-JSON content type", async () => {
     const user = makeUser("oembed-content-type-user");
     mocks.getCurrentUser.mockResolvedValue(user);
@@ -186,6 +200,40 @@ describe("requestSong", () => {
     expect(mocks.createSongRequest).toHaveBeenCalledWith({
       data: expect.objectContaining({ videoTitle: "신청곡" }),
     });
+  });
+
+  it("does not accept an inherited oEmbed title as response data", async () => {
+    const user = makeUser("oembed-inherited-title-user");
+    mocks.getCurrentUser.mockResolvedValue(user);
+    mocks.findUser.mockResolvedValue(user);
+    mocks.getHeader.mockImplementation((name: string) =>
+      name === "x-forwarded-for" ? "203.0.113.214" : null,
+    );
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        new Response("{}", {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      ),
+    );
+    const originalTitle = Object.getOwnPropertyDescriptor(Object.prototype, "title");
+    Object.defineProperty(Object.prototype, "title", {
+      value: "Inherited untrusted title",
+      configurable: true,
+      writable: true,
+    });
+
+    try {
+      await requestSong(makeForm("https://youtu.be/dQw4w9WgXcQ", ""));
+      expect(mocks.createSongRequest).toHaveBeenCalledWith({
+        data: expect.objectContaining({ videoTitle: "신청곡" }),
+      });
+    } finally {
+      if (originalTitle) Object.defineProperty(Object.prototype, "title", originalTitle);
+      else delete (Object.prototype as Record<string, unknown>).title;
+    }
   });
 
   it("stops reading an oEmbed response after 32 KiB without trusting Content-Length", async () => {
@@ -214,6 +262,37 @@ describe("requestSong", () => {
 
     await requestSong(makeForm("https://youtu.be/dQw4w9WgXcQ", ""));
 
+    expect(mocks.createSongRequest).toHaveBeenCalledWith({
+      data: expect.objectContaining({ videoTitle: "신청곡" }),
+    });
+  });
+
+  it("cancels a failed oEmbed response instead of leaving its body streaming", async () => {
+    const user = makeUser("oembed-error-body-user");
+    mocks.getCurrentUser.mockResolvedValue(user);
+    mocks.findUser.mockResolvedValue(user);
+    mocks.getHeader.mockImplementation((name: string) =>
+      name === "x-forwarded-for" ? "203.0.113.213" : null,
+    );
+    let cancelled = false;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        new Response(
+          new ReadableStream({
+            pull() {},
+            cancel() {
+              cancelled = true;
+            },
+          }),
+          { status: 503, headers: { "content-type": "application/json" } },
+        ),
+      ),
+    );
+
+    await requestSong(makeForm("https://youtu.be/dQw4w9WgXcQ", ""));
+
+    expect(cancelled).toBe(true);
     expect(mocks.createSongRequest).toHaveBeenCalledWith({
       data: expect.objectContaining({ videoTitle: "신청곡" }),
     });

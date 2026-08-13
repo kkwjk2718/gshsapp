@@ -14,6 +14,7 @@ const BLOCKED_HOSTNAME_SUFFIXES = [
 ];
 
 export const DEFAULT_ICAL_ALLOWED_HOSTS = new Set(["calendar.google.com"]);
+const ICAL_DNS_TIMEOUT_MS = 3_000;
 
 export interface ResolvedAddress {
   address: string;
@@ -67,7 +68,13 @@ export function isPrivateOrReservedIpAddress(ip: string) {
   }
 
   if (net.isIPv6(ip)) {
-    const normalized = ip.toLowerCase();
+    let normalized = ip.toLowerCase();
+    try {
+      const canonicalHostname = new URL(`http://[${ip}]/`).hostname;
+      normalized = canonicalHostname.slice(1, -1).toLowerCase();
+    } catch {
+      // Keep the original form for valid scoped addresses that URL cannot canonicalize.
+    }
     const mappedIpv4 = normalized.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/)?.[1];
     if (mappedIpv4) return isPrivateOrReservedIpAddress(mappedIpv4);
     return (
@@ -183,7 +190,18 @@ export async function resolvePinnedPublicAddress(
   hostname: string,
   lookupAll: LookupAll = async (host) => dns.lookup(host, { all: true, verbatim: true }),
 ) {
-  const records = await lookupAll(hostname);
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_resolve, reject) => {
+    timeoutId = setTimeout(() => reject(new Error("Hostname resolution timed out.")), ICAL_DNS_TIMEOUT_MS);
+    timeoutId.unref?.();
+  });
+
+  let records: ResolvedAddress[];
+  try {
+    records = await Promise.race([lookupAll(hostname), timeout]);
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
   if (!records.length || records.length > 32) throw new Error("Hostname could not be resolved safely.");
   if (records.some((record) => isPrivateOrReservedIpAddress(record.address))) {
     throw new Error("Hostname resolves to a private or reserved IP address.");

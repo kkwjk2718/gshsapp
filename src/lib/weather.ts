@@ -1,7 +1,7 @@
 import { unstable_cache } from "next/cache";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { readBoundedJsonResponse } from "@/lib/outbound-response";
+import { cancelResponseBody, formatOutboundError, readBoundedJsonResponse } from "@/lib/outbound-response";
 import { getWeatherCachePath } from "@/lib/backup/paths";
 
 export type WeatherCondition =
@@ -238,6 +238,7 @@ export async function fetchWeatherProviderPayload(
   });
 
   if (!response.ok) {
+    await cancelResponseBody(response, "weather provider request failed");
     throw new Error(`Weather fetch failed: ${response.status}`);
   }
 
@@ -268,7 +269,7 @@ async function fetchFreshWeather(): Promise<WeatherData | null> {
         return weather;
       }
     } catch (error) {
-      console.error("Weather fetch error:", error);
+      console.error("Weather fetch error:", formatOutboundError(error));
     }
   }
 

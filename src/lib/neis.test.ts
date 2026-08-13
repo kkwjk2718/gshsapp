@@ -55,6 +55,24 @@ describe("NEIS outbound boundary", () => {
     await expect(getTimetable("20260813", "1", "1")).resolves.toEqual([]);
   });
 
+  it("cancels a failed provider response instead of leaving its body streaming", async () => {
+    let cancelled = false;
+    fetchMock.mockResolvedValue(
+      new Response(
+        new ReadableStream({
+          pull() {},
+          cancel() {
+            cancelled = true;
+          },
+        }),
+        { status: 503, headers: { "content-type": "application/json" } },
+      ),
+    );
+
+    await expect(getMeals("20260813")).resolves.toEqual([]);
+    expect(cancelled).toBe(true);
+  });
+
   it("returns only bounded rows matching the expected meal schema", async () => {
     const valid = {
       MMEAL_SC_CODE: "2",

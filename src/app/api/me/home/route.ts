@@ -22,7 +22,7 @@ const noStoreHeaders = {
 function getExternalSchedulePriority(
   schedule: Awaited<ReturnType<typeof getCalendarSchedules>>[number],
 ) {
-  return "isExternal" in schedule && schedule.isExternal ? 1 : 0;
+  return schedule.category === "EXTERNAL" ? 1 : 0;
 }
 
 function formatDday(title: string, targetDate: Date, today: Date): HomeDdayPayload {

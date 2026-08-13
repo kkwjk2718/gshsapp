@@ -7,7 +7,7 @@ describe("weather provider schema boundary", () => {
   });
 
   it("sets a timeout and stops streaming provider bodies at the byte limit", async () => {
-    const fetchMock = vi.fn(async () =>
+    const fetchMock = vi.fn<typeof fetch>(async () =>
       new Response(
         new ReadableStream({
           start(controller) {
@@ -23,6 +23,27 @@ describe("weather provider schema boundary", () => {
 
     await expect(fetchWeatherProviderPayload("https://weather.example/data")).rejects.toThrow("too large");
     expect(fetchMock.mock.calls[0]?.[1]?.signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it("cancels a failed provider response instead of leaving its body streaming", async () => {
+    let cancelled = false;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        new Response(
+          new ReadableStream({
+            pull() {},
+            cancel() {
+              cancelled = true;
+            },
+          }),
+          { status: 503, headers: { "content-type": "application/json" } },
+        ),
+      ),
+    );
+
+    await expect(fetchWeatherProviderPayload("https://weather.example/data")).rejects.toThrow("503");
+    expect(cancelled).toBe(true);
   });
 
   it("accepts a small valid wttr payload", () => {

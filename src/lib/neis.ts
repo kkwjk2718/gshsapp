@@ -1,4 +1,4 @@
-import { readBoundedJsonResponse } from "@/lib/outbound-response";
+import { cancelResponseBody, formatOutboundError, readBoundedJsonResponse } from "@/lib/outbound-response";
 
 const NEIS_API_KEY = process.env.NEXT_PUBLIC_NEIS_API_KEY;
 const OFFICE_CODE = "S10";
@@ -106,7 +106,10 @@ async function fetchNeisRows(
     signal: AbortSignal.timeout(NEIS_TIMEOUT_MS),
   });
 
-  if (!response.ok) throw new Error(`NEIS request failed with status ${response.status}`);
+  if (!response.ok) {
+    await cancelResponseBody(response, "NEIS request failed");
+    throw new Error(`NEIS request failed with status ${response.status}`);
+  }
   const payload = await readBoundedJsonResponse(response, { maxBytes: NEIS_MAX_RESPONSE_BYTES });
   return extractRows(payload, sectionName);
 }
@@ -175,7 +178,7 @@ export async function getMeals(date: string): Promise<MealInfo[]> {
       .filter((row): row is MealInfo => Boolean(row && row.MLSV_YMD === date))
       .slice(0, 10);
   } catch (error) {
-    console.error("Failed to fetch meals:", error);
+    console.error("Failed to fetch meals:", formatOutboundError(error));
     return [];
   }
 }
@@ -194,7 +197,7 @@ export async function getTimetable(date: string, grade: string, classNum: string
       .filter((row): row is TimetableInfo => Boolean(row))
       .slice(0, 20);
   } catch (error) {
-    console.error("Failed to fetch timetable:", error);
+    console.error("Failed to fetch timetable:", formatOutboundError(error));
     return [];
   }
 }
@@ -215,7 +218,7 @@ export async function getSchoolSchedule(fromDate: string, toDate: string): Promi
       .map(parseSchedule)
       .filter((row): row is SchoolScheduleInfo => Boolean(row && row.AA_YMD >= fromDate && row.AA_YMD <= toDate));
   } catch (error) {
-    console.error("Failed to fetch school schedule:", error);
+    console.error("Failed to fetch school schedule:", formatOutboundError(error));
     return [];
   }
 }
@@ -240,7 +243,7 @@ export async function getMonthlyMeals(year: string, month: string): Promise<Meal
       .map(parseMeal)
       .filter((row): row is MealInfo => Boolean(row && row.MLSV_YMD >= fromDate && row.MLSV_YMD <= toDate));
   } catch (error) {
-    console.error("Failed to fetch monthly meals:", error);
+    console.error("Failed to fetch monthly meals:", formatOutboundError(error));
     return [];
   }
 }

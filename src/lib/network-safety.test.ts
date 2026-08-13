@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   hasBlockedHostname,
   createPinnedLookup,
@@ -20,6 +20,7 @@ describe("network safety helpers", () => {
 
   it("blocks private and reserved IPv6 ranges", () => {
     expect(isPrivateOrReservedIpAddress("::1")).toBe(true);
+    expect(isPrivateOrReservedIpAddress("0:0:0:0:0:0:0:1")).toBe(true);
     expect(isPrivateOrReservedIpAddress("fc00::1")).toBe(true);
     expect(isPrivateOrReservedIpAddress("fd12::1234")).toBe(true);
     expect(isPrivateOrReservedIpAddress("fe80::1")).toBe(true);
@@ -27,6 +28,7 @@ describe("network safety helpers", () => {
     expect(isPrivateOrReservedIpAddress("::ffff:c0a8:101")).toBe(true);
     expect(isPrivateOrReservedIpAddress("64:ff9b::c0a8:101")).toBe(true);
     expect(isPrivateOrReservedIpAddress("2001:4860:4860::8888")).toBe(false);
+    expect(isPrivateOrReservedIpAddress("2001:0db8::1")).toBe(true);
   });
 
   it("blocks local hostnames and local suffixes", () => {
@@ -70,6 +72,22 @@ describe("network safety helpers", () => {
     await expect(
       resolvePinnedPublicAddress("calendar.google.com", async () => [{ address: "142.250.66.78", family: 4 }]),
     ).resolves.toEqual({ address: "142.250.66.78", family: 4 });
+  });
+
+  it("bounds DNS resolution time before an iCal connection is attempted", async () => {
+    vi.useFakeTimers();
+    try {
+      const resolution = resolvePinnedPublicAddress(
+        "calendar.google.com",
+        async () => await new Promise<never>(() => {}),
+      );
+      const rejection = expect(resolution).rejects.toThrow("timed out");
+
+      await vi.advanceTimersByTimeAsync(5_000);
+      await rejection;
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("returns only the prevalidated address for both Node lookup callback modes", async () => {

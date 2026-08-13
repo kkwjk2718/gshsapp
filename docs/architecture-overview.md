@@ -92,7 +92,7 @@ Route group 기준:
 - 공개 데이터는 실패해도 페이지 전체가 죽지 않도록 폴백이 필요
 - 운영 도메인과 테스트 도메인 값이 외부 연동 URL에 섞이면 안 됨
 - NEIS·날씨·YouTube oEmbed 응답은 공용 스트리밍 리더로 콘텐츠 유형과 최대 바이트를 검사하며, 각 연동은 타임아웃과 스키마/행 상한을 별도로 적용
-- iCal은 임의 외부 URL을 받지 않고 `ICAL_ALLOWED_HOSTS`(기본 `calendar.google.com`)의 정확한 HTTPS 호스트만 허용한다. DNS 결과 전체가 공용 주소인지 검사한 뒤 선택한 주소를 TLS 요청의 lookup에 고정해 검증/연결 사이 DNS 변경을 차단
+- iCal은 임의 외부 URL을 받지 않고 `ICAL_ALLOWED_HOSTS`(기본 `calendar.google.com`)의 정확한 HTTPS 호스트만 허용한다. 시간 제한 안에 받은 DNS 결과 전체가 공용 주소인지 검사하고, 선택한 주소를 새 TLS 연결의 lookup에 고정해 검증/연결 사이 DNS 변경과 기존 소켓 재사용을 차단한다. 응답 크기와 물리/논리 줄, 속성, UID, 이벤트 수를 파싱 전에 제한하고 예약 객체 키를 거부한 뒤 own-property만 공개 DTO로 변환한다
 
 ## 6. 권한 구조
 

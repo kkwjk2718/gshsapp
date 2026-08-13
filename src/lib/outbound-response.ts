@@ -9,6 +9,21 @@ interface BoundedJsonReadOptions extends BoundedReadOptions {
   allowedContentTypes?: readonly string[];
 }
 
+const OUTBOUND_ERROR_MAX_LENGTH = 500;
+
+export function formatOutboundError(error: unknown) {
+  let message = "Unknown outbound error.";
+  try {
+    if (error instanceof Error && typeof error.message === "string") message = error.message;
+    else if (typeof error === "string") message = error;
+  } catch {
+    // Do not evaluate attacker-controlled getters while formatting an error.
+  }
+
+  const normalized = message.replace(/[\u0000-\u001f\u007f]+/g, " ").trim();
+  return (normalized || "Unknown outbound error.").slice(0, OUTBOUND_ERROR_MAX_LENGTH);
+}
+
 function assertValidLimit(maxBytes: number) {
   if (!Number.isSafeInteger(maxBytes) || maxBytes <= 0) {
     throw new Error("Outbound response byte limit is invalid.");
@@ -35,12 +50,22 @@ function isJsonContentType(contentType: string | null, allowedContentTypes?: rea
   );
 }
 
+export async function cancelResponseBody(response: Response, reason = "response rejected") {
+  if (!response.body || response.body.locked) return;
+  await response.body.cancel(reason).catch(() => undefined);
+}
+
 export async function readBoundedResponseText(
   response: Response,
   { maxBytes }: BoundedReadOptions,
 ): Promise<string> {
   assertValidLimit(maxBytes);
-  assertContentLength(response.headers.get("content-length"), maxBytes);
+  try {
+    assertContentLength(response.headers.get("content-length"), maxBytes);
+  } catch (error) {
+    await cancelResponseBody(response, "content length exceeds limit");
+    throw error;
+  }
 
   if (!response.body) return "";
 
@@ -79,6 +104,7 @@ export async function readBoundedJsonResponse<T = unknown>(
   { maxBytes, allowedContentTypes }: BoundedJsonReadOptions,
 ): Promise<T> {
   if (!isJsonContentType(response.headers.get("content-type"), allowedContentTypes)) {
+    await cancelResponseBody(response, "invalid JSON content type");
     throw new Error("Outbound response has an invalid JSON content type.");
   }
 
@@ -91,7 +117,12 @@ export async function readBoundedNodeStreamText(
   { maxBytes, contentLength }: BoundedReadOptions,
 ): Promise<string> {
   assertValidLimit(maxBytes);
-  assertContentLength(contentLength, maxBytes);
+  try {
+    assertContentLength(contentLength, maxBytes);
+  } catch (error) {
+    stream.destroy();
+    throw error;
+  }
 
   const chunks: Buffer[] = [];
   let totalBytes = 0;
