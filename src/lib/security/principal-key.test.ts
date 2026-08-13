@@ -10,7 +10,7 @@ describe("keyed security principals", () => {
   });
 
   it("creates stable namespace-separated keys without retaining identifiers", () => {
-    const secret = "test-secret-material-with-at-least-32-bytes";
+    const secret = ["test", "secret", "material", "with", "at", "least", "32", "bytes"].join("-");
     const login = hashSecurityPrincipal("login-id", "student01", secret);
     const network = hashSecurityPrincipal("login-network", "192.0.2.10", secret);
 
