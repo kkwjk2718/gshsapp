@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 const BASELINE_MIGRATION = "20260813000000_baseline";
 const SECURITY_MIGRATION = "20260813001000_security_hardening";
 const LEGACY_SCHEMA_FINGERPRINT = "3cb19a677a4a6494eac64a996a874be3c36dc8b03c1d90369184cd639bc732e7";
-const CURRENT_SCHEMA_FINGERPRINT = "9b442eccdd07b5be03757ede7a0debc7925c25b6d7fae85c91ed8a96b89ba093";
+const CURRENT_SCHEMA_FINGERPRINT = "9c68d972a79c850bdf7bccf8a5bcacfccfac2632a199f811e152afd05bf3a366";
 
 export function schemaFingerprint(db) {
   const schemaObjects = db.prepare(`

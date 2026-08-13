@@ -12,6 +12,7 @@ import { verifyLoginCandidate } from '@/lib/security/login-verification';
 import { getApplicationSecuritySecret, hashSecurityPrincipal } from '@/lib/security/principal-key';
 import { isSensitiveClientAddressTrusted, parseTrustedProxyHops, resolveTrustedClientAddress } from '@/lib/security/client-address';
 import { isValidBcryptInput } from '@/lib/security/password-policy';
+import { hasActiveRosterMembership, isRosterGovernedRole } from '@/lib/student-membership';
 
 async function verifyPassword(password: string, hash: string) {
   return await bcrypt.compare(password, hash);
@@ -69,6 +70,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
           const user = await prisma.user.findUnique({ where: { userId } });
           const verifiedUser = await verifyLoginCandidate(password, user, verifyPassword);
+
+          if (verifiedUser && isRosterGovernedRole(verifiedUser.role) && !(await hasActiveRosterMembership(prisma, verifiedUser.id))) {
+            loginAttemptLimiter.recordFailure(identifierKey, networkKey);
+            await logAction("LOGIN_FAILED", { loginId: userId, reason: "Inactive enrollment" }, undefined, { userId: verifiedUser.id });
+            return null;
+          }
 
           if (verifiedUser) {
             loginAttemptLimiter.clearIdentifier(identifierKey);

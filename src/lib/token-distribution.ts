@@ -30,7 +30,7 @@ type SendDistributionEmailInput = {
   target: DistributionTarget;
   reservation?: Readonly<{
     distributionLogId: string;
-    inviteToken: Readonly<{ id: string; token: string; targetRole: string; targetGisu: number | null }>;
+    inviteToken: Readonly<{ id: string; token: string; targetRole: string; targetGisu: number | null; rosterEntryId?: string | null }>;
   }>;
 };
 
@@ -240,9 +240,10 @@ async function enforceDailyQuota({
         data: { status: "BLOCKED", inviteTokenId: null, errorMessage: "Daily send limit reached." },
       });
       if (transition.count !== 1) throw new Error("Distribution reservation is no longer pending");
-      if (source === "PORTAL_AUTO" && target.studentId) {
+      if (reservation.inviteToken.rosterEntryId && target.studentId) {
         await tx.studentRosterEntry.updateMany({
           where: {
+            id: reservation.inviteToken.rosterEntryId ?? "",
             studentId: target.studentId,
             email: target.email.trim().toLowerCase(),
             claimedInviteTokenId: reservation.inviteToken.id,
@@ -424,9 +425,10 @@ export async function sendInviteTokenEmail(input: SendDistributionEmailInput): P
         });
         if (transition.count !== 1) throw new Error("Distribution reservation is no longer pending");
         await tx.inviteToken.delete({ where: { id: inviteToken.id } });
-        if (input.source === "PORTAL_AUTO" && input.target.studentId) {
+        if (input.reservation!.inviteToken.rosterEntryId && input.target.studentId) {
           await tx.studentRosterEntry.updateMany({
             where: {
+              id: input.reservation!.inviteToken.rosterEntryId ?? "",
               studentId: input.target.studentId,
               email: input.target.email.trim().toLowerCase(),
               claimedInviteTokenId: inviteToken.id,

@@ -67,12 +67,35 @@ export async function updateProfile(formData: FormData) {
 
     try {
       await prisma.$transaction(async (tx) => {
+        const current = await tx.user.findUnique({
+          where: { id: user.id },
+          select: { email: true },
+        });
+        if (!current || current.email?.trim().toLowerCase() !== validated.data.email) {
+          throw new Error("PROFILE_EMAIL_IMMUTABLE");
+        }
+        if (user.role === "STUDENT" || user.role === "BROADCAST") {
+          const rosterIdentity = await tx.studentRosterEntry.findFirst({
+            where: { claimedUserId: user.id, active: true },
+            select: { name: true, email: true },
+          });
+          if (!rosterIdentity || rosterIdentity.name !== validated.data.name ||
+              rosterIdentity.email.toLowerCase() !== validated.data.email) {
+            throw new Error("ROSTER_PROFILE_IMMUTABLE");
+          }
+        }
         await tx.user.update({ where: { id: user.id }, data: validated.data });
         await writeAuditLog(tx, { actorId: user.id, action: "USER_PROFILE_CHANGED", target: { type: "USER", id: user.id } });
       });
       revalidatePath("/me");
       return { success: "Profile updated." };
-    } catch {
+    } catch (error) {
+      if (error instanceof Error && error.message === "PROFILE_EMAIL_IMMUTABLE") {
+        return { error: "Email changes require an administrator-verified identity update." };
+      }
+      if (error instanceof Error && error.message === "ROSTER_PROFILE_IMMUTABLE") {
+        return { error: "Student name and email are managed by the authoritative roster." };
+      }
       return { error: "Unable to update profile." };
     }
 }

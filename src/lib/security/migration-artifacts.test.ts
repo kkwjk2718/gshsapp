@@ -19,7 +19,8 @@ describe("reviewed production migrations", () => {
     db.exec(readFileSync(securityPath, "utf8"));
 
     expect(columns(db, "User")).toEqual(expect.arrayContaining(["sessionVersion", "mustChangePassword"]));
-    expect(columns(db, "InviteToken")).toEqual(expect.arrayContaining(["tokenHash", "boundEmail", "boundStudentId", "rosterClaimRequired"]));
+    expect(columns(db, "InviteToken")).toEqual(expect.arrayContaining(["tokenHash", "boundEmail", "boundStudentId", "rosterClaimRequired", "rosterEntryId"]));
+    expect(columns(db, "StudentRosterEntry")).toEqual(expect.arrayContaining(["id", "academicYear", "gisu", "studentId", "email"]));
     expect((db.prepare("PRAGMA foreign_key_check").all())).toEqual([]);
     db.close();
   });
@@ -30,8 +31,12 @@ describe("reviewed production migrations", () => {
     db.exec(`
       INSERT INTO "User" ("id", "userId", "passwordHash", "name", "email", "role")
       VALUES ('user-1', 'student01', 'legacy-hash', 'Student', 'student@example.com', 'STUDENT');
+      INSERT INTO "InviteToken" ("id", "token", "targetRole", "createdBy", "isUsed", "usedByUserId")
+      VALUES ('invite-used', 'legacy-used-token', 'STUDENT', 'admin', true, 'user-1');
       INSERT INTO "InviteToken" ("id", "token", "targetRole", "createdBy")
-      VALUES ('invite-1', 'legacy-token', 'STUDENT', 'admin');
+      VALUES ('invite-unused', 'legacy-low-entropy-token', 'STUDENT', 'admin');
+      INSERT INTO "TokenDistributionLog" ("id", "source", "recipientEmail", "targetRole", "inviteTokenId", "status", "createdBy")
+      VALUES ('distribution-1', 'ADMIN_MANUAL', 'student@example.com', 'STUDENT', 'invite-unused', 'SENT', 'admin');
       INSERT INTO "AuditLog" ("id", "actorId", "action")
       VALUES ('audit-1', 'user-1', 'LEGACY_EVENT');
     `);
@@ -44,9 +49,12 @@ describe("reviewed production migrations", () => {
       mustChangePassword: 0,
     });
     expect(db.prepare('SELECT "token", "tokenHash" FROM "InviteToken"').get()).toEqual({
-      token: "legacy-token",
+      token: null,
       tokenHash: null,
     });
+    expect(db.prepare('SELECT COUNT(*) AS count FROM "InviteToken"').get()).toEqual({ count: 1 });
+    expect(db.prepare('SELECT "inviteTokenId" FROM "TokenDistributionLog" WHERE "id" = ?').get("distribution-1"))
+      .toEqual({ inviteTokenId: null });
     expect(db.prepare('SELECT "actorId", "action" FROM "AuditLog"').get()).toEqual({
       actorId: "user-1",
       action: "LEGACY_EVENT",

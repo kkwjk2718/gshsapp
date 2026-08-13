@@ -9,11 +9,12 @@ type InviteSnapshot = Readonly<{
   boundEmail: string | null;
   boundStudentId: string | null;
   rosterClaimRequired: boolean;
+  rosterEntryId: string | null;
 }>;
 type InviteRedemptionDb = {
   $transaction<T>(callback: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T>;
 };
-type InvitePreflightDb = Pick<Prisma.TransactionClient, "inviteToken">;
+type InvitePreflightDb = Pick<Prisma.TransactionClient, "inviteToken" | "studentRosterEntry">;
 
 export type InviteRedemptionErrorCode = "INVALID" | "INVALID_ROLE_DATA" | "INVALID_OR_USED_OR_EXPIRED";
 
@@ -64,10 +65,28 @@ export async function preflightInviteRedemption(db: InvitePreflightDb, input: In
       usedByUserId: null,
       createdAt: { gt: cutoff },
     },
-    select: { id: true, targetRole: true, targetGisu: true, boundEmail: true, boundStudentId: true, rosterClaimRequired: true },
+    select: { id: true, targetRole: true, targetGisu: true, boundEmail: true, boundStudentId: true, rosterClaimRequired: true, rosterEntryId: true },
   });
   if (!invite) throw new InviteRedemptionError("INVALID");
   validateInviteIdentity(invite, input);
+  if (invite.rosterClaimRequired) {
+    if (!invite.rosterEntryId || !invite.boundStudentId || !invite.boundEmail || !invite.targetGisu) {
+      throw new InviteRedemptionError("INVALID");
+    }
+    const activeClaim = await db.studentRosterEntry.findFirst({
+      where: {
+        id: invite.rosterEntryId,
+        studentId: invite.boundStudentId,
+        email: invite.boundEmail,
+        gisu: invite.targetGisu,
+        active: true,
+        claimedInviteTokenId: invite.id,
+        claimedUserId: null,
+      },
+      select: { id: true },
+    });
+    if (!activeClaim) throw new InviteRedemptionError("INVALID");
+  }
   return invite;
 }
 
@@ -81,7 +100,7 @@ export async function redeemInvite(db: InviteRedemptionDb, input: RedeemInviteIn
           ...(input.legacyToken ? [{ token: input.legacyToken }] : []),
         ],
       },
-      select: { id: true, targetRole: true, targetGisu: true, boundEmail: true, boundStudentId: true, rosterClaimRequired: true },
+      select: { id: true, targetRole: true, targetGisu: true, boundEmail: true, boundStudentId: true, rosterClaimRequired: true, rosterEntryId: true },
     });
     if (!invite) throw new InviteRedemptionError("INVALID");
 
@@ -98,19 +117,45 @@ export async function redeemInvite(db: InviteRedemptionDb, input: RedeemInviteIn
     });
     if (claim.count !== 1) throw new InviteRedemptionError("INVALID_OR_USED_OR_EXPIRED");
 
+    let authoritativeRosterName: string | null = null;
+    if (invite.rosterClaimRequired) {
+      if (invite.targetRole !== "STUDENT" || !invite.boundStudentId || !invite.boundEmail || !invite.rosterEntryId || !invite.targetGisu) {
+        throw new InviteRedemptionError("INVALID");
+      }
+      const rosterIdentity = await tx.studentRosterEntry.findFirst({
+        where: {
+          id: invite.rosterEntryId,
+          studentId: invite.boundStudentId,
+          email: invite.boundEmail,
+          gisu: invite.targetGisu,
+          active: true,
+          claimedInviteTokenId: invite.id,
+          claimedUserId: null,
+        },
+        select: { name: true },
+      });
+      if (!rosterIdentity) throw new InviteRedemptionError("INVALID");
+      authoritativeRosterName = rosterIdentity.name;
+    }
+
     const user = await tx.user.create({ data: {
       ...input.userData,
+      ...(authoritativeRosterName ? { name: authoritativeRosterName } : {}),
       role: invite.targetRole,
       gisu: invite.targetGisu,
     } });
     if (invite.rosterClaimRequired) {
-      if (invite.targetRole !== "STUDENT" || !invite.boundStudentId || !invite.boundEmail) {
+      if (invite.targetRole !== "STUDENT" || !invite.boundStudentId || !invite.boundEmail || !invite.rosterEntryId || !invite.targetGisu) {
         throw new InviteRedemptionError("INVALID");
       }
       const rosterClaim = await tx.studentRosterEntry.updateMany({
         where: {
+          id: invite.rosterEntryId,
           studentId: invite.boundStudentId,
+          name: authoritativeRosterName!,
           email: invite.boundEmail,
+          gisu: invite.targetGisu,
+          active: true,
           claimedInviteTokenId: invite.id,
           claimedUserId: null,
         },

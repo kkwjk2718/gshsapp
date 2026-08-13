@@ -5,7 +5,6 @@ import { revalidatePath } from "next/cache";
 import bcrypt from "bcryptjs";
 import { getCurrentUser } from "@/lib/session";
 import { createNotification } from "@/lib/notifications";
-import { getGradeMapping } from "@/lib/grade-utils";
 import { logAction } from "@/lib/logger";
 import { resolveUserRoleChange, UserRoleChangeError, isUserRole } from "@/lib/user-role-change";
 import { canChangeGisu } from "@/lib/user-roles";
@@ -14,7 +13,8 @@ import { writeAuditLog } from "@/lib/audit";
 import { generateTemporaryPassword } from "@/lib/security/temporary-password";
 import { assertUserImportBounds } from "@/lib/security/user-import-bounds";
 import { parseImportedUserRecord, type ImportedUserRecord } from "@/lib/security/user-import-record";
-import { validateAtomicUserImportPlan } from "@/lib/security/user-import-plan";
+import { validateAtomicUserImportPlan, validateRosterGovernedUserImports } from "@/lib/security/user-import-plan";
+import { resolveRosterGovernedRoleChange } from "@/lib/security/roster-role-change";
 
 export async function importUsersBackup(_: any, formData: FormData) {
     const sessionUser = await getCurrentUser();
@@ -86,6 +86,11 @@ export async function importUsersBackup(_: any, formData: FormData) {
         validateAtomicUserImportPlan(existing, users, {
             id: sessionUser.id!, userId: sessionUser.userId!,
         });
+        const activeRoster = await tx.studentRosterEntry.findMany({
+            where: { active: true, claimedUserId: { not: null } },
+            select: { claimedUserId: true, name: true, email: true, studentId: true, gisu: true },
+        });
+        validateRosterGovernedUserImports(existing, users, activeRoster);
 
         let inserted = 0;
         let updated = 0;
@@ -262,6 +267,10 @@ function getRoleChangeErrorMessage(error: unknown) {
             return "현재 로그인한 관리자 계정의 ADMIN 권한은 해제할 수 없습니다.";
         }
 
+        if (error.message === "ACTIVE_ROSTER_REQUIRED") {
+            return "Student and broadcast roles require an exact active authoritative roster identity.";
+        }
+
         if (error.message === "LAST_ADMIN_PROTECTED") {
             return "마지막 관리자 계정은 다른 권한으로 변경할 수 없습니다.";
         }
@@ -289,8 +298,6 @@ export async function changeUserRole(formData: FormData): Promise<ChangeUserRole
     }
 
     try {
-        const gradeMapping = targetRole === "STUDENT" ? await getGradeMapping() : undefined;
-
         const result = await prisma.$transaction(async (tx) => {
             const targetUser = await tx.user.findUnique({
                 where: { id: userId },
@@ -298,6 +305,7 @@ export async function changeUserRole(formData: FormData): Promise<ChangeUserRole
                     id: true,
                     userId: true,
                     name: true,
+                    email: true,
                     role: true,
                     studentId: true,
                     gisu: true,
@@ -326,13 +334,25 @@ export async function changeUserRole(formData: FormData): Promise<ChangeUserRole
                 }
             }
 
-            const nextRole = resolveUserRoleChange({
-                currentStudentId: targetUser.studentId,
-                currentGisu: targetUser.gisu,
+            const rosterIdentity = targetRole === "STUDENT" || targetRole === "BROADCAST"
+                ? await tx.studentRosterEntry.findFirst({
+                    where: { claimedUserId: targetUser.id, active: true },
+                    select: { studentId: true, gisu: true, name: true, email: true },
+                })
+                : null;
+            const nextRole = resolveRosterGovernedRoleChange({
                 targetRole,
+                currentRole: targetUser.role,
                 studentIdInput,
-                gradeMapping,
-            });
+                userName: targetUser.name,
+                userEmail: targetUser.email,
+                roster: rosterIdentity,
+            }) ?? resolveUserRoleChange({
+                    currentStudentId: targetUser.studentId,
+                    currentGisu: targetUser.gisu,
+                    targetRole,
+                    studentIdInput,
+                });
 
             const updatedUser = await tx.user.update({
                 where: { id: userId },

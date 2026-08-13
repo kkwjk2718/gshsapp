@@ -4,7 +4,7 @@ import { prisma } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { getCurrentUser } from "@/lib/session";
 import { redirect } from "next/navigation";
-import { resolveStudentTargetGisu, sendInviteTokenEmail } from "@/lib/token-distribution";
+import { sendInviteTokenEmail } from "@/lib/token-distribution";
 import { writeAuditLog } from "@/lib/audit";
 import { generateInviteSecret, hashInviteSecret } from "@/lib/security/invite-token";
 import { DistributionReservationError, reserveDistribution } from "@/lib/distribution-reservation";
@@ -29,13 +29,13 @@ export async function createTokens(formData: FormData) {
   const targetGisu = targetGisuRaw ? parseBoundedInteger(targetGisuRaw, 1, 200) : null;
   const title = String(formData.get("title") ?? "").trim();
   const memo = String(formData.get("memo") ?? "").trim();
-  if (count === null || !["STUDENT", "TEACHER", "BROADCAST", "ADMIN"].includes(targetRole) ||
+  if (count === null || !["TEACHER", "ADMIN"].includes(targetRole) ||
       !title || [...title].length > 120 || new TextEncoder().encode(title).byteLength > 240 ||
       [...memo].length > 500 || new TextEncoder().encode(memo).byteLength > 1_000 ||
-      (targetGisuRaw !== "" && targetGisu === null) || (targetRole === "STUDENT" && targetGisu === null)) {
+      targetGisuRaw !== "") {
     throw new Error("Invalid token batch input");
   }
-  const issuedGisu = targetRole === "STUDENT" ? targetGisu : null;
+  const issuedGisu = null;
 
   const issuedSecrets = Array.from({ length: count }, () => generateInviteSecret());
 
@@ -118,19 +118,27 @@ export async function sendTokenByEmail(
 
   if (targetRole === "STUDENT") {
     if (!isValidStudentId(studentId)) return { error: "A valid four-digit student ID is required." };
-    const mappedGisu = await resolveStudentTargetGisu(studentId);
-    if (mappedGisu === null || mappedGisu !== targetGisu) {
-      return { error: "The student ID grade does not match the selected cohort." };
-    }
+  } else if (targetRole === "BROADCAST") {
+    return { error: "Broadcast enrollment must be granted by promoting an active roster-enrolled student." };
   } else if (studentId || targetGisuValue) {
     return { error: "Student ID and cohort metadata are only allowed for student invitations." };
+  }
+
+  let rosterEntry: { id: string; name: string } | null = null;
+  if (targetRole === "STUDENT") {
+    rosterEntry = await prisma.studentRosterEntry.findFirst({
+      where: { studentId, email, gisu: targetGisu!, active: true, claimedUserId: null },
+      select: { id: true, name: true },
+    });
+    if (!rosterEntry) return { error: "The student is not eligible in the active authoritative roster." };
   }
 
   let reservation;
   try {
     reservation = await reserveDistribution(prisma, {
       source: "ADMIN_MANUAL", createdBy: user.id, actorId: user.id, clientKey: null,
-      target: { email, studentId: targetRole === "STUDENT" ? studentId : null, targetRole, targetGisu: targetRole === "STUDENT" ? targetGisu : null },
+      target: { email, name: rosterEntry?.name ?? null, studentId: targetRole === "STUDENT" ? studentId : null, rosterEntryId: rosterEntry?.id ?? null, targetRole, targetGisu: targetRole === "STUDENT" ? targetGisu : null },
+      rosterClaimRequired: targetRole === "STUDENT",
     });
   } catch (error) {
     if (error instanceof DistributionReservationError) {
@@ -144,6 +152,7 @@ export async function sendTokenByEmail(
     createdBy: user.id,
     target: {
       email,
+      name: rosterEntry?.name ?? null,
       studentId: targetRole === "STUDENT" ? studentId : null,
       targetRole,
       targetGisu: targetRole === "STUDENT" ? targetGisu : null,

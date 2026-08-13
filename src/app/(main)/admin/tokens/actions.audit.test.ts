@@ -6,11 +6,11 @@ const mocks = vi.hoisted(() => ({
   getQuota: vi.fn(),
   reserve: vi.fn(),
   resolveStudentTargetGisu: vi.fn(),
-  tokenDelete: vi.fn(), rosterUpdate: vi.fn(), distributionUpdate: vi.fn(),
+  tokenDelete: vi.fn(), rosterUpdate: vi.fn(), rosterFindFirst: vi.fn(), distributionUpdate: vi.fn(),
 }));
 vi.mock("@/lib/session", () => ({ getCurrentUser: mocks.getCurrentUser }));
 vi.mock("@/lib/db", () => ({ prisma: {
-  tokenBatch: { create: mocks.batchCreate }, inviteToken: { createMany: mocks.tokenCreateMany, create: mocks.tokenCreate, findMany: mocks.tokenFindMany, delete: mocks.tokenDelete }, tokenDistributionLog: { create: mocks.distributionCreate, findFirst: mocks.distributionFindFirst, updateMany: mocks.distributionUpdate }, studentRosterEntry: { updateMany: mocks.rosterUpdate }, auditLog: { create: mocks.auditCreate },
+  tokenBatch: { create: mocks.batchCreate }, inviteToken: { createMany: mocks.tokenCreateMany, create: mocks.tokenCreate, findMany: mocks.tokenFindMany, delete: mocks.tokenDelete }, tokenDistributionLog: { create: mocks.distributionCreate, findFirst: mocks.distributionFindFirst, updateMany: mocks.distributionUpdate }, studentRosterEntry: { updateMany: mocks.rosterUpdate, findFirst: mocks.rosterFindFirst }, auditLog: { create: mocks.auditCreate },
   $transaction: mocks.transaction,
 } }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
@@ -39,10 +39,11 @@ describe("token mutation audit gate", () => {
     mocks.sendInvite.mockResolvedValue({ success: "sent" });
     mocks.getQuota.mockResolvedValue({ used: 0, remaining: 250, isLimitReached: false });
     mocks.resolveStudentTargetGisu.mockResolvedValue(40);
+    mocks.rosterFindFirst.mockResolvedValue({ id: "roster-2026-1", name: "Roster Student" });
     mocks.tokenDelete.mockResolvedValue({ id: "token" }); mocks.rosterUpdate.mockResolvedValue({ count: 1 }); mocks.distributionUpdate.mockResolvedValue({ count: 1 });
-    mocks.reserve.mockResolvedValue({ distributionLogId: "distribution", inviteToken: { id: "token", token: "safe-token", tokenHash: "digest", targetRole: "STUDENT", targetGisu: 40 } });
+    mocks.reserve.mockResolvedValue({ distributionLogId: "distribution", inviteToken: { id: "token", token: "safe-token", tokenHash: "digest", targetRole: "STUDENT", targetGisu: 40, rosterEntryId: "roster-2026-1" } });
     mocks.transaction.mockImplementation(async (callback: (tx: unknown) => unknown) => callback({
-      tokenBatch: { create: mocks.batchCreate }, inviteToken: { createMany: mocks.tokenCreateMany, create: mocks.tokenCreate, findMany: mocks.tokenFindMany, delete: mocks.tokenDelete }, tokenDistributionLog: { create: mocks.distributionCreate, findFirst: mocks.distributionFindFirst, updateMany: mocks.distributionUpdate }, studentRosterEntry: { updateMany: mocks.rosterUpdate }, auditLog: { create: mocks.auditCreate },
+      tokenBatch: { create: mocks.batchCreate }, inviteToken: { createMany: mocks.tokenCreateMany, create: mocks.tokenCreate, findMany: mocks.tokenFindMany, delete: mocks.tokenDelete }, tokenDistributionLog: { create: mocks.distributionCreate, findFirst: mocks.distributionFindFirst, updateMany: mocks.distributionUpdate }, studentRosterEntry: { updateMany: mocks.rosterUpdate, findFirst: mocks.rosterFindFirst }, auditLog: { create: mocks.auditCreate },
     }));
   });
 
@@ -60,7 +61,7 @@ describe("token mutation audit gate", () => {
   it("creates a batch and its audit event in one transaction", async () => {
     const { createTokens } = await import("./actions");
     const form = new FormData();
-    form.set("count", "1"); form.set("targetRole", "STUDENT"); form.set("targetGisu", "40"); form.set("title", "Batch"); form.set("memo", "");
+    form.set("count", "1"); form.set("targetRole", "TEACHER"); form.set("title", "Batch"); form.set("memo", "");
     const result = await createTokens(form);
     expect(mocks.transaction).toHaveBeenCalledOnce();
     expect(mocks.auditCreate).toHaveBeenCalledWith({ data: expect.objectContaining({ action: "TOKEN_BATCH_CREATED", targetId: "batch" }) });
@@ -75,7 +76,11 @@ describe("token mutation audit gate", () => {
     form.set("email", "student@example.com"); form.set("targetRole", "STUDENT"); form.set("targetGisu", "40"); form.set("studentId", "1304");
     expect(await sendTokenByEmail({}, form)).toHaveProperty("success");
     expect(mocks.sendInvite).toHaveBeenCalledWith(expect.objectContaining({ reservation: expect.objectContaining({ distributionLogId: "distribution" }) }));
-    expect(mocks.reserve).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ actorId: "admin", target: expect.objectContaining({ email: "student@example.com", studentId: "1304" }) }));
+    expect(mocks.reserve).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      actorId: "admin",
+      rosterClaimRequired: true,
+      target: expect.objectContaining({ email: "student@example.com", name: "Roster Student", studentId: "1304", rosterEntryId: "roster-2026-1" }),
+    }));
     expect(mocks.reserve.mock.invocationCallOrder[0]).toBeLessThan(mocks.sendInvite.mock.invocationCallOrder[0]);
   });
 
@@ -87,13 +92,11 @@ describe("token mutation audit gate", () => {
     expect(mocks.sendInvite).not.toHaveBeenCalled();
   });
 
-  it("supports the documented BROADCAST manual invite without student cohort metadata", async () => {
+  it("rejects manual BROADCAST enrollment without an active student roster claim", async () => {
     const { sendTokenByEmail } = await import("./actions");
     const form = new FormData(); form.set("email", "broadcast@example.com"); form.set("targetRole", "BROADCAST");
-    await expect(sendTokenByEmail({}, form)).resolves.toHaveProperty("success");
-    expect(mocks.reserve).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
-      target: expect.objectContaining({ targetRole: "BROADCAST", targetGisu: null }),
-    }));
+    await expect(sendTokenByEmail({}, form)).resolves.toHaveProperty("error");
+    expect(mocks.reserve).not.toHaveBeenCalled();
   });
 
   it("does not re-send a recent pending or sent equivalent request", async () => {
@@ -116,7 +119,7 @@ describe("token mutation audit gate", () => {
     expect(mocks.sendInvite).not.toHaveBeenCalled();
   });
 
-  it("requires a valid student ID whose grade mapping matches the selected cohort", async () => {
+  it("requires a valid student ID and an exact active authoritative roster identity", async () => {
     const { sendTokenByEmail } = await import("./actions");
     for (const studentId of ["", "9999", "1304-extra"]) {
       const form = new FormData();
@@ -124,7 +127,7 @@ describe("token mutation audit gate", () => {
       form.set("targetGisu", "40"); form.set("studentId", studentId);
       await expect(sendTokenByEmail({}, form)).resolves.toHaveProperty("error");
     }
-    mocks.resolveStudentTargetGisu.mockResolvedValueOnce(41);
+    mocks.rosterFindFirst.mockResolvedValueOnce(null);
     const mismatch = new FormData();
     mismatch.set("email", "student@example.com"); mismatch.set("targetRole", "STUDENT");
     mismatch.set("targetGisu", "40"); mismatch.set("studentId", "1304");

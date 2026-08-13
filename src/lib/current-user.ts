@@ -3,6 +3,7 @@ import "server-only";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
 import { MEMBER_SERVICE_SUSPENDED } from "@/lib/member-service-suspension";
+import { hasActiveRosterMembership, isRosterGovernedRole } from "@/lib/student-membership";
 
 const currentUserSelect = {
   id: true,
@@ -38,6 +39,7 @@ export async function getCurrentUser(options: Readonly<{ allowPasswordChangeRequ
   });
 
   if (!user || user.sessionVersion !== sessionVersion) return null;
+  if (isRosterGovernedRole(user.role) && !(await hasActiveRosterMembership(prisma, user.id))) return null;
   if (user.mustChangePassword && !options.allowPasswordChangeRequired) return null;
   return user;
 }

@@ -141,6 +141,18 @@ stat() {
   command stat "$@"
 }
 validate_ssh_admin_access "deployer:x:$account_uid:$account_uid::$ssh_home:$login_shell" 'SHA256:abcdefghijklmnopqrstuvwxyz1234567890AB'
+ssh-keygen() {
+  printf '%s\n' \
+    '256 SHA256:abcdefghijklmnopqrstuvwxyz1234567890AB deployer (ED25519)' \
+    '256 SHA256:unreviewedadditionalkey1234567890AB attacker (ED25519)'
+}
+if validate_ssh_admin_access "deployer:x:$account_uid:$account_uid::$ssh_home:$login_shell" 'SHA256:abcdefghijklmnopqrstuvwxyz1234567890AB' >/dev/null 2>&1; then
+  echo "Additional unreviewed authorized keys must be rejected." >&2
+  exit 1
+fi
+ssh-keygen() {
+  printf '%s\n' '256 SHA256:abcdefghijklmnopqrstuvwxyz1234567890AB deployer (ED25519)'
+}
 chmod 666 "$ssh_home/.ssh/authorized_keys"
 authorized_keys_test_mode=666
 if validate_ssh_admin_access "deployer:x:$account_uid:$account_uid::$ssh_home:$login_shell" 'SHA256:abcdefghijklmnopqrstuvwxyz1234567890AB' >/dev/null 2>&1; then
@@ -167,6 +179,8 @@ sshd() {
       'pubkeyauthentication yes' \
       'permitrootlogin no' \
       'allowusers deployer' \
+      'authenticationmethods publickey' \
+      'authorizedkeyscommand none' \
       'authorizedkeysfile .ssh/authorized_keys'
     return 0
   fi
@@ -178,6 +192,13 @@ sshd() {
 }
 if verify_effective_sshd_policy "$ssh_home" '10.20.0.1' >/dev/null 2>&1; then
   echo "An ineffective PubkeyAuthentication override must be rejected." >&2
+  exit 1
+fi
+sshd() {
+  [[ "$1" == "-T" ]] && printf '%s\n' 'passwordauthentication no' 'kbdinteractiveauthentication no' 'pubkeyauthentication yes' 'permitrootlogin no' 'allowusers attacker deployer' 'authenticationmethods any' 'authorizedkeyscommand none' 'authorizedkeysfile .ssh/authorized_keys /etc/ssh/extra_keys'
+}
+if verify_effective_sshd_policy "$ssh_home" '10.20.0.1' >/dev/null 2>&1; then
+  echo "Extra SSH users, authentication methods, or key files must be rejected." >&2
   exit 1
 fi
 

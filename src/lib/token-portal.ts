@@ -5,7 +5,6 @@ import { getApplicationSecuritySecret, hashSecurityPrincipal } from "@/lib/secur
 import {
   getDistributionQuotaSummary,
   recordBlockedTokenDistribution,
-  resolveStudentTargetGisu,
   sendInviteTokenEmail,
 } from "@/lib/token-distribution";
 import {
@@ -23,10 +22,12 @@ export async function getPublicPortalState() {
   return { settings: publicTokenPortalSettings(settings), cooldownSeconds, quota };
 }
 
-export async function sendPortalStudentInvite({ name, studentId, email }: {
+export async function sendPortalStudentInvite({ name, studentId, email, rosterEntryId, rosterGisu }: {
   name: string;
   studentId: string;
   email: string;
+  rosterEntryId: string;
+  rosterGisu: number;
 }) {
   const input = parsePortalInviteInput({ name, studentId, email });
   if (!input) return { error: "Please check the name, student ID, and email address." };
@@ -45,15 +46,17 @@ export async function sendPortalStudentInvite({ name, studentId, email }: {
     return { error: "The token distribution portal is disabled." };
   }
 
-  const targetGisu = await resolveStudentTargetGisu(normalizedStudentId);
-  if (!targetGisu) return { error: "Unable to resolve the student cohort." };
+  const targetGisu = rosterGisu;
+  if (!Number.isInteger(targetGisu) || targetGisu < 1 || targetGisu > 200) {
+    return { error: "Unable to resolve the student cohort." };
+  }
 
   let reservation;
   try {
     reservation = await reserveDistribution(prisma, {
       source: "PORTAL_AUTO", createdBy: "system:distribution-portal", clientKey,
       target: {
-        email: normalizedEmail, name: normalizedName, studentId: normalizedStudentId,
+        email: normalizedEmail, name: normalizedName, studentId: normalizedStudentId, rosterEntryId,
         targetRole: "STUDENT", targetGisu,
       },
     });

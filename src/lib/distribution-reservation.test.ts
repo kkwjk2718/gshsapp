@@ -17,7 +17,7 @@ function createDb(options: { duplicate?: boolean; quota?: number } = {}) {
       update: vi.fn(async () => { sequence.push("attach"); return { id: "log" }; }),
     },
     studentRosterEntry: {
-      findFirst: vi.fn(async () => { sequence.push("roster-read"); return { claimedAt: null, claimedInviteTokenId: null }; }),
+      findFirst: vi.fn(async () => { sequence.push("roster-read"); return { id: "roster-2026-1", claimedAt: null, claimedInviteTokenId: null }; }),
       updateMany: vi.fn(async () => { sequence.push("roster-claim"); return { count: 1 }; }),
     },
     inviteToken: {
@@ -32,7 +32,7 @@ function createDb(options: { duplicate?: boolean; quota?: number } = {}) {
 
 const input = {
   source: "PORTAL_AUTO" as const, createdBy: "system:portal", clientKey: "client-hash",
-  target: { email: "student@example.com", name: "Student", studentId: "1304", targetRole: "STUDENT", targetGisu: 40 },
+  target: { email: "student@example.com", name: "Student", studentId: "1304", rosterEntryId: "roster-2026-1", targetRole: "STUDENT", targetGisu: 40 },
   now: new Date("2026-08-13T01:00:00.000Z"),
 };
 
@@ -44,8 +44,8 @@ describe("atomic invite distribution reservation", () => {
     expect(sequence).toEqual(["pending", "cooldown", "quota", "roster-read", "token", "roster-claim", "attach", "invite-prune"]);
     expect(result.inviteToken.token).toMatch(/^[A-Za-z0-9_-]{43}$/);
     expect(tx.inviteToken.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({ token: null, tokenHash: expect.stringMatching(/^[A-Za-z0-9_-]{43}$/), boundEmail: "student@example.com", boundStudentId: "1304" }),
-      select: { id: true, targetRole: true, targetGisu: true },
+      data: expect.objectContaining({ token: null, tokenHash: expect.stringMatching(/^[A-Za-z0-9_-]{43}$/), boundEmail: "student@example.com", boundStudentId: "1304", rosterEntryId: "roster-2026-1" }),
+      select: { id: true, targetRole: true, targetGisu: true, rosterEntryId: true },
     });
     expect(tx.tokenDistributionLog.findFirst).toHaveBeenCalledWith(expect.objectContaining({
       where: expect.objectContaining({ status: { in: ["PENDING", "SENT", "FAILED"] } }),
@@ -54,7 +54,7 @@ describe("atomic invite distribution reservation", () => {
       where: expect.objectContaining({ status: { in: ["PENDING", "SENT", "FAILED"] } }),
     });
     expect(tx.studentRosterEntry.updateMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: expect.objectContaining({ studentId: "1304", active: true, claimedUserId: null, claimedInviteTokenId: null }),
+      where: expect.objectContaining({ id: "roster-2026-1", studentId: "1304", gisu: 40, active: true, claimedUserId: null, claimedInviteTokenId: null }),
       data: expect.objectContaining({ claimedInviteTokenId: "token" }),
     }));
   });

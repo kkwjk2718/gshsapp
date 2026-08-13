@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { validateAtomicUserImportPlan } from "./user-import-plan";
+import { validateAtomicUserImportPlan, validateRosterGovernedUserImports } from "./user-import-plan";
 
 const actor = { id: "admin-id", userId: "admin", role: "ADMIN", email: "admin@example.com", studentId: null };
 
@@ -18,5 +18,29 @@ describe("atomic user import plan", () => {
       .toThrow("IMPORT_DUPLICATE_EMAIL");
     expect(() => validateAtomicUserImportPlan(existing, [{ userId: "two", role: "STUDENT", email: "two@example.com", studentId: "1304" }], actor))
       .toThrow("IMPORT_DUPLICATE_STUDENT_ID");
+  });
+});
+
+describe("roster-governed backup imports", () => {
+  const current = {
+    id: "student-id", userId: "student", role: "STUDENT", name: "Roster Student",
+    email: "student@example.com", studentId: "1304", gisu: 42,
+  };
+  const roster = {
+    claimedUserId: "student-id", name: "Roster Student", email: "student@example.com",
+    studentId: "1304", gisu: 42,
+  };
+
+  it("allows credential-only restoration for an exact active enrolled account", () => {
+    expect(() => validateRosterGovernedUserImports([current], [current], [roster])).not.toThrow();
+  });
+
+  it("rejects new enrollments, role conversion, and authoritative identity drift", () => {
+    expect(() => validateRosterGovernedUserImports([], [current], [roster]))
+      .toThrow("IMPORT_ROSTER_ENROLLMENT_FORBIDDEN");
+    expect(() => validateRosterGovernedUserImports([{ ...current, role: "TEACHER" }], [current], [roster]))
+      .toThrow("IMPORT_ROSTER_ENROLLMENT_FORBIDDEN");
+    expect(() => validateRosterGovernedUserImports([current], [{ ...current, name: "Other" }], [roster]))
+      .toThrow("IMPORT_ROSTER_IDENTITY_MISMATCH");
   });
 });

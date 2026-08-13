@@ -14,8 +14,8 @@ vi.mock("@/lib/grade-utils", () => ({ getGradeMapping: vi.fn() }));
 vi.mock("@/lib/logger", () => ({ logAction: mocks.log }));
 vi.mock("@/lib/system-settings", () => ({ getSystemSettingValue: mocks.setting, SYSTEM_SETTING_KEYS: { tokenPortalEmailGuidance: "guidance" } }));
 
-const reservation = { distributionLogId: "distribution", inviteToken: { id: "token", token: "secret", targetRole: "STUDENT", targetGisu: 40 } };
-const input = { source: "ADMIN_MANUAL" as const, createdBy: "admin", target: { email: "student@example.com", targetRole: "STUDENT", targetGisu: 40 }, reservation };
+const reservation = { distributionLogId: "distribution", inviteToken: { id: "token", token: "secret", targetRole: "STUDENT", targetGisu: 40, rosterEntryId: "roster-2026-1" } };
+const input = { source: "ADMIN_MANUAL" as const, createdBy: "admin", target: { email: "student@example.com", name: "Student", studentId: "1304", targetRole: "STUDENT", targetGisu: 40 }, reservation };
 
 describe("reserved token email transitions", () => {
   beforeEach(() => {
@@ -41,6 +41,10 @@ describe("reserved token email transitions", () => {
     expect(mocks.transaction).toHaveBeenCalledOnce();
     expect(mocks.updateMany).toHaveBeenCalledWith({ where: { id: "distribution", status: "PENDING" }, data: expect.objectContaining({ status: "FAILED", inviteTokenId: null, errorMessage: expect.any(String) }) });
     expect(mocks.deleteToken).toHaveBeenCalledWith({ where: { id: "token" } });
+    expect(mocks.releaseRoster).toHaveBeenCalledWith({
+      where: { id: "roster-2026-1", studentId: "1304", email: "student@example.com", claimedInviteTokenId: "token", claimedUserId: null },
+      data: { claimedAt: null, claimedEmail: null, claimedInviteTokenId: null },
+    });
     expect(mocks.updateMany.mock.calls.at(-1)?.[0].data.errorMessage.length).toBeLessThanOrEqual(512);
   });
 
@@ -65,25 +69,20 @@ describe("reserved token email transitions", () => {
 
     await expect(sendInviteTokenEmail(portalInput)).resolves.toHaveProperty("error");
     expect(mocks.releaseRoster).toHaveBeenCalledWith({
-      where: { studentId: "1304", email: "student@example.com", claimedInviteTokenId: "token", claimedUserId: null },
+      where: { id: "roster-2026-1", studentId: "1304", email: "student@example.com", claimedInviteTokenId: "token", claimedUserId: null },
       data: { claimedAt: null, claimedEmail: null, claimedInviteTokenId: null },
     });
   });
 
-  it("releases the exact portal roster claim when a reserved send is quota-blocked", async () => {
-    const portalInput = {
-      ...input,
-      source: "PORTAL_AUTO" as const,
-      target: { ...input.target, name: "Student", studentId: "1304" },
-    };
+  it("releases the exact manual roster claim when a reserved send is quota-blocked", async () => {
     mocks.count.mockResolvedValue(251);
     mocks.updateMany.mockResolvedValue({ count: 1 });
     mocks.releaseRoster.mockResolvedValue({ count: 1 });
     const { sendInviteTokenEmail } = await import("./token-distribution");
-    await expect(sendInviteTokenEmail(portalInput)).resolves.toHaveProperty("error");
+    await expect(sendInviteTokenEmail(input)).resolves.toHaveProperty("error");
     expect(mocks.send).not.toHaveBeenCalled();
     expect(mocks.releaseRoster).toHaveBeenCalledWith({
-      where: { studentId: "1304", email: "student@example.com", claimedInviteTokenId: "token", claimedUserId: null },
+      where: { id: "roster-2026-1", studentId: "1304", email: "student@example.com", claimedInviteTokenId: "token", claimedUserId: null },
       data: { claimedAt: null, claimedEmail: null, claimedInviteTokenId: null },
     });
   });

@@ -2,17 +2,19 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const authMock = vi.fn();
 const findUniqueMock = vi.fn();
+const rosterFindFirstMock = vi.fn();
 
 vi.mock("server-only", () => ({}));
 vi.mock("@/auth", () => ({ auth: authMock }));
 vi.mock("@/lib/db", () => ({
-  prisma: { user: { findUnique: findUniqueMock } },
+  prisma: { user: { findUnique: findUniqueMock }, studentRosterEntry: { findFirst: rosterFindFirstMock } },
 }));
 vi.mock("@/lib/member-service-suspension", () => ({ MEMBER_SERVICE_SUSPENDED: false }));
 
 describe("database-backed current user authorization", () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    rosterFindFirstMock.mockResolvedValue({ id: "roster" });
   });
 
   it.each([undefined, null, "1", 1.5, Number.NaN])(
@@ -41,6 +43,26 @@ describe("database-backed current user authorization", () => {
     const { getCurrentUser } = await import("./current-user");
 
     await expect(getCurrentUser()).resolves.toEqual(dbUser);
+  });
+
+  it("rejects roster-governed accounts omitted from the active academic generation", async () => {
+    authMock.mockResolvedValue({ user: { id: "user-1", sessionVersion: 3 } });
+    findUniqueMock.mockResolvedValue({ id: "user-1", role: "STUDENT", sessionVersion: 3 });
+    rosterFindFirstMock.mockResolvedValue(null);
+    const { getCurrentUser } = await import("./current-user");
+
+    await expect(getCurrentUser()).resolves.toBeNull();
+    expect(rosterFindFirstMock).toHaveBeenCalledWith({ where: { claimedUserId: "user-1", active: true }, select: { id: true } });
+  });
+
+  it("does not apply student enrollment state to staff roles", async () => {
+    authMock.mockResolvedValue({ user: { id: "admin-1", sessionVersion: 3 } });
+    const dbUser = { id: "admin-1", role: "ADMIN", sessionVersion: 3 };
+    findUniqueMock.mockResolvedValue(dbUser);
+    const { getCurrentUser } = await import("./current-user");
+
+    await expect(getCurrentUser()).resolves.toEqual(dbUser);
+    expect(rosterFindFirstMock).not.toHaveBeenCalled();
   });
 
   it("denies admin access when a JWT says ADMIN but the database says STUDENT", async () => {

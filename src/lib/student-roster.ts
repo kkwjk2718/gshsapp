@@ -10,9 +10,17 @@ export async function validatePortalRosterIdentity(
   db: RosterDb,
   identity: Readonly<{ name: string; studentId: string; email: string }>,
 ) {
-  const entry = await db.studentRosterEntry.findUnique({
-    where: { studentId: identity.studentId },
+  const entry = await db.studentRosterEntry.findFirst({
+    where: {
+      studentId: identity.studentId,
+      email: identity.email.trim().toLowerCase(),
+      active: true,
+      claimedUserId: null,
+    },
     select: {
+      id: true,
+      academicYear: true,
+      gisu: true,
       studentId: true,
       name: true,
       email: true,

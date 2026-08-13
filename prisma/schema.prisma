@@ -38,6 +38,7 @@ model User {
   systemLogs     SystemLog[]
   usedToken      InviteToken? @relation("TokenUsedByUser")
   errorReports   ErrorReport[]
+  studentRosterClaims StudentRosterEntry[]
 }
 
 model TokenBatch {
@@ -57,6 +58,7 @@ model InviteToken {
   boundEmail     String?
   boundStudentId String?
   rosterClaimRequired Boolean @default(false)
+  rosterEntryId String?
   targetRole  String   // STUDENT, TEACHER, ADMIN
   targetGisu  Int?
   isUsed      Boolean  @default(false)
@@ -69,6 +71,9 @@ model InviteToken {
 
   usedByUserId String? @unique
   usedBy       User?   @relation("TokenUsedByUser", fields: [usedByUserId], references: [id])
+  rosterEntry  StudentRosterEntry? @relation(fields: [rosterEntryId], references: [id], onDelete: Restrict)
+
+  @@index([rosterEntryId])
 }
 
 model TokenDistributionLog {
@@ -215,18 +220,27 @@ model AuditLog {
 }
 
 model StudentRosterEntry {
-  studentId           String    @id
+  id                  String    @id @default(uuid())
+  academicYear        Int
+  gisu                Int
+  studentId           String
   name                String
-  email               String    @unique
+  email               String
   active              Boolean   @default(true)
   claimedAt           DateTime?
   claimedEmail        String?
   claimedInviteTokenId String?   @unique
-  claimedUserId       String?    @unique
+  claimedUserId       String?
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
+  inviteTokens        InviteToken[]
+  claimedUser         User?      @relation(fields: [claimedUserId], references: [id], onDelete: SetNull)
 
+  @@unique([academicYear, studentId])
+  @@unique([academicYear, email])
+  @@unique([academicYear, claimedUserId])
   @@index([active, claimedAt])
+  @@index([claimedUserId, active])
 }
 
 model SystemSetting {

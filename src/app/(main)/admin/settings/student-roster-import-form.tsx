@@ -20,7 +20,7 @@ export function StudentRosterImportForm({ activeCount, claimedCount }: { activeC
       </div>
       <form action={formAction} className="space-y-3">
         <p className="text-xs text-amber-600 dark:text-amber-400">
-          CSV header must be exactly <code>studentId,name,email</code>. Import is atomic; claimed identities cannot be changed or reused.
+          CSV header must be exactly <code>academicYear,gisu,studentId,name,email</code>. One file contains one school year; older generations remain inactive audit evidence while student numbers may be safely reused.
         </p>
         <input
           id="student-roster-file"

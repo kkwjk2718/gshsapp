@@ -103,9 +103,10 @@ export async function requestSignupToken(
     return { error: "포털 인증이 만료되었습니다. 다시 비밀번호를 입력해주세요." };
   }
 
-  if (!(await validatePortalRosterIdentity(prisma, input))) {
+  const rosterEntry = await validatePortalRosterIdentity(prisma, input);
+  if (!rosterEntry) {
     return { error: "The supplied student identity is not eligible for self-service enrollment." };
   }
 
-  return sendPortalStudentInvite(input);
+  return sendPortalStudentInvite({ ...input, rosterEntryId: rosterEntry.id, rosterGisu: rosterEntry.gisu });
 }

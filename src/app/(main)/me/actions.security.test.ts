@@ -3,11 +3,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   getCurrentUser: vi.fn(), findUnique: vi.fn(), update: vi.fn(), updateMany: vi.fn(), transaction: vi.fn(), auditCreate: vi.fn(),
   compare: vi.fn(), hash: vi.fn(), signOut: vi.fn(), limiterCheck: vi.fn(), limiterFailure: vi.fn(), limiterClear: vi.fn(),
-  clientAddress: vi.fn(),
+  clientAddress: vi.fn(), rosterFindFirst: vi.fn(),
 }));
 vi.mock("@/lib/session", () => ({ getCurrentUser: mocks.getCurrentUser }));
 vi.mock("@/lib/db", () => ({ prisma: {
   user: { findUnique: mocks.findUnique, update: mocks.update, updateMany: mocks.updateMany }, auditLog: { create: mocks.auditCreate },
+  studentRosterEntry: { findFirst: mocks.rosterFindFirst },
   personalEvent: { count: vi.fn() }, $transaction: mocks.transaction,
 } }));
 vi.mock("bcryptjs", () => ({ default: { compare: mocks.compare, hash: mocks.hash } }));
@@ -36,10 +37,13 @@ describe("self profile and credential actions", () => {
     mocks.auditCreate.mockResolvedValue({ id: "audit" });
     mocks.limiterCheck.mockReturnValue({ locked: false });
     mocks.clientAddress.mockReturnValue("192.0.2.10");
-    mocks.transaction.mockImplementation(async (callback: (tx: unknown) => unknown) => callback({ user: { update: mocks.update, updateMany: mocks.updateMany }, auditLog: { create: mocks.auditCreate } }));
+    mocks.rosterFindFirst.mockResolvedValue({ name: "Hong Gildong", email: "student@example.com" });
+    mocks.findUnique.mockResolvedValue({ id: "user", email: "student@example.com", passwordHash: "old", sessionVersion: 3 });
+    mocks.transaction.mockImplementation(async (callback: (tx: unknown) => unknown) => callback({ user: { findUnique: mocks.findUnique, update: mocks.update, updateMany: mocks.updateMany }, studentRosterEntry: { findFirst: mocks.rosterFindFirst }, auditLog: { create: mocks.auditCreate } }));
   });
 
   it("normalizes self-service fields and never accepts a studentId change", async () => {
+    mocks.getCurrentUser.mockResolvedValue({ id: "user", role: "ADMIN", mustChangePassword: false });
     const { updateProfile } = await import("./actions");
     const form = new FormData();
     form.set("name", "  Hong Gildong  ");
@@ -78,6 +82,32 @@ describe("self profile and credential actions", () => {
     expect(mocks.compare).not.toHaveBeenCalled();
     expect(mocks.hash).not.toHaveBeenCalled();
     expect(mocks.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("does not let a roster-governed user replace an authoritative name or email", async () => {
+    const { updateProfile } = await import("./actions");
+    const form = new FormData();
+    form.set("name", "Other Student");
+    form.set("email", "student@example.com");
+
+    await expect(updateProfile(form)).resolves.toEqual({
+      error: "Student name and email are managed by the authoritative roster.",
+    });
+    expect(mocks.update).not.toHaveBeenCalled();
+    expect(mocks.auditCreate).not.toHaveBeenCalled();
+  });
+
+  it("does not let any role self-assert a new unverified mailbox", async () => {
+    mocks.getCurrentUser.mockResolvedValue({ id: "user", role: "GRADUATE", mustChangePassword: false });
+    const { updateProfile } = await import("./actions");
+    const form = new FormData();
+    form.set("name", "Graduate");
+    form.set("email", "unclaimed-student@example.com");
+
+    await expect(updateProfile(form)).resolves.toEqual({
+      error: "Email changes require an administrator-verified identity update.",
+    });
+    expect(mocks.update).not.toHaveBeenCalled();
   });
 
   it("rejects a missing trusted proxy address before bcrypt", async () => {

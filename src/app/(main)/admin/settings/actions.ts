@@ -10,6 +10,7 @@ import { SYSTEM_SETTING_KEYS, normalizeGoogleAnalyticsId } from "@/lib/system-se
 import { writeAuditLog } from "@/lib/audit";
 import { validatePassword } from "@/lib/security/password-policy";
 import { MAX_STUDENT_ROSTER_BYTES, parseStudentRosterCsv, planStudentRosterReplacement } from "@/lib/security/student-roster-import";
+import { withSqliteWriteRetry } from "@/lib/security/sqlite-retry";
 
 export async function updateGradeMapping(formData: FormData) {
   const user = await getCurrentUser();
@@ -69,41 +70,60 @@ export async function replaceStudentRoster(
 
   try {
     const entries = parseStudentRosterCsv(await file.text());
-    await prisma.$transaction(async (tx) => {
-      const claimedEntries = await tx.studentRosterEntry.findMany({
-        where: {
-          OR: [
-            { claimedAt: { not: null } },
-            { claimedInviteTokenId: { not: null } },
-            { claimedUserId: { not: null } },
-          ],
+    await withSqliteWriteRetry(() => prisma.$transaction(async (tx) => {
+      // Acquire the SQLite writer lease before reading roster and account state.
+      await tx.systemSetting.updateMany({ where: { key: "__roster_import_write_lease__" }, data: { value: "" } });
+      const rosterEntries = await tx.studentRosterEntry.findMany({
+        select: {
+          id: true, academicYear: true, gisu: true, studentId: true, name: true, email: true,
+          claimedUserId: true,
         },
-        select: { studentId: true, name: true, email: true },
       });
       const existingStudents = await tx.user.findMany({
-        where: { role: "STUDENT" },
-        select: { id: true, studentId: true, name: true, email: true },
+        select: { id: true, role: true, gisu: true, studentId: true, name: true, email: true },
       });
-      const plan = planStudentRosterReplacement(entries, claimedEntries, existingStudents);
-      await tx.studentRosterEntry.deleteMany({
-        where: { claimedAt: null, claimedInviteTokenId: null, claimedUserId: null },
+      const plan = planStudentRosterReplacement(entries, rosterEntries, existingStudents);
+      const pendingClaims = await tx.studentRosterEntry.findMany({
+        where: { active: true, claimedInviteTokenId: { not: null }, claimedUserId: null },
+        select: { id: true, claimedInviteTokenId: true },
+      });
+      const pendingTokenIds = pendingClaims.flatMap(({ claimedInviteTokenId }) => claimedInviteTokenId ? [claimedInviteTokenId] : []);
+      if (pendingTokenIds.length > 0) {
+        await tx.tokenDistributionLog.updateMany({ where: { inviteTokenId: { in: pendingTokenIds } }, data: { inviteTokenId: null } });
+        const revoked = await tx.inviteToken.deleteMany({ where: { id: { in: pendingTokenIds }, isUsed: false, usedByUserId: null } });
+        if (revoked.count !== pendingTokenIds.length) throw new Error("ROSTER_PENDING_INVITE_CHANGED");
+      }
+      await tx.studentRosterEntry.updateMany({
+        where: { claimedUserId: null },
+        data: { claimedAt: null, claimedEmail: null, claimedInviteTokenId: null },
       });
       await tx.studentRosterEntry.updateMany({ data: { active: false } });
-      if (plan.reactivateStudentIds.length > 0) {
-        await tx.studentRosterEntry.updateMany({
-          where: { studentId: { in: plan.reactivateStudentIds } },
-          data: { active: true },
-        });
+      for (const update of plan.updateEntries) {
+        await tx.studentRosterEntry.update({ where: { id: update.id }, data: update.data });
       }
       if (plan.createEntries.length > 0) {
         await tx.studentRosterEntry.createMany({ data: plan.createEntries });
       }
+      for (const update of plan.userUpdates) {
+        const result = await tx.user.updateMany({
+          where: { id: update.id, role: { in: ["STUDENT", "BROADCAST"] } },
+          data: { studentId: update.studentId, gisu: update.gisu, name: update.name, sessionVersion: { increment: 1 } },
+        });
+        if (result.count !== 1) throw new Error("ROSTER_USER_CHANGED");
+      }
+      await tx.user.updateMany({
+        where: {
+          role: { in: ["STUDENT", "BROADCAST"] },
+          ...(plan.activeUserIds.length > 0 ? { id: { notIn: plan.activeUserIds } } : {}),
+        },
+        data: { sessionVersion: { increment: 1 } },
+      });
       await writeAuditLog(tx, {
         actorId: user.id,
         action: "STUDENT_ROSTER_REPLACED",
-        target: { type: "STUDENT_ROSTER", id: `rows:${entries.length}` },
+        target: { type: "STUDENT_ROSTER", id: `year:${plan.academicYear}:rows:${entries.length}` },
       });
-    });
+    }));
     revalidatePath("/admin/settings");
     revalidatePath("/signup/request");
     return { success: `Student roster replaced atomically (${entries.length} active entries).`, count: entries.length };

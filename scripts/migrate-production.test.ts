@@ -75,7 +75,7 @@ describe("production migration preflight", () => {
     const driftFingerprint = schemaFingerprint(db);
     db.close();
     expect(driftFingerprint).not.toBe("3cb19a677a4a6494eac64a996a874be3c36dc8b03c1d90369184cd639bc732e7");
-    expect(driftFingerprint).not.toBe("9b442eccdd07b5be03757ede7a0debc7925c25b6d7fae85c91ed8a96b89ba093");
+    expect(driftFingerprint).not.toBe("9c68d972a79c850bdf7bccf8a5bcacfccfac2632a199f811e152afd05bf3a366");
     expect(() => validatePreMigrationState({ kind: "unmanaged", fingerprint: driftFingerprint })).toThrow(
       "Refusing to baseline an unknown SQLite schema",
     );

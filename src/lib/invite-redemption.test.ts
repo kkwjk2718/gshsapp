@@ -6,8 +6,8 @@ function createDb(options: { claimCount?: number; createError?: Error } = {}) {
   const sequence: string[] = [];
   const invite: {
     id: string; targetRole: string; targetGisu: number | null; boundEmail: string | null;
-    boundStudentId: string | null; rosterClaimRequired: boolean;
-  } = { id: "invite-1", targetRole: "STUDENT", targetGisu: 40, boundEmail: null, boundStudentId: null, rosterClaimRequired: false };
+    boundStudentId: string | null; rosterClaimRequired: boolean; rosterEntryId: string | null;
+  } = { id: "invite-1", targetRole: "STUDENT", targetGisu: 40, boundEmail: null, boundStudentId: null, rosterClaimRequired: false, rosterEntryId: null };
   const tx = {
     inviteToken: {
       findFirst: vi.fn(async () => { sequence.push("lookup"); return invite; }),
@@ -22,6 +22,7 @@ function createDb(options: { claimCount?: number; createError?: Error } = {}) {
       }),
     },
     studentRosterEntry: {
+      findFirst: vi.fn(async () => { sequence.push("verify-roster"); return { name: "Roster Student" }; }),
       updateMany: vi.fn(async () => { sequence.push("complete-roster"); return { count: 1 }; }),
     },
   };
@@ -33,11 +34,12 @@ describe("atomic invite redemption", () => {
   it("cheaply rejects inactive or mismatched invites before password hashing can begin", async () => {
     const findFirst = vi.fn().mockResolvedValue({
       id: "invite-1", targetRole: "STUDENT", targetGisu: 40,
-      boundEmail: "student@example.com", boundStudentId: "1304", rosterClaimRequired: true,
+      boundEmail: "student@example.com", boundStudentId: "1304", rosterClaimRequired: true, rosterEntryId: "roster-2026-1",
     });
     const validateInvite = vi.fn();
+    const rosterFindFirst = vi.fn().mockResolvedValue({ id: "roster-2026-1" });
     const now = new Date("2026-08-13T00:00:00.000Z");
-    await expect(preflightInviteRedemption({ inviteToken: { findFirst } } as never, {
+    await expect(preflightInviteRedemption({ inviteToken: { findFirst }, studentRosterEntry: { findFirst: rosterFindFirst } } as never, {
       tokenHash: "digest", legacyToken: null, now,
       claimedIdentity: { email: "student@example.com", studentId: "1304" }, validateInvite,
     })).resolves.toMatchObject({ id: "invite-1" });
@@ -46,12 +48,19 @@ describe("atomic invite redemption", () => {
         OR: [{ tokenHash: "digest" }], isUsed: false, usedByUserId: null,
         createdAt: { gt: new Date("2026-08-06T00:00:00.000Z") },
       },
-      select: { id: true, targetRole: true, targetGisu: true, boundEmail: true, boundStudentId: true, rosterClaimRequired: true },
+      select: { id: true, targetRole: true, targetGisu: true, boundEmail: true, boundStudentId: true, rosterClaimRequired: true, rosterEntryId: true },
     });
     expect(validateInvite).toHaveBeenCalledOnce();
+    expect(rosterFindFirst).toHaveBeenCalledWith({
+      where: {
+        id: "roster-2026-1", studentId: "1304", email: "student@example.com", gisu: 40,
+        active: true, claimedInviteTokenId: "invite-1", claimedUserId: null,
+      },
+      select: { id: true },
+    });
 
     findFirst.mockResolvedValueOnce(null);
-    await expect(preflightInviteRedemption({ inviteToken: { findFirst } } as never, {
+    await expect(preflightInviteRedemption({ inviteToken: { findFirst }, studentRosterEntry: { findFirst: rosterFindFirst } } as never, {
       tokenHash: "invalid", legacyToken: null, now, validateInvite,
     })).rejects.toMatchObject({ code: "INVALID" });
   });
@@ -100,7 +109,7 @@ describe("atomic invite redemption", () => {
     });
     expect(tx.inviteToken.findFirst).toHaveBeenCalledWith({
       where: { OR: [{ tokenHash: "sha256-digest" }, { token: "legacy-value" }] },
-      select: { id: true, targetRole: true, targetGisu: true, boundEmail: true, boundStudentId: true, rosterClaimRequired: true },
+      select: { id: true, targetRole: true, targetGisu: true, boundEmail: true, boundStudentId: true, rosterClaimRequired: true, rosterEntryId: true },
     });
   });
 
@@ -108,7 +117,7 @@ describe("atomic invite redemption", () => {
     const { db, tx } = createDb();
     tx.inviteToken.findFirst.mockResolvedValueOnce({
       id: "invite-1", targetRole: "STUDENT", targetGisu: 40,
-      boundEmail: "intended@example.com", boundStudentId: "1304", rosterClaimRequired: true,
+      boundEmail: "intended@example.com", boundStudentId: "1304", rosterClaimRequired: true, rosterEntryId: "roster-2026-1",
     });
     await expect(redeemInvite(db as never, {
       presentedSecret: "secret", tokenHash: "digest", legacyToken: null,
@@ -124,7 +133,7 @@ describe("atomic invite redemption", () => {
     const { db, tx, sequence } = createDb();
     tx.inviteToken.findFirst.mockResolvedValueOnce({
       id: "invite-1", targetRole: "STUDENT", targetGisu: 40,
-      boundEmail: "student@example.com", boundStudentId: "1304", rosterClaimRequired: true,
+      boundEmail: "student@example.com", boundStudentId: "1304", rosterClaimRequired: true, rosterEntryId: "roster-2026-1",
     });
     await redeemInvite(db as never, {
       presentedSecret: "secret", tokenHash: "digest", legacyToken: null,
@@ -133,9 +142,10 @@ describe("atomic invite redemption", () => {
       validateInvite: () => undefined,
       userData: { userId: "student", passwordHash: "hash", name: "Student" },
     });
-    expect(sequence).toEqual(["claim", "create-user", "complete-roster", "associate"]);
+    expect(sequence).toEqual(["claim", "verify-roster", "create-user", "complete-roster", "associate"]);
+    expect(tx.user.create).toHaveBeenCalledWith({ data: expect.objectContaining({ name: "Roster Student" }) });
     expect(tx.studentRosterEntry.updateMany).toHaveBeenCalledWith({
-      where: { studentId: "1304", email: "student@example.com", claimedInviteTokenId: "invite-1", claimedUserId: null },
+      where: { id: "roster-2026-1", studentId: "1304", name: "Roster Student", email: "student@example.com", gisu: 40, active: true, claimedInviteTokenId: "invite-1", claimedUserId: null },
       data: { claimedUserId: "user-1", claimedInviteTokenId: null, claimedAt: new Date("2026-08-13T00:00:00.000Z"), claimedEmail: "student@example.com" },
     });
   });
@@ -154,7 +164,7 @@ describe("atomic invite redemption", () => {
     const { db, tx } = createDb();
     tx.inviteToken.findFirst.mockResolvedValueOnce({
       id: "invite-1", targetRole: "STUDENT", targetGisu: 40,
-      boundEmail: "student@example.com", boundStudentId: "1304", rosterClaimRequired: false,
+      boundEmail: "student@example.com", boundStudentId: "1304", rosterClaimRequired: false, rosterEntryId: null,
     });
     await expect(redeemInvite(db as never, {
       presentedSecret: "secret", tokenHash: "digest", legacyToken: null, now: new Date(),

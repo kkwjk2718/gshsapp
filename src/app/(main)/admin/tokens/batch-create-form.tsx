@@ -40,8 +40,7 @@ export function BatchCreateForm() {
         <div>
           <label className="mb-1 block text-xs font-bold text-slate-500">Role</label>
           <select name="targetRole" className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 dark:border-slate-700 dark:bg-slate-900">
-            <option value="STUDENT">Student</option><option value="TEACHER">Teacher</option>
-            <option value="BROADCAST">Broadcast</option><option value="ADMIN">Admin</option>
+            <option value="TEACHER">Teacher</option><option value="ADMIN">Admin</option>
           </select>
         </div>
         <div>

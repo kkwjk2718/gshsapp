@@ -33,6 +33,7 @@ CREATE TABLE "new_InviteToken" (
     "boundEmail" TEXT,
     "boundStudentId" TEXT,
     "rosterClaimRequired" BOOLEAN NOT NULL DEFAULT false,
+    "rosterEntryId" TEXT,
     "targetRole" TEXT NOT NULL,
     "targetGisu" INTEGER,
     "isUsed" BOOLEAN NOT NULL DEFAULT false,
@@ -41,15 +42,24 @@ CREATE TABLE "new_InviteToken" (
     "batchId" TEXT,
     "usedByUserId" TEXT,
     CONSTRAINT "InviteToken_batchId_fkey" FOREIGN KEY ("batchId") REFERENCES "TokenBatch" ("id") ON DELETE SET NULL ON UPDATE CASCADE,
-    CONSTRAINT "InviteToken_usedByUserId_fkey" FOREIGN KEY ("usedByUserId") REFERENCES "User" ("id") ON DELETE SET NULL ON UPDATE CASCADE
+    CONSTRAINT "InviteToken_usedByUserId_fkey" FOREIGN KEY ("usedByUserId") REFERENCES "User" ("id") ON DELETE SET NULL ON UPDATE CASCADE,
+    CONSTRAINT "InviteToken_rosterEntryId_fkey" FOREIGN KEY ("rosterEntryId") REFERENCES "StudentRosterEntry" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
 );
 INSERT INTO "new_InviteToken" ("batchId", "createdAt", "createdBy", "id", "isUsed", "targetGisu", "targetRole", "token", "usedByUserId")
-SELECT "batchId", "createdAt", "createdBy", "id", "isUsed", "targetGisu", "targetRole", "token", "usedByUserId" FROM "InviteToken";
+SELECT "batchId", "createdAt", "createdBy", "id", "isUsed", "targetGisu", "targetRole",
+       CASE WHEN "isUsed" = true OR "usedByUserId" IS NOT NULL THEN NULL ELSE "token" END,
+       "usedByUserId"
+FROM "InviteToken"
+WHERE "isUsed" = true OR "usedByUserId" IS NOT NULL;
+UPDATE "TokenDistributionLog"
+SET "inviteTokenId" = NULL
+WHERE "inviteTokenId" NOT IN (SELECT "id" FROM "new_InviteToken");
 DROP TABLE "InviteToken";
 ALTER TABLE "new_InviteToken" RENAME TO "InviteToken";
 CREATE UNIQUE INDEX "InviteToken_token_key" ON "InviteToken"("token");
 CREATE UNIQUE INDEX "InviteToken_tokenHash_key" ON "InviteToken"("tokenHash");
 CREATE UNIQUE INDEX "InviteToken_usedByUserId_key" ON "InviteToken"("usedByUserId");
+CREATE INDEX "InviteToken_rosterEntryId_idx" ON "InviteToken"("rosterEntryId");
 
 CREATE TABLE "new_AuditLog" (
     "id" TEXT NOT NULL PRIMARY KEY,
@@ -70,7 +80,10 @@ CREATE INDEX "SystemLog_createdAt_idx" ON "SystemLog"("createdAt");
 CREATE INDEX "SystemLog_action_createdAt_idx" ON "SystemLog"("action", "createdAt");
 
 CREATE TABLE "StudentRosterEntry" (
-    "studentId" TEXT NOT NULL PRIMARY KEY,
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "academicYear" INTEGER NOT NULL,
+    "gisu" INTEGER NOT NULL,
+    "studentId" TEXT NOT NULL,
     "name" TEXT NOT NULL,
     "email" TEXT NOT NULL,
     "active" BOOLEAN NOT NULL DEFAULT true,
@@ -79,12 +92,15 @@ CREATE TABLE "StudentRosterEntry" (
     "claimedInviteTokenId" TEXT,
     "claimedUserId" TEXT,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "StudentRosterEntry_claimedUserId_fkey" FOREIGN KEY ("claimedUserId") REFERENCES "User" ("id") ON DELETE SET NULL ON UPDATE CASCADE
 );
-CREATE UNIQUE INDEX "StudentRosterEntry_email_key" ON "StudentRosterEntry"("email");
 CREATE UNIQUE INDEX "StudentRosterEntry_claimedInviteTokenId_key" ON "StudentRosterEntry"("claimedInviteTokenId");
-CREATE UNIQUE INDEX "StudentRosterEntry_claimedUserId_key" ON "StudentRosterEntry"("claimedUserId");
+CREATE UNIQUE INDEX "StudentRosterEntry_academicYear_studentId_key" ON "StudentRosterEntry"("academicYear", "studentId");
+CREATE UNIQUE INDEX "StudentRosterEntry_academicYear_email_key" ON "StudentRosterEntry"("academicYear", "email");
+CREATE UNIQUE INDEX "StudentRosterEntry_academicYear_claimedUserId_key" ON "StudentRosterEntry"("academicYear", "claimedUserId");
 CREATE INDEX "StudentRosterEntry_active_claimedAt_idx" ON "StudentRosterEntry"("active", "claimedAt");
+CREATE INDEX "StudentRosterEntry_claimedUserId_active_idx" ON "StudentRosterEntry"("claimedUserId", "active");
 
 PRAGMA foreign_keys=ON;
 PRAGMA defer_foreign_keys=OFF;

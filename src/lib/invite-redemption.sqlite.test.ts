@@ -51,6 +51,7 @@ function provisionDatabase() {
       "boundEmail" TEXT,
       "boundStudentId" TEXT,
       "rosterClaimRequired" INTEGER NOT NULL DEFAULT 0,
+      "rosterEntryId" TEXT,
       "targetRole" TEXT NOT NULL,
       "targetGisu" INTEGER,
       "isUsed" INTEGER NOT NULL DEFAULT 0,
@@ -63,7 +64,10 @@ function provisionDatabase() {
     CREATE UNIQUE INDEX "InviteToken_tokenHash_key" ON "InviteToken"("tokenHash");
     CREATE UNIQUE INDEX "InviteToken_usedByUserId_key" ON "InviteToken"("usedByUserId");
     CREATE TABLE "StudentRosterEntry" (
-      "studentId" TEXT NOT NULL PRIMARY KEY,
+      "id" TEXT NOT NULL PRIMARY KEY,
+      "academicYear" INTEGER NOT NULL,
+      "gisu" INTEGER NOT NULL,
+      "studentId" TEXT NOT NULL,
       "name" TEXT NOT NULL,
       "email" TEXT NOT NULL,
       "active" INTEGER NOT NULL DEFAULT 1,
@@ -104,6 +108,44 @@ describe("file-backed SQLite invite claim", () => {
       expect(await first.user.count()).toBe(1);
       expect(await first.inviteToken.findFirst({ select: { isUsed: true, usedByUserId: true } }))
         .toMatchObject({ isUsed: true, usedByUserId: expect.any(String) });
+    } finally {
+      await Promise.all([first.$disconnect(), second.$disconnect()]);
+    }
+  });
+
+  it("never grants active membership after an authoritative roster revocation race", async () => {
+    const databaseUrl = provisionDatabase();
+    const first = new PrismaClient({ datasources: { db: { url: databaseUrl } } });
+    const second = new PrismaClient({ datasources: { db: { url: databaseUrl } } });
+    try {
+      const roster = await first.studentRosterEntry.create({ data: {
+        academicYear: 2026, gisu: 42, studentId: "1304", name: "Roster Student",
+        email: "student@example.com", active: true,
+      } });
+      const invite = await first.inviteToken.create({ data: {
+        tokenHash: "roster-race-digest", targetRole: "STUDENT", targetGisu: 42, createdBy: "admin",
+        boundEmail: "student@example.com", boundStudentId: "1304", rosterClaimRequired: true,
+        rosterEntryId: roster.id,
+      } });
+      await first.studentRosterEntry.update({
+        where: { id: roster.id },
+        data: { claimedAt: new Date(), claimedEmail: "student@example.com", claimedInviteTokenId: invite.id },
+      });
+
+      const redemption = redeemInvite(first, {
+        presentedSecret: "secret", tokenHash: "roster-race-digest", legacyToken: null, now: new Date(),
+        claimedIdentity: { email: "student@example.com", studentId: "1304" },
+        validateInvite: () => undefined,
+        userData: { userId: "roster-student", passwordHash: "hash", name: "Attacker supplied name", email: "student@example.com", studentId: "1304" },
+      });
+      const revocation = second.studentRosterEntry.update({ where: { id: roster.id }, data: { active: false } });
+      await Promise.allSettled([redemption, revocation]);
+
+      const finalRoster = await first.studentRosterEntry.findUniqueOrThrow({ where: { id: roster.id } });
+      expect(finalRoster.active).toBe(false);
+      const created = await first.user.findUnique({ where: { userId: "roster-student" } });
+      if (created) expect(created.name).toBe("Roster Student");
+      expect(await first.studentRosterEntry.count({ where: { claimedUserId: created?.id, active: true } })).toBe(0);
     } finally {
       await Promise.all([first.$disconnect(), second.$disconnect()]);
     }

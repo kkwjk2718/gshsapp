@@ -153,13 +153,14 @@ validate_ssh_admin_access() {
     return 1
   }
 
-  local fingerprints
+  local fingerprints fingerprint_count
   fingerprints="$(ssh-keygen -l -E sha256 -f "$authorized_keys")" || {
     echo "authorized_keys contains no valid public key." >&2
     return 1
   }
-  awk '{print $2}' <<<"$fingerprints" | grep -Fxq "$expected_fingerprint" || {
-    echo "The reviewed SSH public-key fingerprint is not installed for the administrator." >&2
+  fingerprint_count="$(awk 'NF { count += 1 } END { print count + 0 }' <<<"$fingerprints")"
+  [[ "$fingerprint_count" == "1" && "$(awk 'NF { print $2 }' <<<"$fingerprints")" == "$expected_fingerprint" ]] || {
+    echo "authorized_keys must contain exactly the single reviewed SSH public key." >&2
     return 1
   }
 }
@@ -173,14 +174,16 @@ verify_effective_sshd_policy() {
   grep -Fxq "kbdinteractiveauthentication no" <<<"$effective" &&
   grep -Fxq "pubkeyauthentication yes" <<<"$effective" &&
   grep -Fxq "permitrootlogin no" <<<"$effective" &&
-  grep -Eq "^allowusers( .*)? $SSH_ADMIN_USER( .*)?$|^allowusers $SSH_ADMIN_USER$" <<<"$effective" || {
+  grep -Fxq "allowusers $SSH_ADMIN_USER" <<<"$effective" &&
+  grep -Fxq "authenticationmethods publickey" <<<"$effective" &&
+  grep -Fxq "authorizedkeyscommand none" <<<"$effective" || {
     echo "Effective sshd authentication policy does not match the reviewed key-only configuration." >&2
     return 1
   }
   local authorized_value
   authorized_value="$(sed -n 's/^authorizedkeysfile //p' <<<"$effective")"
-  grep -Eq '(^|[[:space:]])(\.ssh/authorized_keys|%h/\.ssh/authorized_keys)([[:space:]]|$)' <<<"$authorized_value" || {
-    echo "Effective AuthorizedKeysFile does not include the validated account key file." >&2
+  [[ "$authorized_value" == ".ssh/authorized_keys" || "$authorized_value" == "%h/.ssh/authorized_keys" ]] || {
+    echo "Effective AuthorizedKeysFile must be exactly the validated account key file." >&2
     return 1
   }
   [[ -f "$account_home/.ssh/authorized_keys" && ! -L "$account_home/.ssh/authorized_keys" ]]

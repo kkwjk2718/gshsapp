@@ -3,17 +3,27 @@ import { isValidStudentId } from "@/lib/student-id";
 export const MAX_STUDENT_ROSTER_BYTES = 256 * 1024;
 export const MAX_STUDENT_ROSTER_ROWS = 500;
 
-const HEADER = ["studentId", "name", "email"] as const;
+const HEADER = ["academicYear", "gisu", "studentId", "name", "email"] as const;
 const CONTROL = /[\u0000-\u001f\u007f-\u009f\ufeff]/u;
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/u;
 
 export type StudentRosterImportEntry = Readonly<{
+  academicYear: number;
+  gisu: number;
   studentId: string;
   name: string;
   email: string;
 }>;
-type ExistingStudentIdentity = Readonly<{
+
+export type ExistingRosterIdentity = StudentRosterImportEntry & Readonly<{
   id: string;
+  claimedUserId: string | null;
+}>;
+
+export type ExistingStudentIdentity = Readonly<{
+  id: string;
+  role: string;
+  gisu: number | null;
   studentId: string | null;
   name: string;
   email: string | null;
@@ -74,11 +84,21 @@ function parseCsvRows(value: string): string[][] {
   return rows;
 }
 
+function parseBoundedInteger(value: string, minimum: number, maximum: number, code: string) {
+  const normalized = value.trim();
+  if (!/^\d+$/u.test(normalized)) throw new Error(code);
+  const parsed = Number(normalized);
+  if (!Number.isSafeInteger(parsed) || parsed < minimum || parsed > maximum) throw new Error(code);
+  return parsed;
+}
+
 function normalizeEntry(row: string[]): StudentRosterImportEntry {
   if (row.length !== HEADER.length) throw new Error("ROSTER_INVALID_COLUMNS");
-  const studentId = row[0].trim();
-  const name = row[1].trim().normalize("NFC");
-  const email = row[2].trim().toLowerCase();
+  const academicYear = parseBoundedInteger(row[0], 2020, 2100, "ROSTER_INVALID_ACADEMIC_YEAR");
+  const gisu = parseBoundedInteger(row[1], 1, 200, "ROSTER_INVALID_GISU");
+  const studentId = row[2].trim();
+  const name = row[3].trim().normalize("NFC");
+  const email = row[4].trim().toLowerCase();
   if (!isValidStudentId(studentId)) throw new Error("ROSTER_INVALID_STUDENT_ID");
   if (!name || [...name].length > 80 || new TextEncoder().encode(name).byteLength > 240 || CONTROL.test(name)) {
     throw new Error("ROSTER_INVALID_NAME");
@@ -86,7 +106,7 @@ function normalizeEntry(row: string[]): StudentRosterImportEntry {
   if (!EMAIL.test(email) || email.length > 254 || new TextEncoder().encode(email).byteLength > 254 || CONTROL.test(email)) {
     throw new Error("ROSTER_INVALID_EMAIL");
   }
-  return { studentId, name, email };
+  return { academicYear, gisu, studentId, name, email };
 }
 
 export function parseStudentRosterCsv(value: string): StudentRosterImportEntry[] {
@@ -97,6 +117,8 @@ export function parseStudentRosterCsv(value: string): StudentRosterImportEntry[]
   }
   const entries = rows.slice(1).map(normalizeEntry);
   if (entries.length === 0 || entries.length > MAX_STUDENT_ROSTER_ROWS) throw new Error("ROSTER_INVALID_ROW_COUNT");
+  const academicYears = new Set(entries.map(({ academicYear }) => academicYear));
+  if (academicYears.size !== 1) throw new Error("ROSTER_MIXED_ACADEMIC_YEARS");
   const studentIds = new Set<string>();
   const emails = new Set<string>();
   for (const entry of entries) {
@@ -108,61 +130,150 @@ export function parseStudentRosterCsv(value: string): StudentRosterImportEntry[]
   return entries;
 }
 
+function normalizeEmail(value: string | null) {
+  return value?.trim().toLowerCase() || null;
+}
+
 export function planStudentRosterReplacement(
   entries: readonly StudentRosterImportEntry[],
-  claimedEntries: readonly StudentRosterImportEntry[],
-  existingStudents: readonly ExistingStudentIdentity[] = [],
+  rosterEntries: readonly ExistingRosterIdentity[],
+  existingUsers: readonly ExistingStudentIdentity[] = [],
   now = new Date(),
 ) {
+  if (entries.length === 0) throw new Error("ROSTER_INVALID_ROW_COUNT");
+  const academicYear = entries[0].academicYear;
+  if (entries.some((entry) => entry.academicYear !== academicYear)) throw new Error("ROSTER_MIXED_ACADEMIC_YEARS");
+
   const incomingByStudentId = new Map(entries.map((entry) => [entry.studentId, entry]));
-  const incomingByEmail = new Map(entries.map((entry) => [entry.email, entry]));
-  const existingByStudentId = new Map<string, ExistingStudentIdentity[]>();
-  const existingClaims = new Map<string, ExistingStudentIdentity>();
-  for (const user of existingStudents) {
-    if (user.email) {
-      const emailEntry = incomingByEmail.get(user.email.trim().toLowerCase());
-      if (emailEntry && emailEntry.studentId !== user.studentId) throw new Error("ROSTER_EXISTING_EMAIL_CONFLICT");
+  const usersById = new Map(existingUsers.map((user) => [user.id, user]));
+  const usersByEmail = new Map<string, ExistingStudentIdentity[]>();
+  const authoritativeClaimByEmail = new Map<string, ExistingRosterIdentity>();
+
+  for (const user of existingUsers) {
+    const email = normalizeEmail(user.email);
+    if (email) usersByEmail.set(email, [...(usersByEmail.get(email) ?? []), user]);
+    const studentIdEntry = user.studentId ? incomingByStudentId.get(user.studentId) : undefined;
+    if (studentIdEntry && user.gisu === studentIdEntry.gisu && email !== studentIdEntry.email) {
+      throw new Error("ROSTER_EXISTING_STUDENT_ID_CONFLICT");
     }
-    if (!user.studentId || !incomingByStudentId.has(user.studentId)) continue;
-    const matches = existingByStudentId.get(user.studentId) ?? [];
-    matches.push(user);
-    existingByStudentId.set(user.studentId, matches);
   }
-  for (const [studentId, users] of existingByStudentId) {
-    if (users.length !== 1) throw new Error("ROSTER_EXISTING_STUDENT_ID_CONFLICT");
-    const user = users[0];
-    const incoming = incomingByStudentId.get(studentId)!;
-    if (!user.email || user.email.trim().toLowerCase() !== incoming.email || user.name.trim().normalize("NFC") !== incoming.name) {
-      throw new Error("ROSTER_EXISTING_IDENTITY_CONFLICT");
+
+  // A prior, administrator-imported roster is the stable identity chain. User.email is
+  // self-editable, so it must never be sufficient to attach a later generation.
+  for (const rosterEntry of rosterEntries) {
+    if (!rosterEntry.claimedUserId) continue;
+    const email = normalizeEmail(rosterEntry.email);
+    if (!email) throw new Error("ROSTER_CLAIMED_IDENTITY_CONFLICT");
+    const prior = authoritativeClaimByEmail.get(email);
+    if (prior && prior.claimedUserId !== rosterEntry.claimedUserId) {
+      throw new Error("ROSTER_CLAIMED_IDENTITY_CONFLICT");
     }
-    existingClaims.set(studentId, user);
+    authoritativeClaimByEmail.set(email, rosterEntry);
   }
-  const claimedByEmail = new Map(claimedEntries.map((entry) => [entry.email.toLowerCase(), entry]));
-  const reactivateStudentIds: string[] = [];
-  for (const claimed of claimedEntries) {
-    const incoming = incomingByStudentId.get(claimed.studentId);
-    if (incoming) {
-      if (incoming.name !== claimed.name || incoming.email !== claimed.email.toLowerCase()) {
+
+  const userClaimByEmail = new Map<string, ExistingStudentIdentity>();
+  const claimedIncomingByUser = new Map<string, string>();
+  for (const entry of entries) {
+    const authoritativeClaim = authoritativeClaimByEmail.get(entry.email);
+    let user: ExistingStudentIdentity | undefined;
+    if (authoritativeClaim) {
+      if (authoritativeClaim.gisu !== entry.gisu || !authoritativeClaim.claimedUserId) {
         throw new Error("ROSTER_CLAIMED_IDENTITY_CONFLICT");
       }
-      reactivateStudentIds.push(claimed.studentId);
+      user = usersById.get(authoritativeClaim.claimedUserId);
+      if (!user) throw new Error("ROSTER_CLAIMED_IDENTITY_CONFLICT");
+      if (normalizeEmail(user.email) !== entry.email) throw new Error("ROSTER_USER_EMAIL_DRIFT");
+    } else {
+      // First rollout has no authoritative history. Only an exact current cohort,
+      // student-number and email match is safe enough to seed the initial claim.
+      const candidates = usersByEmail.get(entry.email) ?? [];
+      const exact = candidates.filter((candidate) =>
+        (candidate.role === "STUDENT" || candidate.role === "BROADCAST") &&
+        candidate.studentId === entry.studentId && candidate.gisu === entry.gisu,
+      );
+      if (candidates.length > 0 && exact.length !== 1) throw new Error("ROSTER_EXISTING_EMAIL_CONFLICT");
+      user = exact[0];
+    }
+    if (!user) continue;
+    const priorEmail = claimedIncomingByUser.get(user.id);
+    if (priorEmail && priorEmail !== entry.email) throw new Error("ROSTER_CLAIMED_IDENTITY_CONFLICT");
+    claimedIncomingByUser.set(user.id, entry.email);
+    userClaimByEmail.set(entry.email, user);
+  }
+
+  const currentRows = rosterEntries.filter((entry) => entry.academicYear === academicYear);
+  const currentClaimedByUser = new Map(currentRows.filter((entry) => entry.claimedUserId).map((entry) => [entry.claimedUserId!, entry]));
+  const currentByStudentId = new Map(currentRows.map((entry) => [entry.studentId, entry]));
+  const currentByEmail = new Map(currentRows.map((entry) => [entry.email.toLowerCase(), entry]));
+  const updateEntries: Array<{ id: string; data: StudentRosterImportEntry & {
+    active: true;
+    claimedAt: Date | null;
+    claimedEmail: string | null;
+    claimedUserId: string | null;
+    claimedInviteTokenId: null;
+  } }> = [];
+  const createEntries: Array<StudentRosterImportEntry & {
+    active: true;
+    claimedAt?: Date;
+    claimedEmail?: string;
+    claimedUserId?: string;
+  }> = [];
+  const userUpdates: Array<{ id: string; studentId: string; gisu: number; name: string }> = [];
+  const activeUserIds: string[] = [];
+  const usedRowIds = new Set<string>();
+
+  const chooseReusableRow = (entry: StudentRosterImportEntry, userId: string | null) => {
+    const byStudentId = currentByStudentId.get(entry.studentId);
+    const byEmail = currentByEmail.get(entry.email);
+    if (byStudentId && byEmail && byStudentId.id !== byEmail.id) throw new Error("ROSTER_CURRENT_ROW_CONFLICT");
+    const row = userId ? currentClaimedByUser.get(userId) ?? byStudentId ?? byEmail : byStudentId ?? byEmail;
+    if (!row) return null;
+    if (usedRowIds.has(row.id)) throw new Error("ROSTER_CURRENT_ROW_CONFLICT");
+    if (row.claimedUserId && row.claimedUserId !== userId) throw new Error("ROSTER_CLAIMED_IDENTITY_CONFLICT");
+    usedRowIds.add(row.id);
+    return row;
+  };
+
+  for (const entry of entries) {
+    const user = userClaimByEmail.get(entry.email);
+    if (!user) {
+      const current = chooseReusableRow(entry, null);
+      if (current) {
+        updateEntries.push({
+          id: current.id,
+          data: {
+            ...entry,
+            active: true,
+            claimedAt: null,
+            claimedEmail: null,
+            claimedUserId: null,
+            claimedInviteTokenId: null,
+          },
+        });
+      } else {
+        createEntries.push({ ...entry, active: true });
+      }
+      continue;
+    }
+
+    const claimedData = {
+      ...entry,
+      active: true as const,
+      claimedAt: now,
+      claimedEmail: entry.email,
+      claimedUserId: user.id,
+    };
+    activeUserIds.push(user.id);
+    const currentClaim = chooseReusableRow(entry, user.id);
+    if (currentClaim) {
+      updateEntries.push({ id: currentClaim.id, data: { ...claimedData, claimedInviteTokenId: null } });
+    } else {
+      createEntries.push(claimedData);
+    }
+    if (user.role === "STUDENT" || user.role === "BROADCAST") {
+      userUpdates.push({ id: user.id, studentId: entry.studentId, gisu: entry.gisu, name: entry.name });
     }
   }
-  const createEntries = entries.flatMap((entry) => {
-    const claimedForEmail = claimedByEmail.get(entry.email);
-    if (claimedForEmail && claimedForEmail.studentId !== entry.studentId) {
-      throw new Error("ROSTER_CLAIMED_EMAIL_CONFLICT");
-    }
-    if (reactivateStudentIds.includes(entry.studentId)) return [];
-    const existing = existingClaims.get(entry.studentId);
-    return [{
-      ...entry,
-      ...(existing ? {
-        claimedAt: now,
-        claimedEmail: entry.email,
-        claimedUserId: existing.id,
-      } : {}),
-    }];
-  });
-  return { reactivateStudentIds, createEntries };
+
+  return { academicYear, updateEntries, createEntries, userUpdates, activeUserIds };
 }

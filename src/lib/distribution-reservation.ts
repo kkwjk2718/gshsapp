@@ -19,6 +19,7 @@ type Target = Readonly<{
   email: string;
   name?: string | null;
   studentId?: string | null;
+  rosterEntryId?: string | null;
   targetRole: string;
   targetGisu?: number | null;
 }>;
@@ -29,6 +30,7 @@ type Input = Readonly<{
   target: Target;
   now?: Date;
   actorId?: string | null;
+  rosterClaimRequired?: boolean;
 }>;
 
 export class DistributionReservationError extends Error {
@@ -50,6 +52,7 @@ export async function reserveDistribution(db: ReservationDb, input: Input) {
   const normalizedEmail = normalizeDistributionLogText(input.target.email.toLowerCase(), 254);
   const normalizedStudentId = normalizeDistributionLogText(input.target.studentId, 16);
   const normalizedName = normalizeDistributionLogText(input.target.name, 240);
+  const normalizedRosterEntryId = normalizeDistributionLogText(input.target.rosterEntryId, 128);
   const normalizedClientKey = normalizeDistributionLogText(input.clientKey, 128);
   if (!normalizedEmail) throw new Error("Invalid distribution email");
 
@@ -92,17 +95,22 @@ export async function reserveDistribution(db: ReservationDb, input: Input) {
     if (used > TOKEN_DISTRIBUTION_DAILY_LIMIT) throw new DistributionReservationError("QUOTA");
 
     let previousRosterInviteTokenId: string | null = null;
-    if (input.source === "PORTAL_AUTO") {
-      if (!normalizedStudentId || !normalizedName) throw new DistributionReservationError("DUPLICATE");
+    const rosterClaimRequired = input.source === "PORTAL_AUTO" || input.rosterClaimRequired === true;
+    if (rosterClaimRequired) {
+      if (!normalizedStudentId || !normalizedName || !normalizedRosterEntryId || !input.target.targetGisu) {
+        throw new DistributionReservationError("DUPLICATE");
+      }
       const rosterEntry = await tx.studentRosterEntry.findFirst({
         where: {
+          id: normalizedRosterEntryId,
           studentId: normalizedStudentId,
           name: normalizedName,
           email: normalizedEmail,
+          gisu: input.target.targetGisu,
           active: true,
           claimedUserId: null,
         },
-        select: { claimedAt: true, claimedInviteTokenId: true },
+        select: { id: true, claimedAt: true, claimedInviteTokenId: true },
       });
       if (!rosterEntry) throw new DistributionReservationError("DUPLICATE");
       previousRosterInviteTokenId = rosterEntry.claimedInviteTokenId;
@@ -131,21 +139,24 @@ export async function reserveDistribution(db: ReservationDb, input: Input) {
         tokenHash: hashInviteSecret(token),
         boundEmail: normalizedEmail,
         boundStudentId: normalizedStudentId,
-        rosterClaimRequired: input.source === "PORTAL_AUTO",
+        rosterClaimRequired,
+        rosterEntryId: rosterClaimRequired ? normalizedRosterEntryId : null,
         targetRole: input.target.targetRole,
         targetGisu: input.target.targetGisu ?? null,
         createdBy: input.createdBy,
         isUsed: false,
         batchId: null,
       },
-      select: { id: true, targetRole: true, targetGisu: true },
+      select: { id: true, targetRole: true, targetGisu: true, rosterEntryId: true },
     });
-    if (input.source === "PORTAL_AUTO") {
+    if (rosterClaimRequired) {
       const rosterClaim = await tx.studentRosterEntry.updateMany({
         where: {
+          id: normalizedRosterEntryId!,
           studentId: normalizedStudentId!,
           name: normalizedName!,
           email: normalizedEmail,
+          gisu: input.target.targetGisu!,
           active: true,
           claimedUserId: null,
           claimedInviteTokenId: previousRosterInviteTokenId,

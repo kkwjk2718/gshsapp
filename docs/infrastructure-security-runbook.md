@@ -19,6 +19,8 @@ The former public history contained operational credentials and user password ma
 
 6. Only after rotation, session revocation, history cleanup, and clean scans set production environment variable `SECURITY_ROTATION_COMPLETE=true`.
 
+Before the first hardened deployment, delete every historic GitHub Actions artifact containing `playwright-report` or `test-results` and confirm none remain downloadable. Treat every test and production E2E administrator credential previously supplied to Playwright as compromised, rotate it, and revoke its sessions. Future remote E2E must use a dedicated short-lived, least-privilege account and must never enable trace, screenshots, video, or raw Playwright artifact uploads.
+
 ## 2. Origin and SSH restriction
 
 The supplied address `172.15.10.34` is **not** RFC1918 private space (`172.16.0.0/12` is private). Confirm the intended subnet with the network owner before applying firewall rules. If it is intentionally routed as internal space, the explicit exception below documents that decision.
@@ -51,7 +53,7 @@ Install `/opt/gshsapp/.env` as a non-symlink file owned by root or the dedicated
 
 ## 2a. Student roster gate
 
-Before re-enabling membership or the token portal, resolve the known legacy duplicate student-ID group and export an authoritative CSV with the exact header `studentId,name,email`. In `/admin/settings`, use **Authoritative student roster** and type `REPLACE ROSTER`. Import is capped at 256 KiB/500 rows, validates all rows before one atomic transaction, preserves claimed identities, seeds exact existing accounts as already enrolled, and rejects ambiguous or conflicting legacy identities. The portal cannot be enabled with an empty roster. Never source this CSV from self-declared profile data.
+Before re-enabling membership or the token portal, resolve the known legacy duplicate student-ID group and export an authoritative CSV with the exact header `academicYear,gisu,studentId,name,email`. One file must contain one academic year. In `/admin/settings`, use **Authoritative student roster** and type `REPLACE ROSTER`. Import is capped at 256 KiB/500 rows, validates all rows before one atomic transaction, revokes outstanding self-service invites, keeps prior generations inactive, safely supports annual student-number reuse, seeds exact existing accounts as enrolled, and rejects ambiguous or conflicting identities. The portal cannot be enabled with an empty roster. Never source this CSV from self-declared profile data.
 
 ## 3. Backup and recovery
 
