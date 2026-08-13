@@ -56,6 +56,32 @@ describe("standalone artifact boundary", () => {
     await expect(assertStandaloneBoundary(root)).rejects.toThrow();
   });
 
+  it("rejects dependency links that escape the standalone root", async () => {
+    const root = await fixture(minimalAllowed);
+    const outsideRoot = await fs.mkdtemp(path.join(os.tmpdir(), "gshs-standalone-outside-"));
+    temporaryDirectories.push(outsideRoot);
+    const outside = path.join(outsideRoot, "node_modules", "dependency");
+    await fs.mkdir(outside, { recursive: true });
+    await fs.writeFile(path.join(outside, "package.json"), "{}");
+    const link = path.join(root, ".next", "node_modules", "escaped-dependency");
+    await fs.mkdir(path.dirname(link), { recursive: true });
+    await fs.symlink(outside, link, process.platform === "win32" ? "junction" : "dir");
+
+    await expect(assertStandaloneBoundary(root)).rejects.toThrow("Standalone output contains a link");
+  });
+
+  it("accepts dependency links that stay inside the standalone root", async () => {
+    const root = await fixture(minimalAllowed);
+    const target = path.join(root, "node_modules", ".store", "dependency");
+    await fs.mkdir(target, { recursive: true });
+    await fs.writeFile(path.join(target, "package.json"), "{}");
+    const link = path.join(root, ".next", "node_modules", "dependency");
+    await fs.mkdir(path.dirname(link), { recursive: true });
+    await fs.symlink(target, link, process.platform === "win32" ? "junction" : "dir");
+
+    await expect(assertStandaloneBoundary(root)).resolves.toEqual(expect.objectContaining({ filesChecked: 9 }));
+  });
+
   it("accepts the minimal runtime boundary", async () => {
     const root = await fixture(minimalAllowed);
     await expect(assertStandaloneBoundary(root)).resolves.toEqual(expect.objectContaining({ filesChecked: 7 }));

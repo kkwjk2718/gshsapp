@@ -44,9 +44,15 @@ async function walk(root) {
       if (stats.isSymbolicLink()) {
         const normalizedLink = normalize(childRelative);
         const target = await fs.realpath(absolute);
+        const relativeTarget = path.relative(root, target);
+        const containedTarget = relativeTarget !== "" &&
+          relativeTarget !== ".." &&
+          !relativeTarget.startsWith(`..${path.sep}`) &&
+          !path.isAbsolute(relativeTarget);
         const dependencyLink = normalizedLink.includes("node_modules/") &&
+          containedTarget &&
           target.split(path.sep).includes("node_modules");
-        if (process.platform !== "win32" || !dependencyLink) {
+        if (!dependencyLink) {
           throw new Error(`Standalone output contains a link: ${normalizedLink}`);
         }
         files.push(normalizedLink);
@@ -72,7 +78,8 @@ export async function assertStandaloneBoundary(root = path.resolve(".next", "sta
   const absoluteRoot = path.resolve(root);
   const rootStats = await fs.lstat(absoluteRoot);
   if (!rootStats.isDirectory() || rootStats.isSymbolicLink()) throw new Error("Standalone output is not a regular directory");
-  const files = await walk(absoluteRoot);
+  const canonicalRoot = await fs.realpath(absoluteRoot);
+  const files = await walk(canonicalRoot);
   const fileSet = new Set(files);
 
   for (const file of files) {
@@ -81,7 +88,7 @@ export async function assertStandaloneBoundary(root = path.resolve(".next", "sta
     if (file.endsWith(".nft.json")) {
       let parsed;
       try {
-        parsed = JSON.parse(await fs.readFile(path.join(absoluteRoot, ...file.split("/")), "utf8"));
+        parsed = JSON.parse(await fs.readFile(path.join(canonicalRoot, ...file.split("/")), "utf8"));
       } catch {
         throw new Error(`Invalid NFT manifest: ${file}`);
       }

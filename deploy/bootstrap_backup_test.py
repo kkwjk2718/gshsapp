@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import errno
 import datetime as dt
 import gzip
 import importlib.util
@@ -109,10 +108,20 @@ class BootstrapBackupDurabilityTests(unittest.TestCase):
             connection.commit()
             connection.close()
 
+            sync_calls = 0
+
+            def fail_first_directory_sync(_directory: Path) -> None:
+                nonlocal sync_calls
+                sync_calls += 1
+                if sync_calls == 1:
+                    raise bootstrap_backup.BootstrapBackupError(
+                        "simulated directory sync failure"
+                    )
+
             with mock.patch.object(
-                bootstrap_backup.os,
-                "open",
-                side_effect=OSError(errno.EIO, "simulated directory sync failure"),
+                bootstrap_backup,
+                "fsync_directory",
+                side_effect=fail_first_directory_sync,
             ):
                 with self.assertRaises(bootstrap_backup.BootstrapBackupError):
                     bootstrap_backup.create_backup(str(database), str(data), str(backup))

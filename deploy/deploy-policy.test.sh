@@ -138,17 +138,17 @@ if validate_runtime_env_file "$runtime_env" >/dev/null 2>&1; then
 fi
 
 entrypoint="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/docker-entrypoint.sh"
-if TRUSTED_PROXY_HOPS=0 AUTH_SECRET=production-test-secret-material-with-48-bytes-minimum "$entrypoint" node server.js >/dev/null 2>"$runtime_env"; then
+if TRUSTED_PROXY_HOPS=0 AUTH_SECRET=production-test-secret-material-with-48-bytes-minimum /bin/sh "$entrypoint" node server.js >/dev/null 2>"$runtime_env"; then
   echo "production web startup must reject zero trusted proxy hops" >&2
   exit 1
 fi
 grep -q "must be explicitly set to 1, 2, or 3" "$runtime_env"
-if TRUSTED_PROXY_HOPS=1 AUTH_SECRET=replace-with-a-long-random-secret "$entrypoint" node server.js >/dev/null 2>"$runtime_env"; then
+if TRUSTED_PROXY_HOPS=1 AUTH_SECRET=replace-with-a-long-random-secret /bin/sh "$entrypoint" node server.js >/dev/null 2>"$runtime_env"; then
   echo "production web startup must reject placeholder auth secrets" >&2
   exit 1
 fi
 grep -q "AUTH_SECRET must contain" "$runtime_env"
-TRUSTED_PROXY_HOPS=1 "$entrypoint" /usr/bin/true
+TRUSTED_PROXY_HOPS=1 /bin/sh "$entrypoint" /usr/bin/true
 
 IMAGE_TAG=sha-short
 if validate_deploy_identity >/dev/null 2>&1; then
