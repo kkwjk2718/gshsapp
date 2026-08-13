@@ -309,11 +309,12 @@ PY
 if command -v flock >/dev/null 2>&1; then
   busy_lock="$test_root/lifecycle.lock"
   ready="$test_root/lock-ready"
+  release="$test_root/lock-release"
   (
     exec 7>"$busy_lock"
     flock -n 7
     : >"$ready"
-    sleep 2
+    while [[ ! -e "$release" ]]; do sleep 0.01; done
   ) &
   holder=$!
   for _ in {1..100}; do [[ -e "$ready" ]] && break; sleep 0.01; done
@@ -323,13 +324,18 @@ if command -v flock >/dev/null 2>&1; then
     flock -n 8
     : >"$test_root/published"
   ) 2>/dev/null; then
+    : >"$release"
+    wait "$holder"
     echo "Non-blocking lifecycle acquisition accepted an active operation." >&2
     exit 1
   fi
   [[ ! -e "$test_root/published" ]] || {
+    : >"$release"
+    wait "$holder"
     echo "Publication continued after lifecycle lock contention." >&2
     exit 1
   }
+  : >"$release"
   wait "$holder"
 fi
 
