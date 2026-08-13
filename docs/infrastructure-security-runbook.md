@@ -42,7 +42,7 @@ Set the test/production GitHub Environment values:
 - `HOST_BIND_IP`: exact proxy-facing host interface, never `0.0.0.0`.
 - `ALLOW_PUBLIC_BIND=true` only for reviewed non-RFC1918 topology with the source-restricted UFW rule above.
 - `ORIGIN_FIREWALL_READY=true` only after rules and second SSH session are verified.
-- `TRUSTED_PROXY_HOPS`: exact number of controlled proxies that overwrite, rather than append untrusted, forwarding headers.
+- `TRUSTED_PROXY_HOPS`: exact number (1-3) of controlled proxies that overwrite, rather than append, untrusted forwarding headers. Production startup and deployment fail closed when it is absent or zero. Verify the edge removes any client-supplied `Forwarded`, `X-Forwarded-For`, and `X-Real-IP` values before writing its own chain.
 
 ## 3. Backup and recovery
 

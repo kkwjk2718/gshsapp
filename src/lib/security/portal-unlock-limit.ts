@@ -35,11 +35,12 @@ export class PortalUnlockLimiter {
     }, options.now);
   }
 
-  check(clientKey: string, networkKey: string): PortalUnlockDecision {
+  check(clientKey: string, networkKey: string | null): PortalUnlockDecision {
     const client = this.#clients.check(clientKey);
     if (client.locked) {
       return { allowed: false, retryAfterMs: client.retryAfterMs, dimension: "CLIENT" };
     }
+    if (networkKey === null) return { allowed: true, retryAfterMs: 0, dimension: "NONE" };
     const network = this.#networks.check(networkKey);
     if (network.locked) {
       return { allowed: false, retryAfterMs: network.retryAfterMs, dimension: "NETWORK" };
@@ -47,10 +48,15 @@ export class PortalUnlockLimiter {
     return { allowed: true, retryAfterMs: 0, dimension: "NONE" };
   }
 
-  recordFailure(clientKey: string, networkKey: string): PortalUnlockDecision {
+  recordFailure(clientKey: string, networkKey: string | null): PortalUnlockDecision {
     const before = this.check(clientKey, networkKey);
     if (!before.allowed) return before;
     const client = this.#clients.recordFailure(clientKey);
+    if (networkKey === null) {
+      return client.locked
+        ? { allowed: false, retryAfterMs: client.retryAfterMs, dimension: "CLIENT" }
+        : { allowed: true, retryAfterMs: 0, dimension: "NONE" };
+    }
     const network = this.#networks.recordFailure(networkKey);
     if (client.locked) return { allowed: false, retryAfterMs: client.retryAfterMs, dimension: "CLIENT" };
     if (network.locked) return { allowed: false, retryAfterMs: network.retryAfterMs, dimension: "NETWORK" };

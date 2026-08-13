@@ -38,4 +38,12 @@ describe("signup attempt limiter", () => {
 
     expect(limiter.check("fourth", "network-d").locked).toBe(false);
   });
+
+  it("skips the network dimension instead of sharing an unknown-address bucket", () => {
+    const limiter = createSignupAttemptLimiter({ identifierMaxAttempts: 2, networkMaxAttempts: 2 });
+
+    limiter.recordAttempt("student-a", null);
+    limiter.recordAttempt("student-b", null);
+    expect(limiter.check("student-c", null).locked).toBe(false);
+  });
 });

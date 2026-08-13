@@ -30,4 +30,12 @@ describe("portal unlock limiter", () => {
     expect(limiter.check("c", "school")).toMatchObject({ allowed: true });
     expect(limiter.recordFailure("c", "school")).toMatchObject({ allowed: false, dimension: "NETWORK" });
   });
+
+  it("does not turn an unavailable address into a shared global network bucket", () => {
+    const limiter = new PortalUnlockLimiter({ clientMaxFailures: 2, networkMaxFailures: 2 });
+
+    expect(limiter.recordFailure("a", null)).toMatchObject({ allowed: true });
+    expect(limiter.recordFailure("b", null)).toMatchObject({ allowed: true });
+    expect(limiter.check("c", null)).toMatchObject({ allowed: true });
+  });
 });

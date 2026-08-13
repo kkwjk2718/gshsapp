@@ -44,3 +44,19 @@ validate_bind_policy() {
     return 1
   fi
 }
+
+validate_runtime_env_file() {
+  local runtime_env_file="$1"
+  if [[ ! -f "$runtime_env_file" || -L "$runtime_env_file" ]]; then
+    echo "The production runtime environment file must be a regular, non-symlink file." >&2
+    return 1
+  fi
+
+  local matches
+  matches="$(grep -E '^TRUSTED_PROXY_HOPS=' "$runtime_env_file" || true)"
+  if [[ "$(printf '%s\n' "$matches" | grep -c . || true)" != "1" ]] ||
+     [[ ! "$matches" =~ ^TRUSTED_PROXY_HOPS=\"?[1-3]\"?$ ]]; then
+    echo "TRUSTED_PROXY_HOPS must occur exactly once and be 1, 2, or 3 in the production runtime environment." >&2
+    return 1
+  fi
+}

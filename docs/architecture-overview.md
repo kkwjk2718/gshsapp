@@ -71,7 +71,7 @@ Route group 기준:
 - `src/auth.config.ts`: Edge 호환 route UX guard와 JWT/session claim 전달(DB 접근 금지)
 - `src/lib/current-user.ts`: Node 런타임의 DB 기반 현재 사용자·관리자 인가
 - `src/lib/system-log-store.ts`: `SystemLog` 정규화, 1~90일 보관, 공개/전체 행 상한과 oldest-first pruning
-- 클라이언트 주소 경계: 로깅·공개 텔레메트리·요청 제한은 `TRUSTED_PROXY_HOPS`만 사용한다. 기본값 `0`은 `X-Forwarded-For`를 무시하고 공유 unknown 버킷을 사용하며, 설정값은 오른쪽부터 신뢰할 프록시 홉 수 `0..3`만 허용한다. 로그인/회원가입/포털 제한기는 계정·클라이언트 임계값보다 공유 학교 NAT의 네트워크 임계값을 높게 두고 key 상한 도달 시 전역 차단 대신 LRU 항목을 교체한다. 회원가입 제한과 초대 사전 조회는 bcrypt보다 먼저 실행된다.
+- 클라이언트 주소 경계: 운영 컨테이너는 `TRUSTED_PROXY_HOPS=1..3`의 명시적 설정 없이는 시작하지 않는다. 이 값은 `X-Forwarded-For`를 덮어쓰는 통제된 프록시의 정확한 수다. 주소를 결정할 수 없으면 로그인·회원가입·포털 제한기는 공유 `unknown` 네트워크 버킷을 만들지 않고 식별자·클라이언트 차원만 적용한다. 학교 NAT의 네트워크 임계값은 계정·클라이언트 임계값보다 높고, key 상한에서는 전역 차단 대신 LRU 항목을 교체한다. 회원가입 제한과 초대 사전 조회는 bcrypt보다 먼저 실행된다.
 - `src/lib/audit.ts`: 공개 텔레메트리와 분리된 폐쇄형 관리자 감사 이벤트 기록
 - `InviteToken.token`은 7일 legacy 호환을 위한 nullable 필드이고 신규 발급은 `tokenHash`만 저장한다. 원문은 DB에서 복구하지 않는다.
 - `AuditLog.actorId`는 사용자 삭제 뒤에도 감사 행을 보존하기 위해 nullable `ON DELETE SET NULL` 관계를 사용한다.

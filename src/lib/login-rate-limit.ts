@@ -33,15 +33,16 @@ export function createLoginAttemptLimiter(options: LoginLimiterOptions = {}) {
   }, options.now);
 
   return {
-    check(identifierKey: string, networkKey: string) {
+    check(identifierKey: string, networkKey: string | null) {
       const identifier = identifiers.check(identifierKey);
-      if (identifier.locked) return identifier;
+      if (identifier.locked || networkKey === null) return identifier;
       return networks.check(networkKey);
     },
-    recordFailure(identifierKey: string, networkKey: string) {
+    recordFailure(identifierKey: string, networkKey: string | null) {
       const current = this.check(identifierKey, networkKey);
       if (current.locked) return current;
       const identifier = identifiers.recordFailure(identifierKey);
+      if (networkKey === null) return identifier;
       const network = networks.recordFailure(networkKey);
       return identifier.locked ? identifier : network;
     },

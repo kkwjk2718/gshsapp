@@ -29,12 +29,13 @@ export function createSignupAttemptLimiter(options: SignupLimiterOptions = {}) {
   }, options.now);
 
   return {
-    check(identifierKey: string, networkKey: string) {
+    check(identifierKey: string, networkKey: string | null) {
       const identifier = identifiers.check(identifierKey);
-      return identifier.locked ? identifier : networks.check(networkKey);
+      return identifier.locked || networkKey === null ? identifier : networks.check(networkKey);
     },
-    recordAttempt(identifierKey: string, networkKey: string) {
+    recordAttempt(identifierKey: string, networkKey: string | null) {
       const identifier = identifiers.recordFailure(identifierKey);
+      if (networkKey === null) return identifier;
       const network = networks.recordFailure(networkKey);
       return identifier.locked ? identifier : network;
     },

@@ -51,4 +51,13 @@ describe("login failure persistence boundary", () => {
     expect(limiter.check("id-c", "school-nat")).toMatchObject({ locked: false });
     expect(limiter.recordFailure("id-c", "school-nat")).toMatchObject({ locked: true });
   });
+
+  it("never creates a shared global bucket when the client address is unavailable", async () => {
+    const { createLoginAttemptLimiter } = await import("./login-rate-limit");
+    const limiter = createLoginAttemptLimiter({ identifierMaxFailures: 2, networkMaxFailures: 2 });
+
+    expect(limiter.recordFailure("id-a", null)).toMatchObject({ locked: false });
+    expect(limiter.recordFailure("id-b", null)).toMatchObject({ locked: false });
+    expect(limiter.check("id-c", null)).toMatchObject({ locked: false });
+  });
 });

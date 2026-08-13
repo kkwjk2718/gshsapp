@@ -7,6 +7,7 @@ source "$DEPLOY_ROOT/deploy-policy.sh"
 PROJECT_NAME="${PROJECT_NAME:-gshsapp}"
 COMPOSE_FILE="${COMPOSE_FILE:-$DEPLOY_ROOT/compose.yml}"
 DEPLOY_ENV_FILE="${DEPLOY_ENV_FILE:-$DEPLOY_ROOT/.deploy.env}"
+APP_ENV_FILE="${APP_ENV_FILE:-$DEPLOY_ROOT/.env}"
 DATA_DIR="${DATA_DIR:-$DEPLOY_ROOT/data}"
 BACKUP_DIR="${BACKUP_DIR:-$DEPLOY_ROOT/backup}"
 DB_FILE="${DB_FILE:-$DATA_DIR/dev.db}"
@@ -158,6 +159,7 @@ require_command docker
 require_command curl
 require_command "$PYTHON_BIN"
 require_command flock
+validate_runtime_env_file "$APP_ENV_FILE"
 validate_deploy_identity
 if [[ "${REQUIRE_EXPLICIT_BIND:-false}" == "true" && -z "$RAW_HOST_BIND_IP" ]]; then
   echo "HOST_BIND_IP must be configured explicitly for this deployment environment." >&2

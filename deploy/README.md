@@ -97,6 +97,7 @@ BACKUP_DIR=/app/data/backup
 RESTORE_ROOT=/app/data/restore
 WEATHER_CACHE_PATH=/app/data/weather-cache.json
 AUTH_SECRET=replace-me
+TRUSTED_PROXY_HOPS=1
 AUTH_TRUST_HOST=true
 AUTH_URL=https://test.gshs.app
 NEXTAUTH_URL=https://test.gshs.app

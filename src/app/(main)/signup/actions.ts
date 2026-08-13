@@ -11,7 +11,7 @@ import { validatePassword } from "@/lib/security/password-policy";
 import { hashInviteSecret } from "@/lib/security/invite-token";
 import { validateSignupInviteIdentity } from "@/lib/security/signup-identity";
 import { parseTrustedProxyHops, resolveTrustedClientAddress } from "@/lib/security/client-address";
-import { getApplicationSecuritySecret, hashSecurityPrincipal, networkPrincipal } from "@/lib/security/principal-key";
+import { getApplicationSecuritySecret, hashSecurityPrincipal } from "@/lib/security/principal-key";
 import { signupAttemptLimiter } from "@/lib/signup-rate-limit";
 
 const LOGIN_ID = /^[A-Za-z0-9._-]{3,64}$/u;
@@ -30,7 +30,7 @@ async function getSignupAttemptKeys(userId: string) {
   const secret = getApplicationSecuritySecret();
   return {
     identifierKey: hashSecurityPrincipal("signup-identifier", userId.toLowerCase(), secret),
-    networkKey: hashSecurityPrincipal("signup-network", networkPrincipal(address), secret),
+    networkKey: address === null ? null : hashSecurityPrincipal("signup-network", address, secret),
   };
 }
 

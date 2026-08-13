@@ -17,6 +17,8 @@
 - 운영 VM에 `/opt/gshsapp/{data,backup,.env}`가 준비되어 있음
 - 운영 `.env`가 `AUTH_URL`, `NEXTAUTH_URL`, `NEXT_PUBLIC_APP_URL`에 모두 `https://gshs.app`을 사용함
 - `DATABASE_URL=file:/app/data/dev.db`
+- 운영 `.env`의 `TRUSTED_PROXY_HOPS`가 전달 헤더를 덮어쓰는 통제된 프록시 수(1~3)와 정확히 일치함
+- 리버스 프록시가 클라이언트의 `Forwarded`, `X-Forwarded-For`, `X-Real-IP`를 제거한 뒤 자체 전달 헤더를 기록함
 - 리버스 프록시가 `gshs.app`을 운영 VM `1234` 포트로 전달함
 - GitHub `production` environment에 승인 규칙이 활성화되어 있음
 - GitHub `production` environment에 아래 값이 준비되어 있음

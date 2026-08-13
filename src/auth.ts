@@ -9,7 +9,7 @@ import { isLoginTemporarilyLocked, loginAttemptLimiter } from '@/lib/login-rate-
 import { MEMBER_SERVICE_SUSPENDED } from '@/lib/member-service-suspension';
 import bcrypt from 'bcryptjs';
 import { verifyLoginCandidate } from '@/lib/security/login-verification';
-import { getApplicationSecuritySecret, hashSecurityPrincipal, networkPrincipal } from '@/lib/security/principal-key';
+import { getApplicationSecuritySecret, hashSecurityPrincipal } from '@/lib/security/principal-key';
 import { parseTrustedProxyHops, resolveTrustedClientAddress } from '@/lib/security/client-address';
 import { isValidBcryptInput } from '@/lib/security/password-policy';
 
@@ -54,7 +54,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           const clientAddress = resolveTrustedClientAddress({
             forwardedFor: request.headers.get("x-forwarded-for"),
           }, { trustedProxyHops: parseTrustedProxyHops(process.env.TRUSTED_PROXY_HOPS) });
-          const networkKey = hashSecurityPrincipal("login-network", networkPrincipal(clientAddress), securitySecret);
+          const networkKey = clientAddress === null
+            ? null
+            : hashSecurityPrincipal("login-network", clientAddress, securitySecret);
 
           if (loginAttemptLimiter.check(identifierKey, networkKey).locked || await isLoginTemporarilyLocked(userId)) {
             await logAction("LOGIN_BLOCKED", { loginId: userId, reason: "rate-limit" }, undefined, { userId: null });

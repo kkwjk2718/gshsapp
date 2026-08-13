@@ -6,7 +6,7 @@ import { getPortalClientKey, hasValidPortalSession, setPortalSessionCookie } fro
 import { sendPortalStudentInvite } from "@/lib/token-portal";
 import { getTokenPortalSettings } from "@/lib/system-settings";
 import { MEMBER_SERVICE_SUSPENDED } from "@/lib/member-service-suspension";
-import { getApplicationSecuritySecret, hashSecurityPrincipal, networkPrincipal } from "@/lib/security/principal-key";
+import { getApplicationSecuritySecret, hashSecurityPrincipal } from "@/lib/security/principal-key";
 import { PortalUnlockLimiter } from "@/lib/security/portal-unlock-limit";
 import { headers } from "next/headers";
 import { parseTrustedProxyHops, resolveTrustedClientAddress } from "@/lib/security/client-address";
@@ -27,7 +27,7 @@ async function getPortalUnlockKeys() {
   });
   return {
     clientKey: hashSecurityPrincipal("portal-client", rawClientKey, secret),
-    networkKey: hashSecurityPrincipal("portal-network", networkPrincipal(address), secret),
+    networkKey: address === null ? null : hashSecurityPrincipal("portal-network", address, secret),
   };
 }
 
