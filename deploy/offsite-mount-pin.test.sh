@@ -64,7 +64,7 @@ validator_source="$(<"$VALIDATOR")"
 for installer in install-backup-timer.sh install-deploy-service.sh; do
   installer_source="$(<"$SCRIPT_ROOT/$installer")"
   [[ "$installer_source" == *'--property=PrivateMounts --property=MountFlags --property=BindPaths'* ]]
-  [[ "$installer_source" == *'"MountFlags": "262144"'* ]]
+  [[ "$installer_source" == *'mount_flags not in {"private", "262144"}'* ]]
 done
 
 if [[ "${GSHSAPP_STATIC_TEST_ONLY:-0}" == 1 ]]; then
@@ -194,7 +194,7 @@ PROBE
   done
   [[ -e "$READY" ]] || { printf '%s\n' "systemd pinned namespace did not become ready" >&2; exit 1; }
   effective_mount_flags="$(systemctl show "$systemd_unit" --property=MountFlags --value)"
-  [[ "$effective_mount_flags" == 262144 ]] || {
+  [[ "$effective_mount_flags" == private || "$effective_mount_flags" == 262144 ]] || {
     printf 'unexpected effective MountFlags value: <%q>\n' "$effective_mount_flags" >&2
     exit 1
   }

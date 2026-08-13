@@ -182,9 +182,11 @@ for line in text.splitlines():
     if key in values:
         raise SystemExit(1)
     values[key] = value
+mount_flags = values.pop("MountFlags", None)
+if mount_flags not in {"private", "262144"}:
+    raise SystemExit(1)
 if values != {
     "PrivateMounts": "yes",
-    "MountFlags": "262144",
     "BindPaths": f"{expected}:{expected}:rbind",
 }:
     raise SystemExit(1)
