@@ -193,7 +193,11 @@ PROBE
     sleep 0.05
   done
   [[ -e "$READY" ]] || { printf '%s\n' "systemd pinned namespace did not become ready" >&2; exit 1; }
-  [[ "$(systemctl show "$systemd_unit" --property=MountFlags --value)" == 262144 ]]
+  effective_mount_flags="$(systemctl show "$systemd_unit" --property=MountFlags --value)"
+  [[ "$effective_mount_flags" == 262144 ]] || {
+    printf 'unexpected effective MountFlags value: <%q>\n' "$effective_mount_flags" >&2
+    exit 1
+  }
   umount -- "$OFFSITE_DIR"
   mount -t tmpfs -o rw,nodev,nosuid,noexec,mode=0700 tmpfs "$OFFSITE_DIR"
   printf '%s\n' systemd-replacement >"$OFFSITE_DIR/generation"
