@@ -26,7 +26,10 @@ if validate_bind_policy >/dev/null 2>&1; then
 fi
 
 ALLOW_PUBLIC_BIND=true
-validate_bind_policy
+if validate_bind_policy >/dev/null 2>&1; then
+  echo "wildcard bind must remain forbidden even with a public-address override" >&2
+  exit 1
+fi
 
 HOST_BIND_IP=172.15.10.34
 ALLOW_PUBLIC_BIND=false

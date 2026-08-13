@@ -35,10 +35,8 @@ validate_bind_policy() {
 
   case "${HOST_BIND_IP:-}" in
     0.0.0.0)
-      if [[ "${ALLOW_PUBLIC_BIND:-false}" != "true" ]]; then
-        echo "Wildcard/blank bind refused. Set a private interface address, or explicitly set ALLOW_PUBLIC_BIND=true with a source-restricted firewall." >&2
-        return 1
-      fi
+      echo "Wildcard bind refused. Set the exact proxy-facing interface address and a source-restricted firewall." >&2
+      return 1
       ;;
   esac
   if [[ "$is_private" != "true" && "${ALLOW_PUBLIC_BIND:-false}" != "true" ]]; then
