@@ -39,6 +39,12 @@ function validForm() {
   return form;
 }
 
+function validFormWithUserId(userId: string) {
+  const form = validForm();
+  form.set("userId", userId);
+  return form;
+}
+
 describe("signup cost ordering", () => {
   afterEach(() => vi.useRealTimers());
   beforeEach(() => {
@@ -94,6 +100,23 @@ describe("signup cost ordering", () => {
     expect(mocks.preflight).not.toHaveBeenCalled();
     expect(mocks.hash).not.toHaveBeenCalled();
     expect(mocks.redeem).not.toHaveBeenCalled();
+  });
+
+  it("does not fan out bcrypt for parallel user IDs presenting the same invite", async () => {
+    mocks.preflight.mockResolvedValue({ id: "invite" });
+    let releaseHash!: () => void;
+    mocks.hash.mockImplementationOnce(() => new Promise<string>((resolve) => {
+      releaseHash = () => resolve("hash");
+    }));
+    const { signup } = await import("./actions");
+
+    const first = signup(validFormWithUserId("student01"));
+    await vi.waitFor(() => expect(mocks.hash).toHaveBeenCalledTimes(1));
+    await expect(signup(validFormWithUserId("student02"))).resolves.toHaveProperty("error");
+    expect(mocks.preflight).toHaveBeenCalledTimes(1);
+    expect(mocks.hash).toHaveBeenCalledTimes(1);
+    releaseHash();
+    await first;
   });
 
   it("rejects a missing trusted proxy address before lookup or bcrypt", async () => {

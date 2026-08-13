@@ -13,6 +13,7 @@ import { validateSignupInviteIdentity } from "@/lib/security/signup-identity";
 import { isSensitiveClientAddressTrusted, parseTrustedProxyHops, resolveTrustedClientAddress } from "@/lib/security/client-address";
 import { getApplicationSecuritySecret, hashSecurityPrincipal } from "@/lib/security/principal-key";
 import { signupAttemptLimiter } from "@/lib/signup-rate-limit";
+import { credentialVerificationGate, signupInviteVerificationGate } from "@/lib/security/bounded-concurrency-gate";
 
 const LOGIN_ID = /^[A-Za-z0-9._-]{3,64}$/u;
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/u;
@@ -71,15 +72,23 @@ export async function signup(formData: FormData) {
     validateInvite: (invite: Readonly<{ targetRole: string }>) => validateSignupInviteIdentity(invite, studentId || null),
   } as const;
 
+  const invitePermit = signupInviteVerificationGate.tryAcquire(inviteInput.tokenHash);
+  if (!invitePermit) return { error: "This invitation is already being verified. Please try again shortly." };
+  let preflightComplete = false;
+
   try {
     await preflightInviteRedemption(prisma, inviteInput);
-  } catch (error) {
-    if (error instanceof InviteRedemptionError) return genericInviteError();
-    return { error: "Unable to validate the invitation." };
-  }
+    preflightComplete = true;
 
-  const passwordHash = await bcrypt.hash(password, 10);
-  try {
+    const verificationPermit = credentialVerificationGate.tryAcquire();
+    if (!verificationPermit) return { error: "Too many concurrent password operations. Please try again shortly." };
+    let passwordHash: string;
+    try {
+      passwordHash = await bcrypt.hash(password, 10);
+    } finally {
+      verificationPermit.release();
+    }
+
     await redeemInvite(prisma, {
       presentedSecret: token,
       ...inviteInput,
@@ -95,7 +104,11 @@ export async function signup(formData: FormData) {
     });
   } catch (error) {
     if (error instanceof InviteRedemptionError) return genericInviteError();
-    return { error: "Unable to create the account. The login ID or email may already exist." };
+    return preflightComplete
+      ? { error: "Unable to create the account. The login ID or email may already exist." }
+      : { error: "Unable to validate the invitation." };
+  } finally {
+    invitePermit.release();
   }
 
   redirect("/login");

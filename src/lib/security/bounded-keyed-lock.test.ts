@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createLoginAttemptLimiter } from "@/lib/login-rate-limit";
 import { PortalUnlockLimiter } from "@/lib/security/portal-unlock-limit";
 import { BoundedAttemptAdmission } from "./attempt-admission";
-import { BoundedConcurrencyGate } from "./bounded-concurrency-gate";
+import { BoundedConcurrencyGate, BoundedKeyedConcurrencyGate } from "./bounded-concurrency-gate";
 import { BoundedKeyedLock, BoundedKeyedLockError, securityPrincipalLockKey } from "./bounded-keyed-lock";
 
 describe("bounded keyed authentication serialization", () => {
@@ -79,6 +79,17 @@ describe("bounded keyed authentication serialization", () => {
     expect(globalGate.tryAcquire()).toBeNull();
     first!.release();
     expect(globalGate.tryAcquire()).not.toBeNull();
+  });
+
+  it("admits only one active operation for the same bearer secret", () => {
+    const gate = new BoundedKeyedConcurrencyGate(2);
+    const first = gate.tryAcquire("same-invite-hash");
+    expect(first).not.toBeNull();
+    expect(gate.tryAcquire("same-invite-hash")).toBeNull();
+    expect(gate.tryAcquire("different-invite-hash")).not.toBeNull();
+    expect(gate.tryAcquire("third-invite-hash")).toBeNull();
+    first!.release();
+    expect(gate.tryAcquire("same-invite-hash")).not.toBeNull();
   });
 
   it("fails closed instead of growing unbounded queues or active key state", async () => {
