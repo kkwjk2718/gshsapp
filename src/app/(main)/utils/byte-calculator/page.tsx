@@ -37,7 +37,7 @@ export default function ByteCalculatorPage() {
           <Calculator className="h-6 w-6" />
         </div>
         <div>
-          <h1 className="text-2xl font-bold">자기부 바이트 계산기</h1>
+          <h1 className="text-2xl font-bold">생기부 바이트 계산기</h1>
           <p className="text-slate-500">
             나이스(NEIS) 기준으로 입력한 내용의 바이트 수를 계산합니다.
           </p>
