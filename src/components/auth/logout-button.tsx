@@ -1,12 +1,13 @@
 import type { MouseEventHandler } from "react";
 import { cn } from "@/lib/utils";
 import { LogOut } from "lucide-react";
+import { logout } from "@/app/logout/actions";
 
 type LogoutButtonProps = {
   className?: string;
   next?: string;
   testId?: string;
-  onClick?: MouseEventHandler<HTMLAnchorElement>;
+  onClick?: MouseEventHandler<HTMLButtonElement>;
 };
 
 export function LogoutButton({
@@ -16,15 +17,18 @@ export function LogoutButton({
   onClick,
 }: LogoutButtonProps) {
   return (
-    <a
-      href={`/logout?next=${encodeURIComponent(next)}`}
-      data-testid={testId}
-      onClick={onClick}
-      className={cn("w-full flex items-center gap-3 px-4 py-2 text-xs rounded-lg transition-colors cursor-pointer", className)}
-      style={{ color: "var(--foreground)" }}
-    >
-      <LogOut className="w-3 h-3" />
-      로그아웃
-    </a>
+    <form action={logout} className="w-full">
+      <input type="hidden" name="next" value={next} />
+      <button
+        type="submit"
+        data-testid={testId}
+        onClick={onClick}
+        className={cn("w-full flex items-center gap-3 px-4 py-2 text-xs rounded-lg transition-colors cursor-pointer", className)}
+        style={{ color: "var(--foreground)" }}
+      >
+        <LogOut className="w-3 h-3" />
+        로그아웃
+      </button>
+    </form>
   );
 }

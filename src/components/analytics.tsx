@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { pageview } from "@/lib/ga";
 import { sendNonBlockingJson } from "@/lib/client-event";
 
-export function Analytics() {
+export function Analytics({ nonce }: { nonce?: string }) {
   const pathname = usePathname();
   const [googleAnalyticsId, setGoogleAnalyticsId] = useState<string | null>(null);
   const [isGoogleAnalyticsReady, setIsGoogleAnalyticsReady] = useState(false);
@@ -88,6 +88,7 @@ export function Analytics() {
             key={`ga-src-${googleAnalyticsId}`}
             id={`ga-src-${googleAnalyticsId}`}
             strategy="afterInteractive"
+            nonce={nonce}
             src={`https://www.googletagmanager.com/gtag/js?id=${googleAnalyticsId}`}
             onReady={() => setIsGoogleAnalyticsReady(true)}
           />
@@ -95,6 +96,7 @@ export function Analytics() {
             key={`ga-init-${googleAnalyticsId}`}
             id={`ga-init-${googleAnalyticsId}`}
             strategy="afterInteractive"
+            nonce={nonce}
             dangerouslySetInnerHTML={{
               __html: `
                 window.dataLayer = window.dataLayer || [];

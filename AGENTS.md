@@ -43,7 +43,9 @@ GSHS.app은 경남과학고등학교 구성원을 위한 통합 웹 서비스입
 7. `docs/architecture-overview.md`
 8. `DEPLOY.md`
 9. `docs/cicd-setup.md`
-10. `docs/repository-governance.md`
+10. `docs/root-operations-bootstrap.md`
+11. `docs/production-launch-runbook.md`
+12. `docs/repository-governance.md`
 
 문맥이 부족할 때 최소 우선순위:
 
@@ -75,8 +77,11 @@ GSHS.app은 경남과학고등학교 구성원을 위한 통합 웹 서비스입
 
 - Docker 내부 SQLite 경로는 `file:/app/data/dev.db`
 - 실제 배포 기준은 `sha-<commit>` 태그
+- 태그와 함께 immutable `sha256:<digest>`를 검증
 - GitHub Release는 `vX.Y.Z` semver 태그
 - `latest`는 운영 배포 판단 기준이 아님
+- GitHub Actions는 GitHub-hosted 검증·publish만 수행하며 호스트를 변경하지 않음
+- 호스트 변경은 OOB 인증된 root control과 systemd unit만 수행
 - Google Analytics는 `/admin/settings`에서 관리
 - 토큰 배부 포털 메일 발송은 Brevo API 기반
 
@@ -102,7 +107,9 @@ GSHS.app은 경남과학고등학교 구성원을 위한 통합 웹 서비스입
 - `src/app/(main)/admin/settings`
 - `src/app/(main)/admin/tokens`
 - `.github/workflows/publish-and-deploy-test.yml`
+- `.github/workflows/preproduction-rehearsal.yml`
 - `.github/workflows/deploy-prod.yml`
+- `deploy/install-root-operations.sh`
 - `deploy/deploy.sh`
 
 ## 5. 제품 기능 빠른 지도
@@ -205,21 +212,30 @@ npm run test:e2e:smoke
 
 CI/CD 구조:
 
-- `ci.yml`: 품질 검사
-- `publish-and-deploy-test.yml`: 테스트 자동 배포
-- `preproduction-rehearsal.yml`: 후보 SHA 리허설
-- `deploy-prod.yml`: 운영 수동 배포
+- `ci.yml`: lint, test, firewall policy, build 검사
+- `secret-scan.yml`: tracked tree와 Git 이력 secret 검사
+- `publish-and-deploy-test.yml`: 보호된 `main`의 exact SHA 이미지 publish와 provenance 생성
+- `preproduction-rehearsal.yml`: 이미 설치된 테스트 origin의 exact 후보 공개 검증과 proof 생성
+- `deploy-prod.yml`: 이미 설치된 운영 origin 공개 검증과 SHA-bound semver Release 생성
+- `production-health-monitor.yml`: 선택적으로 공개 운영 URL만 주기 확인
+
+모든 workflow job은 GitHub-hosted `ubuntu-latest`에서 실행합니다. Actions는 테스트·운영 호스트에 SSH하거나 Docker, SQLite, backup mount, runtime secret, systemd에 접근하지 않습니다.
 
 이미지 정책:
 
-- `sha-<commit>`
-- `main`
-- `latest`
+- 배포 후보는 exact `sha-<40-hex commit>`와 `sha256:<64-hex>` digest의 결합
+- `main`, `latest`, 로컬 image ID는 승격 근거가 아님
 
-실제 배포 기준:
+호스트 배포 순서:
 
-- 테스트 서버: `sha-<commit>`
-- 운영 서버: `sha-<commit>`
+1. OOB digest로 root control 설치·검증
+2. root-only config와 offsite mount 구성
+3. exact 후보 승인
+4. `$OFFSITE_DIR/.gshsapp-receipts`로 검증된 세대를 빈 data root에 import
+5. 같은 후보의 restore drill
+6. `systemctl start gshsapp-deploy.service`
+
+운영 승인은 동일 후보의 fresh preproduction proof run ID도 요구합니다. 정기 backup은 Actions schedule이 아니라 호스트의 `gshsapp-backup.timer`가 수행합니다.
 
 Release 정책:
 
@@ -228,16 +244,22 @@ Release 정책:
 
 ## 9. 서버 구조와 데이터 규칙
 
-서버 배포 경로:
+서버 운영 경로:
 
 ```text
+/usr/local/lib/gshsapp-operations/
+/etc/gshsapp-operations/
+  host-role
+  deploy.env
+  backup.env
+  github-token
 /opt/gshsapp
   .env
-  .deploy.env
-  compose.yml
-  deploy.sh
   data/
   backup/
+  root-backup/                    # root-only DR generations
+$OFFSITE_DIR/
+  .gshsapp-receipts/
 ```
 
 SQLite 규칙:
@@ -287,12 +309,14 @@ SQLite 규칙:
 
 배포 이상 시:
 
-1. GitHub Actions 로그 확인
-2. runner 상태 확인
-3. `docker compose ps`
-4. `docker compose logs --tail=200`
-5. `curl http://127.0.0.1:1234/api/health`
-6. 서버 `.env` 확인
+1. Actions 단계라면 publish/proof/공개 verification의 exact SHA·digest 확인
+2. `systemctl status gshsapp-deploy.service`
+3. `journalctl -u gshsapp-deploy.service --since '-30 minutes' --no-pager`
+4. 설치된 control manifest와 `/etc/gshsapp-operations/deploy.env` 확인
+5. `/opt/gshsapp/deployment-phase.json`과 recovery 결과 확인
+6. 공개 origin의 `/api/health` version·digest 확인
+
+임의로 mutable checkout의 `deploy.sh`를 실행하거나 `docker compose up`으로 과거 image를 재시작하지 않습니다.
 
 권한/리다이렉트 이상 시:
 
@@ -324,7 +348,7 @@ SQLite 규칙:
 아래를 바꾸면 문서 갱신이 필요합니다.
 
 - workflow 동작
-- `/opt/gshsapp` 배포 구조
+- `/usr/local/lib/gshsapp-operations`, `/etc/gshsapp-operations`, `/opt/gshsapp` 구조
 - 필수 환경 변수
 - 인증 경계
 - 관리자 설정 동작
@@ -344,6 +368,7 @@ SQLite 규칙:
 - `CONTRIBUTING.md`
 - `DEPLOY.md`
 - `docs/cicd-setup.md`
+- `docs/root-operations-bootstrap.md`
 - `docs/production-launch-runbook.md`
 - `docs/repository-governance.md`
 
@@ -368,5 +393,6 @@ SQLite 규칙:
 - [DEPLOY.md](./DEPLOY.md)
 - [docs/cicd-setup.md](./docs/cicd-setup.md)
 - [docs/server-bootstrap.md](./docs/server-bootstrap.md)
+- [docs/root-operations-bootstrap.md](./docs/root-operations-bootstrap.md)
 - [docs/production-launch-runbook.md](./docs/production-launch-runbook.md)
 - [docs/repository-governance.md](./docs/repository-governance.md)

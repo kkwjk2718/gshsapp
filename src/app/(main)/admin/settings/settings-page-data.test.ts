@@ -48,6 +48,7 @@ describe("settings-page-data", () => {
         remaining: 288,
         isLimitReached: false,
       }),
+      getRosterCounts: async () => ({ active: 42, claimed: 12 }),
     };
 
     it("loads settings and backups without warnings", async () => {
@@ -101,6 +102,8 @@ describe("settings-page-data", () => {
           todaySentCount: 12,
           remainingDailyQuota: 288,
           isQuotaReached: false,
+          activeRosterCount: 42,
+          claimedRosterCount: 12,
         },
         warnings: [],
       });

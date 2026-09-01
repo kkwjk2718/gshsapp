@@ -1,61 +1,124 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
 
 import { prisma } from "@/lib/db";
-import { getSongTimeRanges, getKSTDate, isBreakTime } from "@/lib/date-utils";
+import { getKSTDate, isBreakTime } from "@/lib/date-utils";
 import { getUserGrade } from "@/lib/grade-utils";
 import { logAction } from "@/lib/logger";
+import { parseTrustedProxyHops, resolveTrustedClientAddress } from "@/lib/security/client-address";
+import { BoundedRateLimiter } from "@/lib/security/rate-limit";
+import { canonicalizeYouTubeUrl } from "@/lib/security/youtube-url";
 import { getCurrentUser } from "@/lib/session";
+import { canAccessCoreMemberFeatures } from "@/lib/user-roles";
+import { cancelResponseBody, readBoundedJsonResponse } from "@/lib/outbound-response";
+import { enforceSongRequestLifecycle } from "@/lib/submission-lifecycle";
+import {
+  SONG_DAILY_CAP,
+  SONG_PENDING_CAP,
+  consumeSongSubmissionQuota,
+  validateSongTitle,
+} from "@/lib/security/submission-controls";
 
 const YOUTUBE_OEMBED_TIMEOUT_MS = 3_000;
+const YOUTUBE_OEMBED_MAX_RESPONSE_BYTES = 32 * 1024;
+const TITLE_RESOLUTION_WINDOW_MS = 60_000;
+const TITLE_RESOLUTION_LIMIT = 5;
+const MAX_TITLE_RESOLUTION_KEYS = 1_024;
 
-async function resolveVideoTitle(youtubeUrl: string, rawVideoTitle: string | null) {
+const titleResolutionPrincipalLimiter = new BoundedRateLimiter({
+  capacity: TITLE_RESOLUTION_LIMIT, refillTokens: TITLE_RESOLUTION_LIMIT,
+  refillIntervalMs: TITLE_RESOLUTION_WINDOW_MS, idleTtlMs: 10 * TITLE_RESOLUTION_WINDOW_MS,
+  maxKeys: MAX_TITLE_RESOLUTION_KEYS,
+});
+const titleResolutionNetworkLimiter = new BoundedRateLimiter({
+  capacity: TITLE_RESOLUTION_LIMIT, refillTokens: TITLE_RESOLUTION_LIMIT,
+  refillIntervalMs: TITLE_RESOLUTION_WINDOW_MS, idleTtlMs: 10 * TITLE_RESOLUTION_WINDOW_MS,
+  maxKeys: MAX_TITLE_RESOLUTION_KEYS,
+});
+
+function consumeTitleResolutionQuota(principalId: string, ip: string) {
+  if (!titleResolutionPrincipalLimiter.consume(`principal:${principalId}`).allowed ||
+      !titleResolutionNetworkLimiter.consume(`ip:${ip}`).allowed) {
+    throw new Error("Too many YouTube title resolution attempts. Please try again later.");
+  }
+}
+
+async function getClientIp() {
+  const requestHeaders = await headers();
+  return resolveTrustedClientAddress(
+    { directAddress: null, forwardedFor: requestHeaders.get("x-forwarded-for") },
+    { trustedProxyHops: parseTrustedProxyHops(process.env.TRUSTED_PROXY_HOPS) },
+  ) ?? "unknown";
+}
+
+async function resolveVideoTitle(
+  youtubeUrl: string,
+  rawVideoTitle: string | null,
+  principalId: string,
+) {
   const trimmedTitle = rawVideoTitle?.trim() ?? "";
   if (trimmedTitle) {
-    return trimmedTitle;
+    return validateSongTitle(trimmedTitle);
   }
 
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), YOUTUBE_OEMBED_TIMEOUT_MS);
+  consumeTitleResolutionQuota(principalId, await getClientIp());
 
   try {
     const response = await fetch(
       `https://www.youtube.com/oembed?url=${encodeURIComponent(youtubeUrl)}&format=json`,
-      { signal: controller.signal },
+      {
+        headers: { Accept: "application/json" },
+        signal: AbortSignal.timeout(YOUTUBE_OEMBED_TIMEOUT_MS),
+      },
     );
 
     if (response.ok) {
-      const data = (await response.json()) as { title?: string };
-      if (typeof data.title === "string" && data.title.trim()) {
-        return data.title.trim();
+      const data = await readBoundedJsonResponse<unknown>(response, {
+        maxBytes: YOUTUBE_OEMBED_MAX_RESPONSE_BYTES,
+      });
+      const title = typeof data === "object" && data !== null && !Array.isArray(data) && Object.hasOwn(data, "title")
+        ? (data as { title?: unknown }).title
+        : undefined;
+      if (
+        typeof title === "string" &&
+        title.trim()
+      ) {
+        return validateSongTitle(title);
       }
+    } else {
+      await cancelResponseBody(response, "YouTube oEmbed request failed");
     }
   } catch {
     // Fall back to the default title when YouTube metadata is slow or unavailable.
-  } finally {
-    clearTimeout(timeoutId);
   }
 
   return "신청곡";
 }
 
 export async function requestSong(formData: FormData) {
+  const user = await getCurrentUser();
+  if (!user?.id || !canAccessCoreMemberFeatures(user.role)) {
+    throw new Error("Unauthorized");
+  }
+  consumeSongSubmissionQuota(user.id);
+
+  const dbUser = await prisma.user.findUnique({
+    where: { id: user.id },
+    select: {
+      id: true,
+      role: true,
+      gisu: true,
+      studentId: true,
+      banExpiresAt: true,
+    },
+  });
+  if (!dbUser) throw new Error("Unauthorized");
+
   if (isBreakTime()) {
     throw new Error("지금은 기상곡 신청 시간이 아닙니다. (신청 가능: 07:00 ~ 익일 05:00)");
   }
-
-  const youtubeUrl = formData.get("youtubeUrl") as string;
-  const videoTitle = await resolveVideoTitle(
-    youtubeUrl,
-    formData.get("videoTitle") as string | null,
-  );
-
-  const user = await getCurrentUser();
-  if (!user || !user.id) throw new Error("Unauthorized");
-
-  const dbUser = await prisma.user.findUnique({ where: { id: user.id } });
-  if (!dbUser) throw new Error("User not found");
 
   if (dbUser.banExpiresAt && dbUser.banExpiresAt > new Date()) {
     return;
@@ -85,60 +148,56 @@ export async function requestSong(formData: FormData) {
     }
   }
 
+  const quotaWindowStart = new Date(Date.now() - 86_400_000);
+  const [existingDailyCount, existingPendingCount] = await Promise.all([
+    prisma.songRequest.count({ where: { requesterId: user.id, createdAt: { gte: quotaWindowStart } } }),
+    prisma.songRequest.count({ where: { requesterId: user.id, status: "PENDING" } }),
+  ]);
+  if (existingDailyCount >= SONG_DAILY_CAP || existingPendingCount >= SONG_PENDING_CAP) {
+    throw new Error("Song request quota exceeded");
+  }
+
+  const rawYoutubeUrl = formData.get("youtubeUrl");
+  if (typeof rawYoutubeUrl !== "string") {
+    throw new Error("Invalid YouTube URL.");
+  }
+
+  const youtubeUrl = canonicalizeYouTubeUrl(rawYoutubeUrl);
+  const rawVideoTitle = formData.get("videoTitle");
+  const videoTitle = await resolveVideoTitle(
+    youtubeUrl,
+    typeof rawVideoTitle === "string" ? rawVideoTitle : null,
+    dbUser.id,
+  );
+
   let priorityScore = 10;
   if (dbUser.role === "ADMIN") priorityScore = 999;
   else if (dbUser.role === "BROADCAST") priorityScore = 50;
 
   const isAnonymous = formData.get("isAnonymous") === "on";
 
-  await prisma.songRequest.create({
-    data: {
-      requesterId: user.id,
-      youtubeUrl,
-      videoTitle,
-      status: "PENDING",
-      priorityScore,
-      isAnonymous,
-    },
+  await prisma.$transaction(async (tx) => {
+    await enforceSongRequestLifecycle(tx);
+    const [dailyCount, pendingCount] = await Promise.all([
+      tx.songRequest.count({ where: { requesterId: user.id, createdAt: { gte: quotaWindowStart } } }),
+      tx.songRequest.count({ where: { requesterId: user.id, status: "PENDING" } }),
+    ]);
+    if (dailyCount >= SONG_DAILY_CAP || pendingCount >= SONG_PENDING_CAP) {
+      throw new Error("Song request quota exceeded");
+    }
+    await tx.songRequest.create({
+      data: {
+        requesterId: user.id,
+        youtubeUrl,
+        videoTitle,
+        status: "PENDING",
+        priorityScore,
+        isAnonymous,
+      },
+    });
   });
 
   await logAction("SONG_REQUEST", { title: videoTitle, url: youtubeUrl });
 
   revalidatePath("/songs");
-}
-
-export async function getTodayMorningSongs() {
-  const { todayMorning } = getSongTimeRanges();
-
-  return await prisma.songRequest.findMany({
-    where: {
-      createdAt: {
-        gte: todayMorning.start,
-        lt: todayMorning.end,
-      },
-      status: {
-        in: ["APPROVED", "PLAYED"],
-      },
-    },
-    orderBy: { priorityScore: "desc" },
-    include: { requester: true },
-  });
-}
-
-export async function getNextMorningSongs() {
-  const { todayMorning, nextMorning } = getSongTimeRanges();
-  const now = getKSTDate();
-  const currentHour = now.getHours();
-  const targetRange = currentHour < 7 ? todayMorning : nextMorning;
-
-  return await prisma.songRequest.findMany({
-    where: {
-      createdAt: {
-        gte: targetRange.start,
-        lt: targetRange.end,
-      },
-    },
-    orderBy: [{ priorityScore: "desc" }, { createdAt: "asc" }],
-    include: { requester: true },
-  });
 }

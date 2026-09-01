@@ -1,13 +1,24 @@
 import { prisma } from "@/lib/db";
+import { requireAdmin } from "@/lib/current-user";
 import { updateSongStatus } from "./actions";
 import { Check, X, Play } from "lucide-react";
 import { BanUserButton } from "./ban-user-button";
 import { formatKST } from "@/lib/date-utils";
 
 export default async function AdminSongsPage() {
+  await requireAdmin();
   const songs = await prisma.songRequest.findMany({
     orderBy: { createdAt: "desc" },
-    include: { requester: true },
+    take: 500,
+    select: {
+      id: true,
+      requesterId: true,
+      youtubeUrl: true,
+      videoTitle: true,
+      status: true,
+      createdAt: true,
+      requester: { select: { id: true, name: true, studentId: true } },
+    },
   });
 
   return (

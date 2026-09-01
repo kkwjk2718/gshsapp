@@ -1,11 +1,11 @@
-import path from "node:path";
 import { PrismaClient } from '@prisma/client';
+import { getDatabaseUrl } from "@/lib/backup/paths";
 
 const globalForPrisma = global as unknown as { prisma: PrismaClient };
 
-// Static prerender paths need a local SQLite fallback during local builds/tests
-// when a shell session has not explicitly loaded DATABASE_URL yet.
-process.env.DATABASE_URL ??= `file:${path.resolve(process.cwd(), "prisma", "dev.db").replace(/\\/g, "/")}`;
+// Resolve even a relative file URL through the explicit writable data root so
+// Prisma, backups, restore staging, and the weather cache share one boundary.
+process.env.DATABASE_URL = getDatabaseUrl();
 
 export const prisma =
   globalForPrisma.prisma ||

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { saveRetentionSettings, getLogsForExport } from "./actions";
 import { Save, Download, Loader2 } from "lucide-react";
+import { downloadTextFile } from "@/lib/client-download";
 
 export function LogSettingsForm({ initialDays }: { initialDays: number }) {
     const [days, setDays] = useState(initialDays);
@@ -54,14 +55,10 @@ export function DownloadButton() {
         try {
             const csvData = await getLogsForExport();
             // UTF-8 BOM 추가하여 엑셀에서 한글 깨짐 방지
-            const blob = new Blob(["\ufeff" + csvData], { type: 'text/csv;charset=utf-8;' });
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = url;
-            link.setAttribute('download', `system_logs_${new Date().toISOString().slice(0, 10)}.csv`);
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
+            downloadTextFile(csvData, {
+                filename: `system_logs_${new Date().toISOString().slice(0, 10)}.csv`,
+                mimeType: "text/csv;charset=utf-8",
+            });
         } catch (e) {
             alert("다운로드 중 오류가 발생했습니다.");
             console.error(e);

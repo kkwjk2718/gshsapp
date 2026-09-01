@@ -21,6 +21,8 @@ export type TokenPortalSettingsData = {
   todaySentCount: number;
   remainingDailyQuota: number;
   isQuotaReached: boolean;
+  activeRosterCount: number;
+  claimedRosterCount: number;
 };
 
 export type SettingsPageData = {
@@ -49,6 +51,7 @@ type SettingsPageDependencies = {
     isLimitReached: boolean;
   }>;
   hasBrevoConfiguration: () => boolean;
+  getRosterCounts?: () => Promise<{ active: number; claimed: number }>;
 };
 
 const defaultDependencies: SettingsPageDependencies = {
@@ -58,6 +61,13 @@ const defaultDependencies: SettingsPageDependencies = {
   getTokenPortalSettings,
   getDistributionQuotaSummary,
   hasBrevoConfiguration,
+  getRosterCounts: async () => {
+    const [active, claimed] = await Promise.all([
+      prisma.studentRosterEntry.count({ where: { active: true } }),
+      prisma.studentRosterEntry.count({ where: { claimedUserId: { not: null } } }),
+    ]);
+    return { active, claimed };
+  },
 };
 
 export async function loadSettingsPageData(
@@ -79,6 +89,8 @@ export async function loadSettingsPageData(
         todaySentCount: 0,
         remainingDailyQuota: TOKEN_DISTRIBUTION_DAILY_LIMIT,
         isQuotaReached: false,
+        activeRosterCount: 0,
+        claimedRosterCount: 0,
       },
       warnings: [],
     };
@@ -116,6 +128,8 @@ export async function loadSettingsPageData(
     todaySentCount: 0,
     remainingDailyQuota: TOKEN_DISTRIBUTION_DAILY_LIMIT,
     isQuotaReached: false,
+    activeRosterCount: 0,
+    claimedRosterCount: 0,
   };
 
   try {
@@ -129,9 +143,10 @@ export async function loadSettingsPageData(
   }
 
   try {
-    const [portalSettings, quota] = await Promise.all([
+    const [portalSettings, quota, rosterCounts] = await Promise.all([
       dependencies.getTokenPortalSettings(),
       dependencies.getDistributionQuotaSummary(),
+      dependencies.getRosterCounts?.() ?? Promise.resolve({ active: 0, claimed: 0 }),
     ]);
 
     tokenPortal = {
@@ -140,10 +155,16 @@ export async function loadSettingsPageData(
       todaySentCount: quota.used,
       remainingDailyQuota: quota.remaining,
       isQuotaReached: quota.isLimitReached,
+      activeRosterCount: rosterCounts.active,
+      claimedRosterCount: rosterCounts.claimed,
     };
 
     if (tokenPortal.enabled && !tokenPortal.hasPassword) {
       warnings.push("Token portal is enabled but no access password is configured yet.");
+    }
+
+    if (tokenPortal.enabled && tokenPortal.activeRosterCount === 0) {
+      warnings.push("Token portal is enabled without an active authoritative student roster. Disable it until a roster is imported.");
     }
 
     if (!tokenPortal.hasBrevoConfiguration) {

@@ -1,5 +1,5 @@
-import { getMeals, MealInfo, ALLERGY_MAP } from "@/lib/neis";
-import { format, addDays, subDays, parse } from "date-fns";
+import { MealInfo, ALLERGY_MAP, getMonthlyMeals } from "@/lib/neis";
+import { format, addDays, subDays } from "date-fns";
 import { ko } from "date-fns/locale";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
@@ -9,6 +9,7 @@ import { MealCalendar } from "./meal-calendar";
 import { MealInfoTooltip } from "./meal-info-tooltip";
 import { MealViewTracker } from "@/components/meal-view-tracker";
 import { getKSTDate, getKSTDateKey } from "@/lib/date-utils";
+import { getDistinctMealMonths, resolveMealDateQuery } from "@/lib/meal-date";
 
 export const metadata: Metadata = {
   title: "급식",
@@ -22,43 +23,14 @@ interface FoodAllergyDetail {
 
 export default async function MealsPage({ searchParams }: { searchParams: Promise<{ date?: string }> }) {
   const params = await searchParams;
-  const dateStr = params.date || getKSTDateKey();
-
-  let currentDate = getKSTDate();
-  try {
-    currentDate = parse(dateStr, "yyyyMMdd", new Date());
-  } catch (e) {
-    console.error(e);
-    currentDate = getKSTDate();
-  }
+  const resolvedDate = resolveMealDateQuery(params.date || getKSTDateKey(), getKSTDate());
+  const { date: currentDate, dateKey: dateStr } = resolvedDate;
 
   const prevDate = format(subDays(currentDate, 1), "yyyyMMdd");
   const nextDate = format(addDays(currentDate, 1), "yyyyMMdd");
 
-  // [Cache Optimization]
-  // Fetch Prev, Current, Next MONTH data to warm up the cache as requested.
-  const currYear = currentDate.getFullYear().toString();
-  const currMonth = (currentDate.getMonth() + 1).toString().padStart(2, '0');
-
-  const prevMonthDate = subDays(currentDate, 30);
-  const nextMonthDate = addDays(currentDate, 30);
-
-  const pmYear = prevMonthDate.getFullYear().toString();
-  const pmMonth = (prevMonthDate.getMonth() + 1).toString().padStart(2, '0');
-
-  const nmYear = nextMonthDate.getFullYear().toString();
-  const nmMonth = (nextMonthDate.getMonth() + 1).toString().padStart(2, '0');
-
-  // Pre-fetch all 3 months in parallel
-  // We dynamic import to avoid circular dependency if any? No, direct import is fine.
-  // We use Promise.all to fetch them.
-  // Note: getMonthlyMeals is cached.
-  const importNeis = await import("@/lib/neis");
-  const [prevMeals, currMeals, nextMeals] = await Promise.all([
-    importNeis.getMonthlyMeals(pmYear, pmMonth),
-    importNeis.getMonthlyMeals(currYear, currMonth),
-    importNeis.getMonthlyMeals(nmYear, nmMonth),
-  ]);
+  const [{ year, month }] = getDistinctMealMonths([currentDate]);
+  const currMeals = await getMonthlyMeals(year, month);
 
   // Filter current date's meal from the monthly list
   const meals = currMeals.filter(m => m.MLSV_YMD === dateStr);

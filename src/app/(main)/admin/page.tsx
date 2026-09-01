@@ -1,8 +1,10 @@
 import { prisma } from "@/lib/db";
+import { requireAdmin } from "@/lib/current-user";
 import Link from "next/link";
 import { Music, Users, Bell, ArrowRight, Ticket, Tag, Settings, ScrollText, Activity, Send, Building2 } from "lucide-react";
 
 export default async function AdminDashboard() {
+   await requireAdmin();
    const pendingSongsCount = await prisma.songRequest.count({
       where: { status: "PENDING" },
    });

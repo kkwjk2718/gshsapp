@@ -1,12 +1,10 @@
 name: Production Health Monitor
 
 on:
-  workflow_dispatch:
   schedule:
     - cron: "*/10 * * * *"
 
-permissions:
-  contents: read
+permissions: {}
 
 env:
   BASE_URL: https://gshs.app
@@ -18,6 +16,9 @@ jobs:
   monitor:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    environment:
+      name: production-monitor
+      url: https://gshs.app
     steps:
       - id: guard
         name: Check monitor toggle

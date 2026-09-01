@@ -1,0 +1,15 @@
+[Unit]
+Description=Continuously verify the GSHS Docker ingress boundary
+Requires=docker.service
+After=docker.service
+PartOf=docker.service
+
+[Timer]
+OnActiveSec=5s
+OnUnitInactiveSec=15s
+AccuracySec=1s
+RandomizedDelaySec=0
+Unit=gshsapp-docker-user-firewall.service
+
+[Install]
+WantedBy=docker.service

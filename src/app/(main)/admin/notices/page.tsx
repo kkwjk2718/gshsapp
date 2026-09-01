@@ -1,13 +1,15 @@
 import { prisma } from "@/lib/db";
+import { requireAdmin } from "@/lib/current-user";
 import { deleteNotice } from "./actions";
 import Link from "next/link";
 import { Plus, Trash2, Pencil } from "lucide-react";
 import { formatKST } from "@/lib/date-utils";
 
 export default async function AdminNoticesPage() {
+  await requireAdmin();
   const notices = await prisma.notice.findMany({
     orderBy: { createdAt: "desc" },
-    include: { writer: true },
+    include: { writer: { select: { name: true } } },
   });
 
   return (

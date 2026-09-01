@@ -1,43 +1,42 @@
 "use client"
 
 import { ko } from "date-fns/locale";
+import { Ghost } from "lucide-react";
+
 import { formatKST } from "@/lib/date-utils";
 
-interface Song {
+export interface SongListItem {
   id: string;
   videoTitle: string;
   youtubeUrl: string;
-  status: string;
-  createdAt: Date;
-  isAnonymous?: boolean;
-  requesterId: string;
-  requester: {
+  status: "PENDING" | "APPROVED" | "PLAYED";
+  createdAt: string;
+  requester: null | {
     name: string;
-    studentId?: string | null;
-  }
+    studentId: string | null;
+  };
 }
 
 interface SongListProps {
-  songs: Song[];
-  currentUser?: any;
+  songs: SongListItem[];
   emptyMessage?: string;
 }
 
-import { User, Ghost, Shield } from "lucide-react";
-
-export function SongList({ songs, currentUser, emptyMessage = "아직 신청된 노래가 없습니다." }: SongListProps) {
+export function SongList({ songs, emptyMessage = "아직 신청된 노래가 없습니다." }: SongListProps) {
   const getYoutubeId = (url: string) => {
-    const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
-    const match = url.match(regExp);
-    return (match && match[2].length === 11) ? match[2] : null;
+    try {
+      const parsedUrl = new URL(url);
+      const videoId = parsedUrl.searchParams.get("v");
+      return parsedUrl.origin === "https://www.youtube.com" && videoId?.length === 11
+        ? videoId
+        : null;
+    } catch {
+      return null;
+    }
   };
 
-  const renderRequesterInfo = (song: Song) => {
-    const isOwner = currentUser?.id === song.requesterId;
-    const isAdminOrBroadcast = currentUser?.role === 'ADMIN' || currentUser?.role === 'BROADCAST';
-
-    // 1. Not Anonymous: Show full info
-    if (!song.isAnonymous) {
+  const renderRequesterInfo = (song: SongListItem) => {
+    if (song.requester) {
       return (
         <div className="flex flex-col items-end text-xs" style={{ color: "var(--muted)" }}>
           <span className="font-medium">{song.requester.name} {song.requester.studentId && `(${song.requester.studentId})`}</span>
@@ -46,24 +45,6 @@ export function SongList({ songs, currentUser, emptyMessage = "아직 신청된 
       );
     }
 
-    // 2. Anonymous
-    // Admin/Broadcast/Owner can see info, but with indicator
-    if (isOwner || isAdminOrBroadcast) {
-      return (
-        <div className="flex flex-col items-end text-xs">
-          <div className="flex items-center gap-1" style={{ color: "var(--muted)" }}>
-            <Ghost className="w-3 h-3" style={{ color: "var(--accent)" }} />
-            <span className="font-medium">{song.requester.name} {song.requester.studentId && `(${song.requester.studentId})`}</span>
-          </div>
-          <span className="text-[10px] font-bold" style={{ color: "var(--accent)" }}>
-            {isOwner ? "내 정보 가리기 적용됨" : "익명 신청"}
-          </span>
-          <span style={{ color: "var(--muted)" }}>{formatKST(song.createdAt, "M.d HH:mm", { locale: ko })}</span>
-        </div>
-      );
-    }
-
-    // 3. Anonymous & Public: Hide info
     return (
       <div className="flex flex-col items-end text-xs" style={{ color: "var(--muted)" }}>
         <div className="flex items-center gap-1">
@@ -116,7 +97,6 @@ export function SongList({ songs, currentUser, emptyMessage = "아직 신청된 
                 {song.videoTitle}
               </a>
               <div className="flex items-center justify-between text-xs mt-1" style={{ color: "var(--muted)" }}>
-                {/* Replaced masking logic here */}
                 {renderRequesterInfo(song)}
               </div>
               <div className="mt-2">

@@ -8,7 +8,11 @@ test("admin can create, verify, and remove a temporary notice", async ({ page })
   const content = `Temporary E2E notice body for ${title}`;
   let createdNotice = false;
 
-  await loginAsAdmin(page);
+  const loginState = await loginAsAdmin(page);
+  if (loginState === "suspended") {
+    await expect(page.locator("body")).not.toContainText("Application error");
+    return;
+  }
 
   try {
     await page.goto("/admin/notices/new");

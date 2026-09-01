@@ -11,15 +11,17 @@ export default defineConfig({
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 1 : 0,
   workers: 1,
-  reporter: [["list"], ["html", { open: "never" }]],
+  reporter: process.env.CI ? [["list"]] : [["list"], ["html", { open: "never" }]],
   outputDir: "test-results",
   use: {
     baseURL,
     ignoreHTTPSErrors: true,
     serviceWorkers: "block",
-    trace: "on-first-retry",
-    screenshot: "only-on-failure",
-    video: "retain-on-failure",
+    // Remote suites handle a real privileged credential. Playwright traces record
+    // raw fill() parameters, so no browser artifact may be produced in CI.
+    trace: "off",
+    screenshot: "off",
+    video: "off",
   },
   expect: {
     timeout: 15_000,

@@ -9,6 +9,7 @@ export const SYSTEM_SETTING_KEYS = {
   tokenPortalPasswordHash: "TOKEN_PORTAL_PASSWORD_HASH",
   tokenPortalSessionVersion: "TOKEN_PORTAL_SESSION_VERSION",
   tokenPortalEmailGuidance: "TOKEN_PORTAL_EMAIL_GUIDANCE",
+  systemLogRetentionDays: "LOG_RETENTION_DAYS",
 } as const;
 
 export async function getSystemSettingValue(key: string) {
@@ -21,13 +22,16 @@ export async function getSystemSettingValue(key: string) {
 
 export async function getGoogleAnalyticsId() {
   const value = await getSystemSettingValue(SYSTEM_SETTING_KEYS.googleAnalyticsId);
-  const trimmedValue = value?.trim();
-
-  return trimmedValue ? trimmedValue : null;
+  return normalizeGoogleAnalyticsId(value);
 }
 
 export function isValidGoogleAnalyticsId(value: string) {
-  return /^G-[A-Z0-9]+$/i.test(value);
+  return /^G-[A-Z0-9]{4,32}$/i.test(value);
+}
+
+export function normalizeGoogleAnalyticsId(value: string | null | undefined) {
+  const normalized = value?.trim().toUpperCase() ?? "";
+  return isValidGoogleAnalyticsId(normalized) ? normalized : null;
 }
 
 function parseBooleanSetting(value: string | null) {
@@ -57,5 +61,14 @@ export async function getTokenPortalSettings() {
     passwordHash: passwordHash?.trim() || null,
     sessionVersion: parseIntegerSetting(sessionVersionValue, 1),
     guidance: guidanceValue?.trim() || DEFAULT_TOKEN_PORTAL_EMAIL_GUIDANCE,
+  };
+}
+
+export function publicTokenPortalSettings(settings: Awaited<ReturnType<typeof getTokenPortalSettings>>) {
+  return {
+    enabled: settings.enabled,
+    hasPassword: settings.hasPassword,
+    sessionVersion: settings.sessionVersion,
+    guidance: settings.guidance,
   };
 }

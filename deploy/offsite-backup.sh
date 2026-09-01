@@ -1,56 +1,57 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-DEPLOY_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BACKUP_DIR="${BACKUP_DIR:-$DEPLOY_ROOT/backup}"
-DATA_DIR="${DATA_DIR:-$DEPLOY_ROOT/data}"
-DB_FILE="${DB_FILE:-$DATA_DIR/dev.db}"
-OFFSITE_TARGET="${OFFSITE_TARGET:?OFFSITE_TARGET is required}"
-RSYNC_BIN="${RSYNC_BIN:-rsync}"
-SOURCE_PATH=""
-TEMP_BACKUP=""
+PATH=/usr/sbin:/usr/bin:/sbin:/bin
+LC_ALL=C
+export PATH LC_ALL
+IFS=$' \t\n'
+umask 077
 
-require_command() {
-  if ! command -v "$1" >/dev/null 2>&1; then
-    echo "Missing required command: $1" >&2
-    exit 1
-  fi
+DEPLOY_ROOT="${DEPLOY_ROOT:-/opt/gshsapp}"
+CONTROL_ROOT="${CONTROL_ROOT:-/usr/local/lib/gshsapp-operations}"
+BACKUP_DIR="${BACKUP_DIR:-$DEPLOY_ROOT/root-backup}"
+OFFSITE_DIR="${OFFSITE_DIR:?OFFSITE_DIR is required}"
+OFFSITE_RECEIPT_DIR="$OFFSITE_DIR/.gshsapp-receipts"
+OFFSITE_MOUNT_SOURCE="${OFFSITE_MOUNT_SOURCE:?OFFSITE_MOUNT_SOURCE is required}"
+BACKUP_NAME="${BACKUP_NAME:?BACKUP_NAME is required}"
+PYTHON_BIN="${PYTHON_BIN:-/usr/bin/python3}"
+
+[[ "$(id -u)" == "0" ]] || { printf '%s\n' "Offsite export must run as root." >&2; exit 1; }
+current_script="$(readlink -f -- "${BASH_SOURCE[0]}")" || { printf '%s\n' "Offsite export control path cannot be resolved." >&2; exit 1; }
+[[ "$current_script" == "$CONTROL_ROOT/offsite-backup.sh" ]] || { printf '%s\n' "Run only the installed authenticated offsite export control." >&2; exit 1; }
+[[ -f "$current_script" && ! -L "$current_script" && "$(stat -c '%u:%g:%a:%h' "$current_script")" == "0:0:400:1" ]] || {
+  printf '%s\n' "Installed offsite export control is unsafe." >&2
+  exit 1
 }
-
-cleanup() {
-  if [[ -n "$TEMP_BACKUP" && -f "$TEMP_BACKUP" ]]; then
-    rm -f "$TEMP_BACKUP"
-  fi
+/bin/bash "$CONTROL_ROOT/install-root-operations.sh" --verify-installed || {
+  printf '%s\n' "Installed root controls failed verification." >&2
+  exit 1
 }
-
-trap cleanup EXIT
-
-select_latest_backup() {
-  find "$BACKUP_DIR" -maxdepth 1 -type f \( -name '*.bak' -o -name '*.db' -o -name '*.tar.gz' \) -printf '%T@ %p\n' \
-    | sort -nr \
-    | head -n 1 \
-    | cut -d' ' -f2-
+[[ "${GSHSAPP_OFFSITE_PINNED:-}" == manual ]] || {
+  printf '%s\n' "Run offsite export through the authenticated pin-offsite-operation.sh helper." >&2
+  exit 1
 }
-
-require_command "$RSYNC_BIN"
-mkdir -p "$BACKUP_DIR"
-
-if [[ -d "$BACKUP_DIR" ]]; then
-  SOURCE_PATH="$(select_latest_backup || true)"
-fi
-
-if [[ -z "$SOURCE_PATH" ]]; then
-  if [[ ! -f "$DB_FILE" ]]; then
-    echo "No backup file was found in $BACKUP_DIR and no live DB exists at $DB_FILE." >&2
-    exit 1
-  fi
-
-  timestamp="$(date '+%Y%m%d-%H%M%S')"
-  TEMP_BACKUP="$BACKUP_DIR/dev.db.${timestamp}.manual-export.bak"
-  cp "$DB_FILE" "$TEMP_BACKUP"
-  SOURCE_PATH="$TEMP_BACKUP"
-fi
-
-echo "Copying $(basename "$SOURCE_PATH") to $OFFSITE_TARGET"
-"$RSYNC_BIN" -av "$SOURCE_PATH" "$OFFSITE_TARGET"
-echo "Offsite backup export completed successfully."
+[[ "$BACKUP_NAME" =~ ^backup-[0-9]{8}-[0-9]{6}-[a-f0-9]{8}\.tar\.gz$ ]] || {
+  printf '%s\n' "Backup name is invalid." >&2
+  exit 1
+}
+[[ -d "$BACKUP_DIR" && ! -L "$BACKUP_DIR" && "$(stat -c '%u:%g:%a' "$BACKUP_DIR")" == "0:0:700" ]] || {
+  printf '%s\n' "Root recovery backup directory is unsafe." >&2
+  exit 1
+}
+[[ -f "$CONTROL_ROOT/bootstrap-backup.py" && ! -L "$CONTROL_ROOT/bootstrap-backup.py" && "$(stat -c '%u:%g:%a' "$CONTROL_ROOT/bootstrap-backup.py")" == "0:0:400" ]] || {
+  printf '%s\n' "Installed root backup control is unsafe." >&2
+  exit 1
+}
+verify_offsite_mount() {
+  "$PYTHON_BIN" "$CONTROL_ROOT/validate-operations-config.py" backup \
+    /etc/gshsapp-operations/backup.env --verify-pinned-offsite
+}
+verify_offsite_mount || { printf '%s\n' "Offsite mount policy is invalid." >&2; exit 1; }
+"$PYTHON_BIN" "$CONTROL_ROOT/bootstrap-backup.py" export-offsite \
+  --backup-dir "$BACKUP_DIR" --name "$BACKUP_NAME" \
+  --offsite-dir "$OFFSITE_DIR" --receipt-dir "$OFFSITE_RECEIPT_DIR" >/dev/null
+"$PYTHON_BIN" "$CONTROL_ROOT/bootstrap-backup.py" verify-receipt \
+  --offsite-dir "$OFFSITE_DIR" --receipt-dir "$OFFSITE_RECEIPT_DIR" --name "$BACKUP_NAME"
+verify_offsite_mount || { printf '%s\n' "Offsite mount changed during export." >&2; exit 1; }
+printf '%s\n' "Offsite generation and receipt verified."

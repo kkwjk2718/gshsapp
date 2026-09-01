@@ -1,87 +1,115 @@
-"use server"
+"use server";
+
+import bcrypt from "bcryptjs";
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
 
 import { prisma } from "@/lib/db";
-import { redirect } from "next/navigation";
-import { differenceInDays } from "date-fns";
-import bcrypt from "bcryptjs";
-import { isValidStudentId } from "@/lib/student-id";
+import { InviteRedemptionError, preflightInviteRedemption, redeemInvite } from "@/lib/invite-redemption";
 import { MEMBER_SERVICE_SUSPENDED } from "@/lib/member-service-suspension";
+import { validatePassword } from "@/lib/security/password-policy";
+import { hashInviteSecret } from "@/lib/security/invite-token";
+import { validateSignupInviteIdentity } from "@/lib/security/signup-identity";
+import { isSensitiveClientAddressTrusted, parseTrustedProxyHops, resolveTrustedClientAddress } from "@/lib/security/client-address";
+import { getApplicationSecuritySecret, hashSecurityPrincipal } from "@/lib/security/principal-key";
+import { signupAttemptLimiter } from "@/lib/signup-rate-limit";
+import { credentialVerificationGate, signupInviteVerificationGate } from "@/lib/security/bounded-concurrency-gate";
+
+const LOGIN_ID = /^[A-Za-z0-9._-]{3,64}$/u;
+const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/u;
+const CONTROLS = /[\u0000-\u001f\u007f-\u009f\ufeff]/u;
+
+function genericInviteError() {
+  return { error: "The invitation is invalid, expired, used, or not issued for this identity." };
+}
+
+async function getSignupAttemptKeys(userId: string) {
+  const requestHeaders = await headers();
+  const trustedProxyHops = parseTrustedProxyHops(process.env.TRUSTED_PROXY_HOPS);
+  const address = resolveTrustedClientAddress({
+    forwardedFor: requestHeaders.get("x-forwarded-for"),
+  }, { trustedProxyHops });
+  const secret = getApplicationSecuritySecret();
+  return {
+    identifierKey: hashSecurityPrincipal("signup-identifier", userId.toLowerCase(), secret),
+    networkKey: address === null ? null : hashSecurityPrincipal("signup-network", address, secret),
+    trustedClient: isSensitiveClientAddressTrusted(address, trustedProxyHops),
+  };
+}
 
 export async function signup(formData: FormData) {
-    if (MEMBER_SERVICE_SUSPENDED) {
-        return { error: "현재 회원가입 기능이 일시적으로 비활성화되어 있습니다." };
-    }
+  if (MEMBER_SERVICE_SUSPENDED) return { error: "Member signup is temporarily unavailable." };
 
-    const tokenStr = formData.get("token") as string;
-    const userId = formData.get("userId") as string;
-    const password = formData.get("password") as string;
-    const confirmPassword = formData.get("confirmPassword") as string;
-    const name = formData.get("name") as string;
-    const email = formData.get("email") as string;
-    const studentId = ((formData.get("studentId") as string) || "").trim();
+  const token = String(formData.get("token") ?? "").trim();
+  const userId = String(formData.get("userId") ?? "").trim();
+  const password = String(formData.get("password") ?? "");
+  const confirmPassword = String(formData.get("confirmPassword") ?? "");
+  const name = String(formData.get("name") ?? "").trim().normalize("NFC");
+  const email = String(formData.get("email") ?? "").trim().toLowerCase();
+  const studentId = String(formData.get("studentId") ?? "").trim();
 
-    // 0. Validate Passwords
-    if (password !== confirmPassword) {
-        return { error: "비밀번호가 일치하지 않습니다." };
-    }
-    if (password.length < 4) {
-        return { error: "비밀번호는 4자 이상이어야 합니다." };
-    }
+  if (!token || token.length > 128 || CONTROLS.test(token) || !LOGIN_ID.test(userId) || !name || [...name].length > 80 ||
+      new TextEncoder().encode(name).byteLength > 240 || CONTROLS.test(name) || !EMAIL.test(email) || email.length > 254 ||
+      new TextEncoder().encode(email).byteLength > 254 || CONTROLS.test(email) || studentId.length > 16 || CONTROLS.test(studentId)) {
+    return { error: "Please check the signup fields." };
+  }
+  if (password !== confirmPassword) return { error: "Passwords do not match." };
+  const passwordPolicy = validatePassword(password);
+  if (!passwordPolicy.ok) return { error: passwordPolicy.message };
 
-    // 1. Validate Token
-    const inviteToken = await prisma.inviteToken.findUnique({
-        where: { token: tokenStr }
-    });
+  const attemptKeys = await getSignupAttemptKeys(userId);
+  if (!attemptKeys.trustedClient) return { error: "Unable to verify the signup network path." };
+  if (signupAttemptLimiter.check(attemptKeys.identifierKey, attemptKeys.networkKey).locked) {
+    return { error: "Too many signup attempts. Please wait before trying again." };
+  }
+  signupAttemptLimiter.recordAttempt(attemptKeys.identifierKey, attemptKeys.networkKey);
 
-    if (!inviteToken) {
-        return { error: "유효하지 않은 초대 토큰입니다." };
-    }
-    if (inviteToken.isUsed) {
-        return { error: "이미 사용된 초대 토큰입니다." };
-    }
+  const inviteInput = {
+    tokenHash: hashInviteSecret(token),
+    legacyToken: token.length <= 64 ? token : null,
+    now: new Date(),
+    claimedIdentity: { email, studentId: studentId || null },
+    validateInvite: (invite: Readonly<{ targetRole: string }>) => validateSignupInviteIdentity(invite, studentId || null),
+  } as const;
 
-    const daysDiff = differenceInDays(new Date(), inviteToken.createdAt);
-    if (daysDiff >= 7) {
-        return { error: "만료된 초대 토큰입니다. (발급 후 1주일 경과)" };
-    }
+  const invitePermit = signupInviteVerificationGate.tryAcquire(inviteInput.tokenHash);
+  if (!invitePermit) return { error: "This invitation is already being verified. Please try again shortly." };
+  let preflightComplete = false;
 
-    // 학생 계정은 학번 4자리 형식 강제
-    if (inviteToken.targetRole === "STUDENT") {
-        if (!studentId || !isValidStudentId(studentId)) {
-            return { error: "학번 형식이 올바르지 않습니다. 4자리로 입력해주세요. (예: 1304)" };
-        }
-    }
+  try {
+    await preflightInviteRedemption(prisma, inviteInput);
+    preflightComplete = true;
 
-    // 2. Create User & Mark Token
+    const verificationPermit = credentialVerificationGate.tryAcquire();
+    if (!verificationPermit) return { error: "Too many concurrent password operations. Please try again shortly." };
+    let passwordHash: string;
     try {
-        await prisma.$transaction(async (tx) => {
-            const hashedPassword = await bcrypt.hash(password, 10);
-            const newUser = await tx.user.create({
-                data: {
-                    userId,
-                    passwordHash: hashedPassword,
-                    name,
-                    email,
-                    studentId,
-                    role: inviteToken.targetRole,
-                    gisu: inviteToken.targetGisu,
-                    isOnboarded: true,
-                }
-            });
-
-            await tx.inviteToken.update({
-                where: { id: inviteToken.id },
-                data: {
-                    isUsed: true,
-                    usedByUserId: newUser.id
-                }
-            });
-        });
-
-    } catch (e) {
-        console.error(e);
-        return { error: "이미 존재하는 아이디 또는 이메일입니다." };
+      passwordHash = await bcrypt.hash(password, 10);
+    } finally {
+      verificationPermit.release();
     }
 
-    redirect("/login");
+    await redeemInvite(prisma, {
+      presentedSecret: token,
+      ...inviteInput,
+      now: new Date(),
+      userData: {
+        userId,
+        passwordHash,
+        name,
+        email,
+        studentId: studentId || null,
+        isOnboarded: true,
+      },
+    });
+  } catch (error) {
+    if (error instanceof InviteRedemptionError) return genericInviteError();
+    return preflightComplete
+      ? { error: "Unable to create the account. The login ID or email may already exist." }
+      : { error: "Unable to validate the invitation." };
+  } finally {
+    invitePermit.release();
+  }
+
+  redirect("/login");
 }

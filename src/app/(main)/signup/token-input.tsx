@@ -1,10 +1,30 @@
 "use client";
 
+import { useEffect, useState, type FormEvent } from "react";
 import { ArrowRight, Ticket } from "lucide-react";
+import { SignupForm } from "./signup-form";
+import { parseInviteTokenFragment, stripInviteTokenFromLocation } from "@/lib/security/signup-token-handoff";
 
 export function TokenInput() {
+  const [token, setToken] = useState("");
+
+  useEffect(() => {
+    const fragmentToken = parseInviteTokenFragment(window.location.hash);
+    const cleanLocation = stripInviteTokenFromLocation(window.location.pathname, window.location.search);
+    window.history.replaceState(null, "", cleanLocation);
+    if (fragmentToken) setToken(fragmentToken);
+  }, []);
+
+  function submitToken(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const value = String(new FormData(event.currentTarget).get("token") ?? "").trim();
+    if (value && value.length <= 128) setToken(value);
+  }
+
+  if (token) return <SignupForm token={token} />;
+
   return (
-    <form action="/signup" method="GET" className="space-y-4">
+    <form onSubmit={submitToken} className="space-y-4">
       <div className="text-center p-6 rounded-2xl mb-4" style={{ backgroundColor: "var(--surface-2)" }}>
         <h3 className="font-bold" style={{ color: "var(--foreground)" }}>초대 토큰이 있으신가요?</h3>
         <p className="text-xs mt-1 mb-4" style={{ color: "var(--muted)" }}>
@@ -15,6 +35,8 @@ export function TokenInput() {
             <input 
                 type="text" 
                 name="token"
+                maxLength={128}
+                autoComplete="off"
                 placeholder="초대 토큰 입력" 
                 required
                 className="w-full pl-9 pr-3 py-2 text-sm rounded-xl border"

@@ -4,6 +4,7 @@ import { Megaphone, ShieldCheck } from "lucide-react";
 import { getVisibleNotices } from "@/lib/public-content";
 import { NoticesCreateLink } from "./notices-create-link";
 import { formatKST } from "@/lib/date-utils";
+import { headers } from "next/headers";
 
 export const dynamic = "force-dynamic";
 
@@ -14,6 +15,7 @@ export const metadata: Metadata = {
 };
 
 export default async function NoticesPage() {
+  const nonce = (await headers()).get("x-nonce") ?? undefined;
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://gshs.app";
   const notices = await getVisibleNotices();
   const breadcrumbJsonLd = {
@@ -27,7 +29,7 @@ export default async function NoticesPage() {
 
   return (
     <div className="mobile-page mobile-safe-bottom space-y-6">
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }} />
+      <script nonce={nonce} type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }} />
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
         <div className="flex items-center gap-3">
           <div className="p-3 rounded-full" style={{ backgroundColor: "var(--surface-2)", color: "var(--accent)" }}>

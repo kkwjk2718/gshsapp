@@ -32,22 +32,24 @@ GSHS.app은 학교 생활에서 자주 확인하는 정보를 한곳에 모은 N
 | 구분 | 주소 | 용도 |
 | --- | --- | --- |
 | 로컬 개발 | `http://localhost:3000` | 개발 및 수동 확인 |
-| 테스트 서버 | `https://test.gshs.app` | `main` 자동 배포 검증 |
+| 테스트 서버 | `https://test.gshs.app` | 승인된 `main` SHA 수동 배포 검증 |
 | 운영 서버 | `https://gshs.app` | 실제 서비스 |
 
 배포 기본 원칙:
 
-- Docker 이미지는 `sha-<commit>` 불변 태그를 기준으로 배포합니다.
+- Docker 이미지는 `sha-<commit>` 출처와 immutable registry digest를 함께 검증하여 배포합니다.
 - GitHub Release는 `vX.Y.Z` semver 태그를 기준으로 관리합니다.
-- 테스트와 운영은 self-hosted runner가 각각 분리되어 있습니다.
+- GitHub Actions는 GitHub-hosted runner에서 CI, 이미지 publish·attestation, 공개 검증, Release만 수행하며 호스트 배포 권한을 갖지 않습니다.
+- 테스트·운영 호스트 변경은 독립 채널로 digest를 확인한 root 운영자가 `/usr/local/lib/gshsapp-operations`의 설치본과 root-only systemd unit으로만 수행합니다.
+- 과거 self-hosted runner 서비스와 등록·배포 자격증명은 재이미징 과정에서 제거하고 재등록하지 않습니다.
 - SQLite는 `/app/data/dev.db` 영속 볼륨 경로를 사용합니다.
 
 ## 빠른 시작
 
 ### 요구 사항
 
-- Node.js 20 이상
-- npm 10 이상
+- Node.js 24.19 이상(24.x)
+- npm 11 이상
 
 ### 설치
 
@@ -60,24 +62,40 @@ npm ci
 `.env.local` 또는 `.env`에 아래 값을 준비합니다.
 
 ```dotenv
+DATA_ROOT=
 DATABASE_URL=file:./dev.db
-AUTH_SECRET=change-me
+BACKUP_DIR=backup
+RESTORE_ROOT=restore
+BACKUP_RETENTION_MIN_GENERATIONS=3
+BACKUP_RETENTION_MAX_GENERATIONS=30
+BACKUP_RETENTION_MAX_AGE_DAYS=90
+BACKUP_RETENTION_MAX_TOTAL_BYTES=21474836480
+BACKUP_RESERVE_FREE_BYTES=268435456
+BACKUP_STALE_WORK_MAX_AGE_HOURS=24
+RESTORE_MAX_UPLOAD_BYTES=134217728
+WEATHER_CACHE_PATH=weather-cache.json
+AUTH_SECRET=replace-with-long-random-secret
 AUTH_TRUST_HOST=true
 AUTH_URL=http://localhost:3000
 NEXTAUTH_URL=http://localhost:3000
 NEXT_PUBLIC_APP_URL=http://localhost:3000
 NEXT_PUBLIC_NEIS_API_KEY=
+ICAL_ALLOWED_HOSTS=calendar.google.com
 ```
 
 추가 메모:
 
+- `AUTH_SECRET`은 `openssl rand -base64 48` 같은 CSPRNG로 새로 생성한 32바이트 이상의 값을 사용합니다. 예시 placeholder는 런타임에서 거부됩니다.
 - Google Analytics는 환경 변수가 아니라 `/admin/settings`에서 관리합니다.
 - Brevo 메일 발송은 `BREVO_API_KEY`, `BREVO_SENDER_EMAIL`, `BREVO_SENDER_NAME`이 있어야 실제 동작합니다.
+- iCal 동기화는 `ICAL_ALLOWED_HOSTS`의 쉼표 구분 HTTPS 호스트만 허용하며 기본값은 `calendar.google.com`입니다.
+- 로컬 상대 SQLite 경로는 Prisma 스키마 디렉터리 아래로, 서버 경로는 명시한 `DATA_ROOT=/app/data` 아래로 제한됩니다.
+- 최초 관리자 생성은 환경에서 네 개의 `BOOTSTRAP_ADMIN_*` 값을 일회성으로 주입한 뒤 `npm run bootstrap:admin`을 실행합니다. 기존 계정은 수정하지 않습니다.
 
 ### 데이터베이스 초기화
 
 ```bash
-npx prisma db push
+npx prisma migrate dev
 ```
 
 ### 실행
@@ -123,7 +141,7 @@ npm run test:e2e:smoke
 2. [docs/architecture-overview.md](./docs/architecture-overview.md)
 3. [DEPLOY.md](./DEPLOY.md)
 4. [docs/cicd-setup.md](./docs/cicd-setup.md)
-5. [docs/server-bootstrap.md](./docs/server-bootstrap.md)
+5. [docs/root-operations-bootstrap.md](./docs/root-operations-bootstrap.md)
 6. [docs/production-launch-runbook.md](./docs/production-launch-runbook.md)
 7. [docs/repository-governance.md](./docs/repository-governance.md)
 
@@ -150,8 +168,8 @@ npm run test:e2e:smoke
 | --- | --- |
 | [CONTRIBUTING.md](./CONTRIBUTING.md) | 브랜치 생성, 검증, PR 작성, 문서 갱신 기준 |
 | [DEPLOY.md](./DEPLOY.md) | 배포 구조와 배포 원칙의 개요 |
-| [docs/cicd-setup.md](./docs/cicd-setup.md) | GitHub Actions, Docker Hub, runner, secrets 연결 |
-| [docs/server-bootstrap.md](./docs/server-bootstrap.md) | 새 Ubuntu VM 부트스트랩 절차 |
+| [docs/cicd-setup.md](./docs/cicd-setup.md) | GitHub-hosted Actions, Docker Hub, protected environment 설정 |
+| [docs/root-operations-bootstrap.md](./docs/root-operations-bootstrap.md) | 새 호스트의 OOB 인증과 root control 설치 절차 |
 | [docs/production-launch-runbook.md](./docs/production-launch-runbook.md) | 운영 직전/직후 체크리스트 |
 | [docs/repository-governance.md](./docs/repository-governance.md) | 저장소 운영 규칙 단일 정본 |
 | [deploy/README.md](./deploy/README.md) | `deploy/` 배포 자산 설명 |
@@ -200,9 +218,9 @@ npm run test:e2e:smoke
 ## 핵심 운영 원칙
 
 - 테스트/운영 도메인 값은 절대 섞지 않습니다.
-- 운영 배포는 항상 검증된 `sha-<commit>`만 사용합니다.
+- 운영 배포는 검증된 `sha-<commit>`와 정확한 image digest를 함께 사용합니다.
 - semver 릴리스는 `package.json` 버전을 기준으로 생성합니다.
-- 백업, 복원, 릴리스, runner 구조를 바꾸면 문서를 함께 수정합니다.
+- 백업, 복원, 릴리스, root control 구조를 바꾸면 문서를 함께 수정합니다.
 - 시크릿, 비밀번호, API 키, 서버 `.env`는 저장소에 커밋하지 않습니다.
 
 ## 추가 참고

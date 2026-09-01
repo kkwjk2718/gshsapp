@@ -1,14 +1,13 @@
 "use client"
 
 import { useState } from "react";
-import { Edit2, Save, X, User as UserIcon, Mail, CreditCard } from "lucide-react";
+import { Edit2, Save, X, User as UserIcon, Mail } from "lucide-react";
 import { updateProfile } from "./actions";
 
 interface UserProfile {
   name: string;
   email: string | null;
   studentId: string | null;
-  role: string;
   gisu: number | null;
 }
 
@@ -51,13 +50,6 @@ export function ProfileCard({ user }: { user: UserProfile }) {
                       </div>
                   </div>
                   <div>
-                      <label className="text-xs font-bold text-slate-500 mb-1 block">학번</label>
-                      <div className="relative">
-                          <CreditCard className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                          <input name="studentId" defaultValue={user.studentId || ""} required className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm" />
-                      </div>
-                  </div>
-                  <div>
                       <label className="text-xs font-bold text-slate-500 mb-1 block">이메일</label>
                       <div className="relative">
                           <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -95,9 +87,6 @@ export function ProfileCard({ user }: { user: UserProfile }) {
               <span>{user.studentId}</span>
           </div>
           <div className="flex items-center gap-2 mt-3">
-             <span className="px-2 py-1 rounded-md bg-slate-100 dark:bg-slate-800 text-xs font-bold text-slate-600 dark:text-slate-300">
-                {user.role}
-             </span>
              <span className="text-xs text-slate-400 truncate">{user.email}</span>
           </div>
        </div>

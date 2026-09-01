@@ -1,0 +1,4 @@
+b962f8c2ba40512664ad3763e51ad1b7ec1f9d70527c28e2c099b511deb0cce7  deploy/control-assets.sha256
+8014e9afe1ecb4107c44811094e5a0933291c9a6084fc90ad156133ae82fc484  deploy/install-backup-timer.sh
+28cdc7d3978581299836ea4e65fba0edaba4bc47f624b67ed1d6574961d04e1e  deploy/install-deploy-service.sh
+918bd0f908b4bb955e1c07902346cd3623bcfb1a91b27b1cb43f3f6de57b7cdf  deploy/install-root-operations.sh

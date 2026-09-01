@@ -1,0 +1,42 @@
+[Unit]
+Description=Recover an interrupted GSHS authenticated control update
+Before=gshsapp-docker-boot-quarantine.service docker.service
+
+[Service]
+Type=oneshot
+RuntimeDirectory=lock/gshsapp
+RuntimeDirectoryMode=0700
+RuntimeDirectoryPreserve=yes
+ExecStart=/bin/bash /usr/local/lib/gshsapp-operations/install-root-operations.sh --recover-update
+User=root
+Group=root
+UMask=0077
+PrivateTmp=true
+PrivateDevices=true
+ProtectHome=true
+ProtectSystem=strict
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+ReadOnlyPaths=/etc/gshsapp-operations
+# CONTROL_ROOT must remain a normal directory entry: prepared update recovery
+# uses renameat2(RENAME_EXCHANGE) on it. Only the exact parents needed for the
+# authenticated, digest-bound rollback are writable in this namespace.
+ReadWritePaths=/usr/local/lib /etc/systemd/system /var/lib/gshsapp-operations /run/lock/gshsapp
+NoNewPrivileges=true
+CapabilityBoundingSet=CAP_CHOWN CAP_DAC_OVERRIDE CAP_FOWNER
+AmbientCapabilities=
+RestrictSUIDSGID=true
+RestrictNamespaces=true
+RestrictAddressFamilies=AF_UNIX
+LockPersonality=true
+RestrictRealtime=true
+MemoryDenyWriteExecute=true
+SystemCallArchitectures=native
+TimeoutStartSec=2min
+
+[Install]
+RequiredBy=docker.service

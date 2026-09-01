@@ -1,104 +1,80 @@
+import { prisma } from "@/lib/db";
+import { DistributionReservationError, reserveDistribution } from "@/lib/distribution-reservation";
 import { logAction } from "@/lib/logger";
+import { getApplicationSecuritySecret, hashSecurityPrincipal } from "@/lib/security/principal-key";
+import {
+  getDistributionQuotaSummary,
+  recordBlockedTokenDistribution,
+  sendInviteTokenEmail,
+} from "@/lib/token-distribution";
 import {
   getPortalClientKey,
   getPortalCooldownRemainingSeconds,
   setPortalCooldownCookie,
 } from "@/lib/token-portal-session";
-import {
-  getDistributionQuotaSummary,
-  recordBlockedTokenDistribution,
-  resolveStudentTargetGisu,
-  sendInviteTokenEmail,
-} from "@/lib/token-distribution";
-import { isValidStudentId } from "@/lib/student-id";
-import { getTokenPortalSettings } from "@/lib/system-settings";
+import { getTokenPortalSettings, publicTokenPortalSettings } from "@/lib/system-settings";
+import { parsePortalInviteInput } from "@/lib/security/portal-input";
 
 export async function getPublicPortalState() {
   const settings = await getTokenPortalSettings();
   const cooldownSeconds = await getPortalCooldownRemainingSeconds();
   const quota = await getDistributionQuotaSummary();
-
-  return {
-    settings,
-    cooldownSeconds,
-    quota,
-  };
+  return { settings: publicTokenPortalSettings(settings), cooldownSeconds, quota };
 }
 
-export async function sendPortalStudentInvite({
-  name,
-  studentId,
-  email,
-}: {
+export async function sendPortalStudentInvite({ name, studentId, email, rosterEntryId, rosterGisu }: {
   name: string;
   studentId: string;
   email: string;
+  rosterEntryId: string;
+  rosterGisu: number;
 }) {
+  const input = parsePortalInviteInput({ name, studentId, email });
+  if (!input) return { error: "Please check the name, student ID, and email address." };
+  const { name: normalizedName, email: normalizedEmail, studentId: normalizedStudentId } = input;
   const portalState = await getPublicPortalState();
-  const clientKey = await getPortalClientKey();
+  const rawClientKey = await getPortalClientKey();
+  const clientKey = hashSecurityPrincipal("portal-client", rawClientKey, getApplicationSecuritySecret());
+
   if (!portalState.settings.enabled) {
     await recordBlockedTokenDistribution({
-      source: "PORTAL_AUTO",
-      recipientEmail: email,
-      requesterName: name,
-      studentId,
-      targetRole: "STUDENT",
-      errorMessage: "Portal disabled.",
-      clientKey,
-      createdBy: "system:distribution-portal",
+      source: "PORTAL_AUTO", recipientEmail: normalizedEmail, requesterName: normalizedName,
+      studentId: normalizedStudentId, targetRole: "STUDENT", errorMessage: "Portal disabled.",
+      clientKey, createdBy: "system:distribution-portal",
     });
-
-    await logAction("token_portal_blocked", {
-      reason: "disabled",
-      email,
-      studentId,
-    });
-
-    return { error: "현재 토큰 배부 포털이 비활성화되어 있습니다." };
+    await logAction("token_portal_blocked", { reason: "disabled" });
+    return { error: "The token distribution portal is disabled." };
   }
 
-  if (portalState.cooldownSeconds > 0) {
-    await recordBlockedTokenDistribution({
-      source: "PORTAL_AUTO",
-      recipientEmail: email,
-      requesterName: name,
-      studentId,
-      targetRole: "STUDENT",
-      errorMessage: `Cooldown active (${portalState.cooldownSeconds}s remaining).`,
-      clientKey,
-      createdBy: "system:distribution-portal",
+  const targetGisu = rosterGisu;
+  if (!Number.isInteger(targetGisu) || targetGisu < 1 || targetGisu > 200) {
+    return { error: "Unable to resolve the student cohort." };
+  }
+
+  let reservation;
+  try {
+    reservation = await reserveDistribution(prisma, {
+      source: "PORTAL_AUTO", createdBy: "system:distribution-portal", clientKey,
+      target: {
+        email: normalizedEmail, name: normalizedName, studentId: normalizedStudentId, rosterEntryId,
+        targetRole: "STUDENT", targetGisu,
+      },
     });
-
-    return {
-      error: `너무 빠르게 요청하고 있습니다. ${portalState.cooldownSeconds}초 후 다시 시도해주세요.`,
-    };
-  }
-
-  if (!isValidStudentId(studentId)) {
-    return { error: "학번은 4자리 형식으로 입력해주세요. 예: 1304" };
-  }
-
-  const targetGisu = await resolveStudentTargetGisu(studentId);
-  if (!targetGisu) {
-    return { error: "학번에 맞는 기수를 계산할 수 없습니다. 관리자에게 문의해주세요." };
+  } catch (error) {
+    if (error instanceof DistributionReservationError) {
+      return { error: error.code === "QUOTA" ? "The daily invitation email limit has been reached." : "Please wait before requesting another invitation." };
+    }
+    throw error;
   }
 
   const result = await sendInviteTokenEmail({
-    source: "PORTAL_AUTO",
-    createdBy: "system:distribution-portal",
-    clientKey,
+    source: "PORTAL_AUTO", createdBy: "system:distribution-portal", clientKey,
     target: {
-      email,
-      name,
-      studentId,
-      targetRole: "STUDENT",
-      targetGisu,
+      email: normalizedEmail, name: normalizedName, studentId: normalizedStudentId,
+      targetRole: "STUDENT", targetGisu,
     },
+    reservation,
   });
-
-  if (result.success) {
-    await setPortalCooldownCookie();
-  }
-
+  if (result.success) await setPortalCooldownCookie();
   return result;
 }

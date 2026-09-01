@@ -1,10 +1,65 @@
 services:
+  migrate:
+    image: ${DOCKER_IMAGE:?DOCKER_IMAGE is required}@${IMAGE_DIGEST:?IMAGE_DIGEST is required}
+    restart: "no"
+    logging:
+      driver: none
+    user: "61001:61001"
+    read_only: true
+    init: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 128
+    mem_limit: 1536m
+    memswap_limit: 1536m
+    cpus: 2.0
+    network_mode: none
+    environment:
+      NODE_ENV: production
+      NODE_OPTIONS: ""
+      NODE_PATH: ""
+      DATA_ROOT: /app/data
+      DATABASE_URL: file:/app/data/dev.db
+      TMPDIR: /tmp
+      TZ: Asia/Seoul
+    volumes:
+      - ./data:/app/data:rw
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=32m,uid=61001,gid=61001,mode=1700
+    command:
+      - node
+      - scripts/migrate-production.mjs
+
   web:
     container_name: ${CONTAINER_NAME:-gshsapp-web}
-    image: ${DOCKER_IMAGE:?DOCKER_IMAGE is required}:${IMAGE_TAG:?IMAGE_TAG is required}
-    restart: always
+    labels:
+      app.gshsapp.security-boundary: web-v1
+    image: ${DOCKER_IMAGE:?DOCKER_IMAGE is required}@${IMAGE_DIGEST:?IMAGE_DIGEST is required}
+    # The root deployment transaction promotes this to `always` only after
+    # exact-image health succeeds and the durable healthy phase is published.
+    restart: "no"
+    user: "61001:61001"
+    read_only: true
+    init: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 256
+    mem_limit: 768m
+    memswap_limit: 768m
+    cpus: 2.0
+    # Published bridge ingress is additionally restricted in DOCKER-USER by
+    # the authenticated host-hardening control. Host networking is forbidden
+    # so SSRF/RCE cannot directly reach host-loopback services.
     ports:
-      - "${HOST_BIND_IP:-127.0.0.1}:${HOST_PORT:-1234}:3000"
+      - "${HOST_BIND_IP:?HOST_BIND_IP is required}:${HOST_PORT:?HOST_PORT is required}:3000"
+    # The authenticated root firewall creates and verifies this external
+    # bridge, including its dynamically allocated RFC1918 subnet.
+    networks:
+      - web
     env_file:
       - ./.env
     environment:
@@ -12,12 +67,37 @@ services:
       PORT: "3000"
       HOSTNAME: 0.0.0.0
       TZ: Asia/Seoul
+      TMPDIR: /tmp
       APP_VERSION: ${APP_VERSION:?APP_VERSION is required}
-      BACKUP_DIR: /app/backup
+      APP_IMAGE_DIGEST: ${IMAGE_DIGEST:?IMAGE_DIGEST is required}
+      DATA_ROOT: /app/data
+      DATABASE_URL: file:/app/data/dev.db
+      BACKUP_DIR: /app/data/backup
+      RESTORE_ROOT: /app/data/restore
+      WEATHER_CACHE_PATH: /app/data/weather-cache.json
+      UPLOADS_ROOT: /app/data/uploads
+      USER_CONTENT_ROOT: /app/data/user-content
+      STORAGE_ROOT: /app/data/storage
+      LOG_ROOT: /app/data/logs
       BACKUP_MAX_AGE_HOURS: ${BACKUP_MAX_AGE_HOURS:-24}
     volumes:
-      - ./data:/app/data
-      - ./backup:/app/backup
-    dns:
-      - 8.8.8.8
-      - 8.8.4.4
+      - ./data:/app/data:rw
+      - ./backup:/app/data/backup:rw
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=64m,uid=61001,gid=61001,mode=1700
+      - /app/.next/cache:rw,noexec,nosuid,nodev,size=128m,uid=61001,gid=61001,mode=1700
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3000/api/health').then(async r=>{const b=await r.json();if(!r.ok||b.ok!==true)process.exit(1)}).catch(()=>process.exit(1))"
+      interval: 15s
+      timeout: 5s
+      start_period: 30s
+      retries: 4
+
+networks:
+  web:
+    external: true
+    name: gshsapp-web

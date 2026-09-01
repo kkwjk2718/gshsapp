@@ -7,6 +7,7 @@ import { Noto_Sans_KR } from "next/font/google";
 import { Toaster } from "sonner";
 import { DevServiceWorkerReset } from "@/components/dev-sw-reset";
 import { ProductionServiceWorkerCacheCleanup } from "@/components/prod-sw-cache-cleanup";
+import { headers } from "next/headers";
 
 const notoSansKr = Noto_Sans_KR({
   subsets: ["latin"],
@@ -71,17 +72,20 @@ export const viewport: Viewport = {
   themeColor: "#0f172a",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const nonce = (await headers()).get("x-nonce") ?? undefined;
+
   return (
     <html lang="ko" suppressHydrationWarning>
       <body className={`antialiased bg-slate-50 dark:bg-slate-950 transition-colors duration-300 ${notoSansKr.className} ${notoSansKr.variable}`}>
         <Script
           id="theme-migrate"
           strategy="beforeInteractive"
+          nonce={nonce}
           dangerouslySetInnerHTML={{
             __html: `
               (function() {
@@ -111,7 +115,7 @@ export default function RootLayout({
         >
           <DevServiceWorkerReset />
           <ProductionServiceWorkerCacheCleanup />
-          <Analytics />
+          <Analytics nonce={nonce} />
           {children}
           <Toaster />
         </ThemeProvider>

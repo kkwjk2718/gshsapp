@@ -69,21 +69,6 @@ export default function LoginPage() {
             </div>
           </div>
 
-          <div className="flex items-center space-x-2 px-1">
-            <input
-              type="checkbox"
-              id="keepLoggedIn"
-              defaultChecked
-              className="h-4 w-4 rounded border-slate-300 text-indigo-600 accent-indigo-600 focus:ring-indigo-500"
-            />
-            <label
-              htmlFor="keepLoggedIn"
-              className="cursor-pointer select-none text-sm text-slate-600 dark:text-slate-400"
-            >
-              로그인 상태 유지
-            </label>
-          </div>
-
           <div className="flex h-8 items-end space-x-1" aria-live="polite" aria-atomic="true">
             {errorMessage ? <p className="text-sm text-red-500">{errorMessage}</p> : null}
           </div>

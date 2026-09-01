@@ -1,0 +1,41 @@
+[Unit]
+Description=Recover interrupted GSHS writer lifecycle before network publication
+Requires=docker.service gshsapp-docker-user-firewall.service
+After=docker.service gshsapp-docker-user-firewall.service
+BindsTo=docker.service
+PartOf=docker.service
+Before=gshsapp-deploy.service gshsapp-backup.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/bash /usr/local/lib/gshsapp-operations/recover-writers-at-boot.sh
+User=root
+Group=root
+UMask=0077
+PrivateTmp=true
+PrivateDevices=true
+ProtectHome=true
+ProtectSystem=strict
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+ReadOnlyPaths=/usr/local/lib/gshsapp-operations /var/run/docker.sock
+ReadWritePaths=/opt/gshsapp /run/lock/gshsapp
+NoNewPrivileges=true
+CapabilityBoundingSet=CAP_CHOWN CAP_DAC_OVERRIDE CAP_FOWNER
+AmbientCapabilities=
+RestrictSUIDSGID=true
+RestrictNamespaces=true
+RestrictAddressFamilies=AF_UNIX
+LockPersonality=true
+RestrictRealtime=true
+MemoryDenyWriteExecute=true
+SystemCallArchitectures=native
+TimeoutStartSec=15min
+
+[Install]
+WantedBy=docker.service

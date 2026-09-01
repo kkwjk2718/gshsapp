@@ -1,5 +1,4 @@
-import { randomUUID } from "node:crypto";
-import { addDays, differenceInDays, startOfDay } from "date-fns";
+import { addDays, startOfDay } from "date-fns";
 import { fromZonedTime, toZonedTime } from "date-fns-tz";
 import { prisma } from "@/lib/db";
 import { sendBrevoEmail } from "@/lib/brevo";
@@ -8,11 +7,13 @@ import { logAction } from "@/lib/logger";
 import { getGradeFromStudentId, isValidStudentId } from "@/lib/student-id";
 import { DEFAULT_TOKEN_PORTAL_EMAIL_GUIDANCE, TOKEN_DISTRIBUTION_DAILY_LIMIT } from "@/lib/token-portal-config";
 import { getSystemSettingValue, SYSTEM_SETTING_KEYS } from "@/lib/system-settings";
+import { generateInviteSecret, hashInviteSecret } from "@/lib/security/invite-token";
+import { enforceDistributionLogBounds, normalizeDistributionLogText } from "@/lib/distribution-log-store";
 
 const SEOUL_TZ = "Asia/Seoul";
 
 export type TokenDistributionSource = "PORTAL_AUTO" | "ADMIN_MANUAL";
-export type TokenDistributionStatus = "SENT" | "FAILED" | "BLOCKED";
+export type TokenDistributionStatus = "PENDING" | "SENT" | "FAILED" | "BLOCKED";
 
 type DistributionTarget = {
   email: string;
@@ -27,6 +28,10 @@ type SendDistributionEmailInput = {
   createdBy: string;
   clientKey?: string | null;
   target: DistributionTarget;
+  reservation?: Readonly<{
+    distributionLogId: string;
+    inviteToken: Readonly<{ id: string; token: string; targetRole: string; targetGisu: number | null; rosterEntryId?: string | null }>;
+  }>;
 };
 
 export type SendDistributionEmailResult = {
@@ -51,7 +56,7 @@ export async function getTodayDistributionUsage() {
   const { start, end } = getKstDayRange();
   return prisma.tokenDistributionLog.count({
     where: {
-      status: "SENT",
+      status: { in: ["PENDING", "SENT", "FAILED"] },
       createdAt: {
         gte: start,
         lt: end,
@@ -69,37 +74,6 @@ export async function getDistributionQuotaSummary() {
   };
 }
 
-function isInviteTokenReusable(createdAt: Date) {
-  return differenceInDays(new Date(), createdAt) < 7;
-}
-
-export async function findReusableStudentInviteToken(email: string, studentId: string) {
-  const latestDistribution = await prisma.tokenDistributionLog.findFirst({
-    where: {
-      recipientEmail: email,
-      studentId,
-      targetRole: "STUDENT",
-      status: "SENT",
-      inviteTokenId: {
-        not: null,
-      },
-    },
-    include: {
-      inviteToken: true,
-    },
-    orderBy: {
-      createdAt: "desc",
-    },
-  });
-
-  const inviteToken = latestDistribution?.inviteToken;
-  if (!inviteToken || inviteToken.isUsed || !isInviteTokenReusable(inviteToken.createdAt)) {
-    return null;
-  }
-
-  return inviteToken;
-}
-
 function getAppBaseUrl() {
   return process.env.NEXT_PUBLIC_APP_URL?.trim() || "https://gshs.app";
 }
@@ -113,7 +87,7 @@ function escapeHtml(value: string) {
     .replaceAll("'", "&#39;");
 }
 
-function buildInviteEmail({
+export function buildInviteEmail({
   name,
   token,
   guidance,
@@ -122,7 +96,7 @@ function buildInviteEmail({
   token: string;
   guidance: string;
 }) {
-  const signupUrl = `${getAppBaseUrl()}/signup?token=${encodeURIComponent(token)}`;
+  const signupUrl = `${getAppBaseUrl()}/signup#token=${encodeURIComponent(token)}`;
   const greeting = name ? `${name}님` : "안녕하세요";
   const safeGreeting = escapeHtml(greeting);
   const safeToken = escapeHtml(token);
@@ -229,17 +203,20 @@ export async function recordBlockedTokenDistribution({
   clientKey?: string | null;
   createdBy: string;
 }) {
-  await createDistributionLog({
-    source,
-    recipientEmail,
-    requesterName,
-    studentId,
-    targetRole,
-    targetGisu,
-    status: "BLOCKED",
-    errorMessage,
-    clientKey,
-    createdBy,
+  await prisma.$transaction(async (tx) => {
+    await tx.tokenDistributionLog.create({ data: {
+      source,
+      recipientEmail: normalizeDistributionLogText(recipientEmail.toLowerCase(), 254) ?? "invalid",
+      requesterName: normalizeDistributionLogText(requesterName, 240),
+      studentId: normalizeDistributionLogText(studentId, 16),
+      targetRole: normalizeDistributionLogText(targetRole, 32) ?? "UNKNOWN",
+      targetGisu: targetGisu ?? null,
+      status: "BLOCKED",
+      errorMessage: normalizeDistributionLogText(errorMessage, 512),
+      clientKey: normalizeDistributionLogText(clientKey, 128),
+      createdBy: normalizeDistributionLogText(createdBy, 128) ?? "system",
+    } });
+    await enforceDistributionLogBounds(tx);
   });
 }
 
@@ -248,13 +225,36 @@ async function enforceDailyQuota({
   createdBy,
   clientKey,
   target,
+  reservation,
 }: SendDistributionEmailInput) {
   const quota = await getDistributionQuotaSummary();
-  if (!quota.isLimitReached) {
-    return quota;
+  const isLimitReached = reservation ? quota.used > TOKEN_DISTRIBUTION_DAILY_LIMIT : quota.isLimitReached;
+  if (!isLimitReached) {
+    return { ...quota, isLimitReached: false };
   }
 
-  await createDistributionLog({
+  if (reservation) {
+    await prisma.$transaction(async (tx) => {
+      const transition = await tx.tokenDistributionLog.updateMany({
+        where: { id: reservation.distributionLogId, status: "PENDING" },
+        data: { status: "BLOCKED", inviteTokenId: null, errorMessage: "Daily send limit reached." },
+      });
+      if (transition.count !== 1) throw new Error("Distribution reservation is no longer pending");
+      if (reservation.inviteToken.rosterEntryId && target.studentId) {
+        await tx.studentRosterEntry.updateMany({
+          where: {
+            id: reservation.inviteToken.rosterEntryId ?? "",
+            studentId: target.studentId,
+            email: target.email.trim().toLowerCase(),
+            claimedInviteTokenId: reservation.inviteToken.id,
+            claimedUserId: null,
+          },
+          data: { claimedAt: null, claimedEmail: null, claimedInviteTokenId: null },
+        });
+      }
+      await tx.inviteToken.delete({ where: { id: reservation.inviteToken.id } });
+    });
+  } else await createDistributionLog({
     source,
     recipientEmail: target.email,
     requesterName: target.name,
@@ -274,28 +274,38 @@ async function enforceDailyQuota({
     targetRole: target.targetRole,
   });
 
-  return quota;
+  return { ...quota, isLimitReached: true };
 }
 
 async function createInviteTokenRecord({
   createdBy,
   targetRole,
   targetGisu,
+  boundEmail,
+  boundStudentId,
 }: {
   createdBy: string;
   targetRole: string;
   targetGisu?: number | null;
+  boundEmail: string;
+  boundStudentId?: string | null;
 }) {
-  return prisma.inviteToken.create({
+  const token = generateInviteSecret();
+  const inviteToken = await prisma.inviteToken.create({
     data: {
-      token: randomUUID().substring(0, 8),
+      token: null,
+      tokenHash: hashInviteSecret(token),
+      boundEmail: boundEmail.trim().toLowerCase(),
+      boundStudentId: boundStudentId?.trim() || null,
       targetRole,
       targetGisu: targetGisu ?? null,
       createdBy,
       isUsed: false,
       batchId: null,
     },
+    select: { id: true, targetRole: true, targetGisu: true },
   });
+  return { ...inviteToken, token };
 }
 
 export async function resolveStudentTargetGisu(studentId: string) {
@@ -325,23 +335,22 @@ export async function sendInviteTokenEmail(input: SendDistributionEmailInput): P
     (await getSystemSettingValue(SYSTEM_SETTING_KEYS.tokenPortalEmailGuidance)) ||
     DEFAULT_TOKEN_PORTAL_EMAIL_GUIDANCE;
 
-  const reusableToken =
-    input.source === "PORTAL_AUTO" && input.target.studentId
-      ? await findReusableStudentInviteToken(input.target.email, input.target.studentId)
-      : null;
-
-  let inviteToken = reusableToken;
-  let createdNewToken = false;
+  let inviteToken: { id: string; token: string; targetRole: string; targetGisu: number | null } | null =
+    input.reservation?.inviteToken ?? null;
+  let createdWithoutReservation = false;
 
   if (!inviteToken) {
     inviteToken = await createInviteTokenRecord({
       createdBy: input.createdBy,
       targetRole: input.target.targetRole,
       targetGisu: input.target.targetGisu,
+      boundEmail: input.target.email,
+      boundStudentId: input.target.studentId,
     });
-    createdNewToken = true;
+    createdWithoutReservation = true;
   }
 
+  let providerAccepted = false;
   try {
     const emailPayload = buildInviteEmail({
       name: input.target.name,
@@ -358,8 +367,16 @@ export async function sendInviteTokenEmail(input: SendDistributionEmailInput): P
       htmlContent: emailPayload.htmlContent,
       textContent: emailPayload.textContent,
     });
+    providerAccepted = true;
 
-    await createDistributionLog({
+    if (input.reservation) {
+      const messageId = typeof response.messageId === "string" ? response.messageId.replace(/[\u0000-\u001f\u007f-\u009f\ufeff]/gu, "").slice(0, 256) : null;
+      const transition = await prisma.tokenDistributionLog.updateMany({
+        where: { id: input.reservation.distributionLogId, status: "PENDING" },
+        data: { status: "SENT", inviteTokenId: inviteToken.id, brevoMessageId: messageId, errorMessage: null },
+      });
+      if (transition.count !== 1) throw new Error("Distribution reservation is no longer pending");
+    } else await createDistributionLog({
       source: input.source,
       recipientEmail: input.target.email,
       requesterName: input.target.name,
@@ -372,22 +389,22 @@ export async function sendInviteTokenEmail(input: SendDistributionEmailInput): P
       clientKey: input.clientKey ?? null,
       createdBy: input.createdBy,
     });
-
     await logAction("token_distribution_sent", {
       source: input.source,
       recipientEmail: input.target.email,
       targetRole: input.target.targetRole,
       targetGisu: input.target.targetGisu ?? null,
-      reusedToken: !createdNewToken,
+      reusedToken: false,
     });
 
     return {
       success: `${input.target.email}로 초대 메일을 발송했습니다.`,
-      reusedToken: !createdNewToken,
-      quotaUsed: quota.used + 1,
+      reusedToken: false,
+      quotaUsed: input.reservation ? quota.used : quota.used + 1,
     };
   } catch (error) {
-    if (createdNewToken) {
+    if (providerAccepted) throw error;
+    if (createdWithoutReservation) {
       await prisma.inviteToken
         .delete({
           where: {
@@ -397,9 +414,31 @@ export async function sendInviteTokenEmail(input: SendDistributionEmailInput): P
         .catch(() => undefined);
     }
 
-    const errorMessage = error instanceof Error ? error.message : "Unknown email delivery failure";
+    const rawError = error instanceof Error ? error.message : "Unknown email delivery failure";
+    const errorMessage = [...rawError.replace(/[\u0000-\u001f\u007f-\u009f\ufeff]/gu, " ")].slice(0, 512).join("");
 
-    await createDistributionLog({
+    if (input.reservation) {
+      await prisma.$transaction(async (tx) => {
+        const transition = await tx.tokenDistributionLog.updateMany({
+          where: { id: input.reservation!.distributionLogId, status: "PENDING" },
+          data: { status: "FAILED", inviteTokenId: null, brevoMessageId: null, errorMessage },
+        });
+        if (transition.count !== 1) throw new Error("Distribution reservation is no longer pending");
+        await tx.inviteToken.delete({ where: { id: inviteToken.id } });
+        if (input.reservation!.inviteToken.rosterEntryId && input.target.studentId) {
+          await tx.studentRosterEntry.updateMany({
+            where: {
+              id: input.reservation!.inviteToken.rosterEntryId ?? "",
+              studentId: input.target.studentId,
+              email: input.target.email.trim().toLowerCase(),
+              claimedInviteTokenId: inviteToken.id,
+              claimedUserId: null,
+            },
+            data: { claimedAt: null, claimedEmail: null, claimedInviteTokenId: null },
+          });
+        }
+      });
+    } else await createDistributionLog({
       source: input.source,
       recipientEmail: input.target.email,
       requesterName: input.target.name,
@@ -421,7 +460,7 @@ export async function sendInviteTokenEmail(input: SendDistributionEmailInput): P
 
     return {
       error: "메일 발송에 실패했습니다. 잠시 후 다시 시도해주세요.",
-      quotaUsed: quota.used,
+      quotaUsed: input.reservation ? quota.used : quota.used + 1,
     };
   }
 }

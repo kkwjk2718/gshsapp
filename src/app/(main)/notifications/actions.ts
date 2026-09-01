@@ -61,7 +61,8 @@ export async function getUnreadNotificationCount() {
         const count = await prisma.notification.count({
             where: {
                 userId: user.id,
-                isRead: false
+                isRead: false,
+                OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
             }
         });
         return count;

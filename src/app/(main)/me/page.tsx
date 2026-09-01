@@ -1,6 +1,4 @@
-import { prisma } from "@/lib/db";
-
-import { Settings, Calendar, Music, Plus, Trash2, Star } from "lucide-react";
+import { Calendar, Music, Plus, Trash2, Star } from "lucide-react";
 import { getCurrentUser } from "@/lib/session";
 import { redirect } from "next/navigation";
 import { createDDay, deleteDDay, setPrimaryDDay, deleteSongRequest } from "./actions";
@@ -11,6 +9,7 @@ import { Metadata } from "next";
 import { LogoutButton } from "@/components/auth/logout-button";
 import { formatKST } from "@/lib/date-utils";
 import { APP_SEMVER_TAG } from "@/lib/app-version";
+import { loadMePageData } from "./page-data";
 
 export const metadata: Metadata = {
   title: "내 정보",
@@ -21,39 +20,38 @@ export const metadata: Metadata = {
 };
 
 export default async function MyPage() {
-  const user = await getCurrentUser();
+  const user = await getCurrentUser({ allowPasswordChangeRequired: true });
   if (!user) redirect("/login");
 
-  const dbUser = await prisma.user.findUnique({
-      where: { id: user.id },
-      include: { 
-          personalEvents: { orderBy: { targetDate: 'asc' } },
-          songRequests: { orderBy: { createdAt: 'desc' }, take: 5 }
-      }
-  });
+  const pageData = await loadMePageData(user.id);
   
-  if (!dbUser) redirect("/login");
+  if (!pageData) redirect("/login");
 
   return (
      <div className="mobile-page mobile-safe-bottom max-w-2xl mx-auto space-y-6">
         <h1 className="text-2xl font-bold" style={{ color: "var(--foreground)" }}>내 정보</h1>
         
-        <ProfileCard user={dbUser} />
+        {user.mustChangePassword && (
+          <div className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm font-medium text-amber-900">
+            An administrator reset this account. Change the temporary password before using other member features.
+          </div>
+        )}
+        {!user.mustChangePassword && <ProfileCard user={pageData.profile} />}
         <PasswordChangeForm />
 
 
 
-        <div className="glass rounded-3xl p-6 space-y-4">
+        {!user.mustChangePassword && <div className="glass rounded-3xl p-6 space-y-4">
             <div className="flex justify-between items-center">
                 <h3 className="font-bold flex items-center gap-2" style={{ color: "var(--foreground)" }}>
                     <Calendar className="w-5 h-5" style={{ color: "var(--accent)" }} />
                     나의 D-Day
                 </h3>
-                <span className="text-xs" style={{ color: "var(--muted)" }}>{dbUser.personalEvents.length}/3</span>
+                <span className="text-xs" style={{ color: "var(--muted)" }}>{pageData.personalEvents.length}/3</span>
             </div>
             
             <div className="space-y-3">
-                {dbUser.personalEvents.map(event => (
+                {pageData.personalEvents.map(event => (
                     <div key={event.id} className="flex items-center justify-between p-3 rounded-xl border" style={{ backgroundColor: event.isPrimary ? "var(--surface-2)" : "var(--surface)", borderColor: event.isPrimary ? "var(--accent)" : "var(--border)" }}>
                         <div className="flex items-center gap-3">
                             <form action={setPrimaryDDay}>
@@ -74,25 +72,25 @@ export default async function MyPage() {
                         </div>
                     </div>
                 ))}
-                {dbUser.personalEvents.length === 0 && <div className="text-center text-sm py-2" style={{ color: "var(--muted)" }}>등록된 일정이 없습니다.</div>}
+                {pageData.personalEvents.length === 0 && <div className="text-center text-sm py-2" style={{ color: "var(--muted)" }}>등록된 일정이 없습니다.</div>}
             </div>
 
-            {dbUser.personalEvents.length < 3 && (
+            {pageData.personalEvents.length < 3 && (
                 <form action={createDDay} className="grid grid-cols-1 sm:grid-cols-[1fr_auto_auto] gap-2 mt-4 pt-4 border-t" style={{ borderColor: "var(--border)" }}>
-                    <input name="title" type="text" placeholder="일정 제목" required className="flex-1 px-3 py-2 rounded-xl border text-sm focus:outline-none" style={{ backgroundColor: "var(--surface)", borderColor: "var(--border)", color: "var(--foreground)" }} />
-                    <input name="date" type="date" required className="px-3 py-2 rounded-xl border text-sm focus:outline-none" style={{ backgroundColor: "var(--surface)", borderColor: "var(--border)", color: "var(--foreground)" }} />
+                    <input name="title" type="text" maxLength={100} placeholder="일정 제목" required className="flex-1 px-3 py-2 rounded-xl border text-sm focus:outline-none" style={{ backgroundColor: "var(--surface)", borderColor: "var(--border)", color: "var(--foreground)" }} />
+                    <input name="date" type="date" min="2000-01-01" max="2100-12-31" required className="px-3 py-2 rounded-xl border text-sm focus:outline-none" style={{ backgroundColor: "var(--surface)", borderColor: "var(--border)", color: "var(--foreground)" }} />
                     <button className="p-2 tap-target rounded-xl transition-colors flex items-center justify-center" style={{ backgroundColor: "var(--accent)", color: "var(--brand-sub)" }}><Plus className="w-5 h-5" /></button>
                 </form>
             )}
-        </div>
+        </div>}
 
-        <div className="glass rounded-3xl p-6 space-y-4">
+        {!user.mustChangePassword && <div className="glass rounded-3xl p-6 space-y-4">
              <h3 className="font-bold flex items-center gap-2" style={{ color: "var(--foreground)" }}>
                 <Music className="w-5 h-5" style={{ color: "var(--accent)" }} />
                 최근 기상곡 신청
              </h3>
              <div className="space-y-3">
-                {dbUser.songRequests.map(song => (
+                {pageData.songRequests.map(song => (
                     <div key={song.id} className="flex items-center justify-between p-3 rounded-xl group" style={{ backgroundColor: "var(--surface)" }}>
                         <div className="truncate flex-1 mr-4">
                             <div className="font-medium truncate" style={{ color: "var(--foreground)" }}>{song.videoTitle}</div>
@@ -111,11 +109,11 @@ export default async function MyPage() {
                         </div>
                     </div>
                 ))}
-                {dbUser.songRequests.length === 0 && (
+                {pageData.songRequests.length === 0 && (
                     <div className="text-center text-sm text-slate-400 py-2">신청 내역이 없습니다.</div>
                 )}
              </div>
-        </div>
+        </div>}
         
         <LogoutButton
             className="md:hidden justify-center rounded-2xl border border-[color:var(--border)] py-3 text-sm font-medium"

@@ -26,8 +26,9 @@
 
 - 이 프로젝트는 Next.js App Router 기반입니다.
 - 데이터베이스는 Prisma + SQLite입니다.
-- 테스트/운영은 self-hosted runner 기반으로 배포됩니다.
-- 운영 배포는 `sha-<commit>` 기준이고, 릴리스는 `vX.Y.Z` semver 기준입니다.
+- GitHub Actions는 GitHub-hosted CI·이미지 publish·공개 검증만 수행하고 호스트를 배포하지 않습니다.
+- 테스트/운영 호스트는 OOB 인증된 root control과 systemd unit으로만 변경합니다.
+- 배포는 exact `sha-<commit>`와 registry digest 기준이고, 릴리스는 `vX.Y.Z` semver 기준입니다.
 
 ## 2. 기본 작업 흐름
 
@@ -102,8 +103,9 @@ type(scope): summary
 ### 배포 또는 인프라 변경
 
 - `deploy/`, `.github/workflows/`, `docs/`를 함께 확인합니다.
-- runner, secrets, Docker Hub, `.env`, `/opt/gshsapp` 구조 영향 여부를 PR에 적습니다.
+- hosted workflow, protected environment, root control, Docker Hub, `.env`, `/opt/gshsapp` 구조 영향 여부를 PR에 적습니다.
 - `latest`가 아니라 `sha-<commit>` 기준이 유지되는지 확인합니다.
+- Actions에 호스트 SSH/Docker/runtime secret 경로가 생기지 않는지 확인합니다.
 
 ### DB 또는 Prisma 변경
 
@@ -175,6 +177,7 @@ PR 본문에는 아래를 반드시 포함합니다.
 - [DEPLOY.md](./DEPLOY.md)
 - [docs/cicd-setup.md](./docs/cicd-setup.md)
 - [docs/server-bootstrap.md](./docs/server-bootstrap.md)
+- [docs/root-operations-bootstrap.md](./docs/root-operations-bootstrap.md)
 - [docs/production-launch-runbook.md](./docs/production-launch-runbook.md)
 - [docs/repository-governance.md](./docs/repository-governance.md)
 - [AGENTS.md](./AGENTS.md)
@@ -192,12 +195,12 @@ PR 본문에는 아래를 반드시 포함합니다.
 - 서버에서 내려받은 시크릿 백업 파일
 - 통제되지 않은 테스트/운영 DB 원본 파일
 
-시크릿 또는 인프라 값이 바뀌는 작업이라면 PR 설명에 아래를 남깁니다.
+시크릿 또는 인프라 값이 바뀌는 작업이라면 실제 값은 쓰지 말고 PR 설명에 아래 범주만 남깁니다.
 
 - 어떤 값이 바뀌는지
 - 어디에 저장되는지
 - 테스트/운영 모두 수정해야 하는지
-- GitHub secrets인지 서버 `.env`인지
+- protected `publish` secret인지 root-only 서버 config인지
 
 ## 9. 리뷰 기준
 
@@ -226,11 +229,12 @@ PR 본문에는 아래를 반드시 포함합니다.
 
 현재 기본선:
 
-- `main` 보호 활성화
-- 필수 체크: `lint`, `test`, `build`
+- `main`의 approving review 최소 1개와 관리자 강제 적용
+- strict 필수 체크: `lint`, `test`, `firewall-policy`, `build`, `gitleaks`
 - 미해결 리뷰 대화가 있으면 머지 불가
 - `main`에 대한 force push 및 branch deletion 금지
-- 관리자 긴급 우회는 사고 대응 용도로만 허용
+- 기본 bypass 목록 비움
+- `publish`, `preproduction-verification`, `production-verification`은 `main` only와 required reviewer로 보호하고, 무인 `production-monitor`는 `main` only로 제한하되 reviewer gate는 두지 않음
 
 ## 11. 빠른 체크리스트
 

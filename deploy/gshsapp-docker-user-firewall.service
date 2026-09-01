@@ -1,0 +1,40 @@
+[Unit]
+Description=GSHS Docker published-port ingress boundary
+Requires=docker.service gshsapp-docker-boot-quarantine.service gshsapp-docker-user-firewall.timer
+After=docker.service gshsapp-docker-boot-quarantine.service ufw.service gshsapp-docker-user-firewall.timer
+PartOf=docker.service
+Before=gshsapp-writer-recovery.service gshsapp-deploy.service
+
+[Service]
+Type=oneshot
+Environment=LIFECYCLE_LOCK_HELD=0
+ExecStart=/bin/bash /usr/local/lib/gshsapp-operations/docker-user-firewall.sh --enforce
+User=root
+Group=root
+UMask=0077
+PrivateTmp=true
+PrivateDevices=true
+ProtectHome=true
+ProtectSystem=strict
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+ReadOnlyPaths=/usr/local/lib/gshsapp-operations /etc/gshsapp-operations
+ReadWritePaths=/run/lock/gshsapp
+NoNewPrivileges=true
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_RAW
+AmbientCapabilities=CAP_NET_ADMIN CAP_NET_RAW
+RestrictSUIDSGID=true
+RestrictNamespaces=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_NETLINK
+LockPersonality=true
+RestrictRealtime=true
+MemoryDenyWriteExecute=true
+SystemCallArchitectures=native
+TimeoutStartSec=2min
+
+[Install]
+WantedBy=docker.service

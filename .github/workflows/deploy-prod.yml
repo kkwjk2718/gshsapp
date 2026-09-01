@@ -1,355 +1,288 @@
-name: Deploy Production
+name: Production Release Verification
 
 on:
   workflow_dispatch:
     inputs:
       image_tag:
-        description: Immutable image tag to deploy (use sha-<commit>)
+        description: Exact image version already installed by the trusted operator (sha- plus 40 lowercase hex characters)
+        required: true
+        type: string
+      image_digest:
+        description: Exact published image digest (sha256 followed by 64 lowercase hex characters)
         required: true
         type: string
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
-  group: deploy-production
+  group: production-release-verification
   cancel-in-progress: false
 
 env:
-  APP_URL: https://gshs.app
+  IMAGE_REPOSITORY: docker.io/kkwjk2718git/gshsapp
+  PREPRODUCTION_URL: https://test.gshs.app
   E2E_BASE_URL: https://gshs.app
-  DEPLOY_PATH: /opt/gshsapp
-  BACKUP_MAX_AGE_HOURS: "24"
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 jobs:
-  deploy:
-    runs-on:
-      - self-hosted
-      - Linux
-      - X64
-      - gshs-prod
-    environment:
-      name: production
-      url: https://gshs.app
-    steps:
-      - uses: actions/checkout@v5
-      - name: Validate image tag
-        shell: bash
-        env:
-          IMAGE_TAG: ${{ inputs.image_tag }}
-        run: |
-          set -euo pipefail
-          case "$IMAGE_TAG" in
-            sha-*) ;;
-            *)
-              echo "image_tag must use the immutable sha-<commit> format." >&2
-              exit 1
-              ;;
-          esac
-      - name: Sync deploy assets on production server
-        shell: bash
-        run: |
-          set -euo pipefail
-          install -d "$DEPLOY_PATH" "$DEPLOY_PATH/data" "$DEPLOY_PATH/backup"
-          install -m 644 deploy/compose.yml "$DEPLOY_PATH/compose.yml"
-          install -m 755 deploy/deploy.sh "$DEPLOY_PATH/deploy.sh"
-          install -m 755 deploy/offsite-backup.sh "$DEPLOY_PATH/offsite-backup.sh"
-          install -m 755 deploy/run-scheduled-backup.sh "$DEPLOY_PATH/run-scheduled-backup.sh"
-          install -m 755 deploy/restore-drill.sh "$DEPLOY_PATH/restore-drill.sh"
-      - name: Deploy production server
-        shell: bash
-        env:
-          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-          IMAGE_TAG: ${{ inputs.image_tag }}
-          BACKUP_MAX_AGE_HOURS: ${{ env.BACKUP_MAX_AGE_HOURS }}
-        run: |
-          set -euo pipefail
-          cd "$DEPLOY_PATH"
-          export DOCKERHUB_USERNAME="$DOCKERHUB_USERNAME"
-          export DOCKERHUB_TOKEN="$DOCKERHUB_TOKEN"
-          export IMAGE_TAG="$IMAGE_TAG"
-          export APP_VERSION="$IMAGE_TAG"
-          export BACKUP_MAX_AGE_HOURS="$BACKUP_MAX_AGE_HOURS"
-          export DOCKER_IMAGE="${DOCKERHUB_USERNAME}/gshsapp"
-          ./deploy.sh
-
-  smoke:
-    runs-on:
-      - self-hosted
-      - Linux
-      - X64
-      - gshs-prod
-    needs: deploy
+  candidate:
+    if: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      attestations: read
     outputs:
-      health_version: ${{ steps.smoke.outputs.health_version }}
+      image_tag: ${{ steps.provenance.outputs.image_tag }}
+      image_digest: ${{ steps.provenance.outputs.image_digest }}
+      source_sha: ${{ steps.provenance.outputs.source_sha }}
+      control_sha: ${{ steps.provenance.outputs.control_sha }}
     steps:
-      - id: smoke
-        name: Smoke check production deployment on server
+      - name: Check out trusted verification controls from main
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - id: provenance
+        name: Verify candidate commit and signed image provenance
         shell: bash
         env:
-          EXPECTED_VERSION: ${{ inputs.image_tag }}
+          IMAGE_TAG_INPUT: ${{ inputs.image_tag }}
+          REQUESTED_IMAGE_DIGEST: ${{ inputs.image_digest }}
+          IMAGE_REPOSITORY: ${{ env.IMAGE_REPOSITORY }}
+          TRUSTED_CONTROL_SHA: ${{ github.sha }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          health_version="$(
-          EXPECTED_VERSION="$EXPECTED_VERSION" python3 - <<'PY'
+          [[ "$IMAGE_TAG_INPUT" =~ ^sha-[0-9a-f]{40}$ ]] || {
+            echo "image_tag must be sha- followed by 40 lowercase hexadecimal characters." >&2
+            exit 1
+          }
+          export CANDIDATE_SHA="${IMAGE_TAG_INPUT#sha-}"
+          bash ./deploy/verify-image-provenance.sh
+
+  preproduction_health:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: candidate
+    steps:
+      - name: Require the exact candidate on the public test origin
+        shell: bash
+        env:
+          EXPECTED_VERSION: ${{ needs.candidate.outputs.image_tag }}
+          EXPECTED_IMAGE_DIGEST: ${{ needs.candidate.outputs.image_digest }}
+          PUBLIC_BASE_URL: ${{ env.PREPRODUCTION_URL }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
           import json
           import os
+          import urllib.parse
           import urllib.request
 
-          base_url = "http://127.0.0.1:1234"
-          expected_version = os.environ["EXPECTED_VERSION"]
-          paths = ["/api/health", "/", "/menu", "/notices"]
+          base_url = os.environ["PUBLIC_BASE_URL"].rstrip("/")
+          expected_origin = urllib.parse.urlsplit(base_url)
+          request = urllib.request.Request(
+              base_url + "/api/health",
+              headers={"User-Agent": "gshsapp-production-preflight"},
+          )
+          with urllib.request.urlopen(request, timeout=30) as response:
+              actual = urllib.parse.urlsplit(response.geturl())
+              if (actual.scheme, actual.hostname, actual.port) != (
+                  expected_origin.scheme,
+                  expected_origin.hostname,
+                  expected_origin.port,
+              ):
+                  raise SystemExit("Preproduction request escaped the expected origin")
+              body = response.read(65537)
+              status = response.status
 
-          for path in paths:
+          if len(body) > 65536 or status != 200:
+              raise SystemExit("Preproduction health response is invalid")
+          payload = json.loads(body.decode("utf-8"))
+          if payload.get("ok") is not True or payload.get("service") != "gshsapp":
+              raise SystemExit("Preproduction is unhealthy")
+          if payload.get("version") != os.environ["EXPECTED_VERSION"]:
+              raise SystemExit("Preproduction is not serving the requested candidate version")
+          if payload.get("imageDigest") != os.environ["EXPECTED_IMAGE_DIGEST"]:
+              raise SystemExit("Preproduction is not serving the requested image digest")
+          PY
+
+  production_health:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs:
+      - candidate
+      - preproduction_health
+    environment:
+      name: production-verification
+      url: https://gshs.app
+    steps:
+      - name: Verify the exact candidate on the public production origin
+        shell: bash
+        env:
+          EXPECTED_VERSION: ${{ needs.candidate.outputs.image_tag }}
+          EXPECTED_IMAGE_DIGEST: ${{ needs.candidate.outputs.image_digest }}
+          PUBLIC_BASE_URL: ${{ env.E2E_BASE_URL }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+          import urllib.parse
+          import urllib.request
+
+          base_url = os.environ["PUBLIC_BASE_URL"].rstrip("/")
+          expected_origin = urllib.parse.urlsplit(base_url)
+          health = None
+
+          for path in ("/api/health", "/", "/menu", "/notices"):
               request = urllib.request.Request(
                   base_url + path,
-                  headers={"User-Agent": "gshsapp-ci-smoke-check"},
+                  headers={"User-Agent": "gshsapp-production-public-verification"},
               )
               with urllib.request.urlopen(request, timeout=30) as response:
-                  body = response.read()
+                  actual = urllib.parse.urlsplit(response.geturl())
+                  if (actual.scheme, actual.hostname, actual.port) != (
+                      expected_origin.scheme,
+                      expected_origin.hostname,
+                      expected_origin.port,
+                  ):
+                      raise SystemExit(f"Public request escaped the expected origin for {path}")
+                  body = response.read(65537)
                   status = response.status
 
+              if len(body) > 65536:
+                  raise SystemExit(f"{path} response exceeded the verification limit")
               if status < 200 or status >= 400:
                   raise SystemExit(f"{path} returned status {status}")
-
               if path == "/api/health":
-                  payload = json.loads(body.decode("utf-8"))
-                  if payload.get("ok") is not True:
-                      raise SystemExit(f"Health endpoint returned unhealthy payload: {payload}")
-                  if payload.get("service") != "gshsapp":
-                      raise SystemExit(f"Unexpected service name: {payload}")
-                  if payload.get("version") != expected_version:
-                      raise SystemExit(
-                          f"Health endpoint version mismatch: expected {expected_version}, got {payload.get('version')}"
-                      )
+                  health = json.loads(body.decode("utf-8"))
 
-          print(payload["version"])
+          if health is None or health.get("ok") is not True or health.get("service") != "gshsapp":
+              raise SystemExit("Production health response is invalid")
+          if health.get("version") != os.environ["EXPECTED_VERSION"]:
+              raise SystemExit("Production is not serving the requested candidate version")
+          if health.get("imageDigest") != os.environ["EXPECTED_IMAGE_DIGEST"]:
+              raise SystemExit("Production is not serving the requested image digest")
           PY
-          )"
 
-          echo "health_version=$health_version" >> "$GITHUB_OUTPUT"
-
-  e2e:
+  public_e2e:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     needs:
-      - deploy
-      - smoke
-    environment:
-      name: production
-      url: ${{ env.APP_URL }}
+      - candidate
+      - production_health
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
-          node-version: 20
+          ref: ${{ needs.candidate.outputs.control_sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24.19.0
           cache: npm
       - run: npm ci
       - run: npx playwright install --with-deps chromium
-      - name: Wait for production domain to serve deployed version
-        shell: bash
-        env:
-          EXPECTED_VERSION: ${{ inputs.image_tag }}
-        run: |
-          set -euo pipefail
-          EXPECTED_VERSION="$EXPECTED_VERSION" E2E_BASE_URL="$E2E_BASE_URL" python3 - <<'PY'
-          import json
-          import os
-          import time
-          import urllib.request
-
-          base_url = os.environ["E2E_BASE_URL"].rstrip("/")
-          expected_version = os.environ["EXPECTED_VERSION"]
-          deadline = time.time() + 180
-
-          while time.time() < deadline:
-              request = urllib.request.Request(
-                  base_url + "/api/health",
-                  headers={"User-Agent": "gshsapp-production-e2e"},
-              )
-              try:
-                  with urllib.request.urlopen(request, timeout=30) as response:
-                      payload = json.loads(response.read().decode("utf-8"))
-                  if payload.get("version") == expected_version and payload.get("ok") is True:
-                      break
-              except Exception:
-                  pass
-              time.sleep(5)
-          else:
-              raise SystemExit(
-                  f"Timed out waiting for {base_url}/api/health to report version {expected_version}"
-              )
-          PY
-      - name: Run production Playwright smoke suite
+      - name: Run anonymous public-page verification
         env:
           E2E_BASE_URL: ${{ env.E2E_BASE_URL }}
-          E2E_ADMIN_USER: ${{ secrets.E2E_ADMIN_USER }}
-          E2E_ADMIN_PASSWORD: ${{ secrets.E2E_ADMIN_PASSWORD }}
-        run: npm run test:e2e:smoke
-      - name: Upload Playwright report
-        if: always()
-        uses: actions/upload-artifact@v5
-        with:
-          name: playwright-report-production-${{ github.run_id }}
-          path: |
-            playwright-report
-            test-results
-          if-no-files-found: ignore
+        run: npx playwright test e2e/public.spec.ts
 
-  report:
+  proof:
     runs-on: ubuntu-latest
-    if: always()
+    timeout-minutes: 10
     needs:
-      - deploy
-      - smoke
-      - e2e
+      - candidate
+      - preproduction_health
+      - production_health
+      - public_e2e
+    permissions:
+      contents: read
     steps:
-      - name: Write production deployment summary
+      - name: Check out the exact deployed source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ needs.candidate.outputs.source_sha }}
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Create exact production-verification proof
         shell: bash
         env:
-          DEPLOY_RESULT: ${{ needs.deploy.result }}
-          SMOKE_RESULT: ${{ needs.smoke.result }}
-          E2E_RESULT: ${{ needs.e2e.result }}
-          IMAGE_TAG: ${{ inputs.image_tag }}
-          HEALTH_VERSION: ${{ needs.smoke.outputs.health_version }}
+          CANDIDATE_SHA: ${{ needs.candidate.outputs.source_sha }}
+          CONTROL_SHA: ${{ needs.candidate.outputs.control_sha }}
+          IMAGE_TAG: ${{ needs.candidate.outputs.image_tag }}
+          IMAGE_DIGEST: ${{ needs.candidate.outputs.image_digest }}
+          PROOF_PATH: ${{ runner.temp }}/production-proof.json
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import datetime, json, os
+          proof = {
+              "format": "gshsapp-production-public-proof",
+              "version": 1,
+              "repository": os.environ["GITHUB_REPOSITORY"],
+              "workflow": ".github/workflows/deploy-prod.yml",
+              "runId": int(os.environ["GITHUB_RUN_ID"]),
+              "runAttempt": int(os.environ["GITHUB_RUN_ATTEMPT"]),
+              "candidateSha": os.environ["CANDIDATE_SHA"],
+              "controlSha": os.environ["CONTROL_SHA"],
+              "imageTag": os.environ["IMAGE_TAG"],
+              "imageDigest": os.environ["IMAGE_DIGEST"],
+              "verifiedAt": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z"),
+          }
+          with open(os.environ["PROOF_PATH"], "x", encoding="utf-8", newline="\n") as output:
+              json.dump(proof, output, separators=(",", ":"))
+              output.write("\n")
+          PY
+      - name: Publish exact production-verification proof
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: production-proof-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/production-proof.json
+          if-no-files-found: error
+          retention-days: 7
+
+  report:
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs:
+      - candidate
+      - preproduction_health
+      - production_health
+      - public_e2e
+      - proof
+    steps:
+      - name: Record release verification result
+        shell: bash
+        env:
+          CANDIDATE_RESULT: ${{ needs.candidate.result }}
+          PREPRODUCTION_RESULT: ${{ needs.preproduction_health.result }}
+          PRODUCTION_RESULT: ${{ needs.production_health.result }}
+          E2E_RESULT: ${{ needs.public_e2e.result }}
+          PROOF_RESULT: ${{ needs.proof.result }}
+          IMAGE_TAG: ${{ needs.candidate.outputs.image_tag }}
+          IMAGE_DIGEST: ${{ needs.candidate.outputs.image_digest }}
         run: |
           set -euo pipefail
           {
-            echo "## Production Deployment"
+            echo "## Production Release Verification"
             echo
-            echo "- Deployment SHA: $IMAGE_TAG"
-            echo "- Health version: ${HEALTH_VERSION:-n/a}"
-            echo "- Deploy result: $DEPLOY_RESULT"
-            echo "- Smoke result: $SMOKE_RESULT"
-            echo "- Playwright smoke result: $E2E_RESULT"
+            echo "- Candidate: ${IMAGE_TAG:-unavailable}"
+            echo "- Image digest: ${IMAGE_DIGEST:-unavailable}"
+            echo "- Provenance result: $CANDIDATE_RESULT"
+            echo "- Preproduction public result: $PREPRODUCTION_RESULT"
+            echo "- Production public result: $PRODUCTION_RESULT"
+            echo "- Anonymous browser result: $E2E_RESULT"
+            echo "- Privileged release handoff proof: $PROOF_RESULT"
+            echo "- Host deployment mutation performed: no"
           } >> "$GITHUB_STEP_SUMMARY"
 
-          if [[ "$DEPLOY_RESULT" != "success" || "$SMOKE_RESULT" != "success" || "$E2E_RESULT" != "success" ]]; then
-            exit 1
-          fi
-
-  release:
-    runs-on: ubuntu-latest
-    needs:
-      - deploy
-      - smoke
-      - e2e
-      - report
-    if: ${{ needs.deploy.result == 'success' && needs.smoke.result == 'success' && needs.e2e.result == 'success' && needs.report.result == 'success' }}
-    steps:
-      - uses: actions/checkout@v5
-      - id: package_version
-        name: Read package version
-        shell: bash
-        run: |
-          set -euo pipefail
-          printf 'value=%s\n' "$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
-      - name: Create or update GitHub Release
-        uses: actions/github-script@v8
-        env:
-          IMAGE_TAG: ${{ inputs.image_tag }}
-          HEALTH_VERSION: ${{ needs.smoke.outputs.health_version }}
-          PACKAGE_VERSION: ${{ steps.package_version.outputs.value }}
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          TZ: Asia/Seoul
-        with:
-          script: |
-            const imageTag = process.env.IMAGE_TAG;
-            const healthVersion = process.env.HEALTH_VERSION || imageTag;
-            const packageVersion = process.env.PACKAGE_VERSION;
-            const runUrl = process.env.RUN_URL;
-            const releaseTag = `v${packageVersion}`;
-            const targetCommitish = imageTag.replace(/^sha-/, "");
-            const now = new Date();
-            const seoulDate = new Intl.DateTimeFormat("en-CA", {
-              timeZone: "Asia/Seoul",
-              year: "numeric",
-              month: "2-digit",
-              day: "2-digit",
-            }).format(now);
-            const releaseName = `${releaseTag} - ${seoulDate}`;
-            const body = [
-              `- 서비스 버전: ${releaseTag}`,
-              `- 배포 태그: ${imageTag}`,
-              `- 헬스 버전: ${healthVersion}`,
-              `- 운영 주소: https://gshs.app`,
-              `- 배포 실행 기록: ${runUrl}`,
-            ].join("\n");
-
-            let existingRelease = null;
-            let existingTagRef = null;
-
-            try {
-              const { data } = await github.rest.git.getRef({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                ref: `tags/${releaseTag}`,
-              });
-              existingTagRef = data;
-            } catch (error) {
-              if (error.status !== 404) {
-                throw error;
-              }
-            }
-
-            try {
-              const { data } = await github.rest.repos.getReleaseByTag({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                tag: releaseTag,
-              });
-              existingRelease = data;
-            } catch (error) {
-              if (error.status !== 404) {
-                throw error;
-              }
-            }
-
-            if (existingTagRef && !existingRelease) {
-              throw new Error(
-                `${releaseTag} 태그가 이미 존재합니다. package.json 버전을 먼저 올린 뒤 다시 배포해 주세요.`
-              );
-            }
-
-            if (existingRelease) {
-              const existingBody = existingRelease.body || "";
-              const existingImageTag = existingBody.match(/^- 배포 태그: (.+)$/m)?.[1]?.trim();
-
-              if (!existingImageTag) {
-                throw new Error(
-                  `${releaseTag} 릴리스가 이미 존재하지만 기존 배포 태그를 확인할 수 없습니다. 버전을 새로 올린 뒤 다시 배포해 주세요.`
-                );
-              }
-
-              if (existingImageTag !== imageTag) {
-                throw new Error(
-                  `${releaseTag} 릴리스가 이미 ${existingImageTag}에 사용되었습니다. package.json 버전을 먼저 올린 뒤 다시 배포해 주세요.`
-                );
-              }
-
-              await github.rest.repos.updateRelease({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                release_id: existingRelease.id,
-                tag_name: releaseTag,
-                name: releaseName,
-                body,
-                draft: false,
-                prerelease: false,
-              });
-              core.info(`Updated existing release for ${releaseTag}`);
-            } else {
-              await github.rest.repos.createRelease({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                tag_name: releaseTag,
-                name: releaseName,
-                body,
-                draft: false,
-                prerelease: false,
-                target_commitish: targetCommitish,
-                generate_release_notes: false,
-              });
-              core.info(`Created release for ${releaseTag}`);
-            }
+          [[ "$CANDIDATE_RESULT" == "success" ]]
+          [[ "$PREPRODUCTION_RESULT" == "success" ]]
+          [[ "$PRODUCTION_RESULT" == "success" ]]
+          [[ "$E2E_RESULT" == "success" ]]
+          [[ "$PROOF_RESULT" == "success" ]]

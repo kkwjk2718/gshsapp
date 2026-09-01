@@ -1,9 +1,20 @@
-import { getLastBackupAt, getLatestBackup, maybeRunScheduledBackup } from "../src/lib/backup";
+import { createBackup, getLastBackupAt, getLatestBackup, maybeRunScheduledBackup, setLastBackupAt } from "../src/lib/backup";
+import { prisma } from "../src/lib/db";
+import { pruneAuditLogs, pruneSystemLogs } from "../src/lib/system-log-store";
+import { enforceInviteTokenLifecycle } from "../src/lib/invite-token-lifecycle";
 
 async function main() {
+  await pruneSystemLogs();
+  await pruneAuditLogs();
+  await prisma.$transaction((tx) => enforceInviteTokenLifecycle(tx));
   const before = await getLastBackupAt();
 
-  await maybeRunScheduledBackup();
+  if (process.argv.includes("--force")) {
+    await createBackup("pre-deployment");
+    await setLastBackupAt(new Date());
+  } else {
+    await maybeRunScheduledBackup();
+  }
 
   const [after, latestBackup] = await Promise.all([
     getLastBackupAt(),
@@ -20,7 +31,11 @@ async function main() {
   console.log(JSON.stringify(payload, null, 2));
 }
 
-main().catch((error) => {
-  console.error("Scheduled backup failed:", error);
-  process.exit(1);
-});
+try {
+  await main();
+} catch {
+  console.error("Scheduled backup failed.");
+  process.exitCode = 1;
+} finally {
+  await prisma.$disconnect();
+}

@@ -1,0 +1,158 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const mocks = vi.hoisted(() => ({
+  getCurrentUser: vi.fn(), transaction: vi.fn(), batchCreate: vi.fn(), tokenCreateMany: vi.fn(), auditCreate: vi.fn(),
+  distributionCreate: vi.fn(), distributionFindFirst: vi.fn(), tokenCreate: vi.fn(), tokenFindMany: vi.fn(), sendInvite: vi.fn(),
+  getQuota: vi.fn(),
+  reserve: vi.fn(),
+  resolveStudentTargetGisu: vi.fn(),
+  tokenDelete: vi.fn(), rosterUpdate: vi.fn(), rosterFindFirst: vi.fn(), distributionUpdate: vi.fn(),
+}));
+vi.mock("@/lib/session", () => ({ getCurrentUser: mocks.getCurrentUser }));
+vi.mock("@/lib/db", () => ({ prisma: {
+  tokenBatch: { create: mocks.batchCreate }, inviteToken: { createMany: mocks.tokenCreateMany, create: mocks.tokenCreate, findMany: mocks.tokenFindMany, delete: mocks.tokenDelete }, tokenDistributionLog: { create: mocks.distributionCreate, findFirst: mocks.distributionFindFirst, updateMany: mocks.distributionUpdate }, studentRosterEntry: { updateMany: mocks.rosterUpdate, findFirst: mocks.rosterFindFirst }, auditLog: { create: mocks.auditCreate },
+  $transaction: mocks.transaction,
+} }));
+vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
+vi.mock("next/navigation", () => ({ redirect: vi.fn() }));
+vi.mock("@/lib/token-distribution", () => ({
+  sendInviteTokenEmail: mocks.sendInvite,
+  getDistributionQuotaSummary: mocks.getQuota,
+  resolveStudentTargetGisu: mocks.resolveStudentTargetGisu,
+}));
+vi.mock("@/lib/distribution-reservation", () => ({
+  reserveDistribution: mocks.reserve,
+  DistributionReservationError: class DistributionReservationError extends Error { constructor(public code: string) { super(code); } },
+}));
+
+describe("token mutation audit gate", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.getCurrentUser.mockResolvedValue({ id: "admin", role: "ADMIN" });
+    mocks.batchCreate.mockResolvedValue({ id: "batch" });
+    mocks.tokenCreateMany.mockResolvedValue({ count: 1 });
+    mocks.auditCreate.mockResolvedValue({ id: "audit" });
+    mocks.distributionCreate.mockResolvedValue({ id: "distribution" });
+    mocks.distributionFindFirst.mockResolvedValue(null);
+    mocks.tokenCreate.mockResolvedValue({ id: "token", token: null, tokenHash: "digest", targetRole: "STUDENT", targetGisu: 40 });
+    mocks.tokenFindMany.mockResolvedValue([]);
+    mocks.sendInvite.mockResolvedValue({ success: "sent" });
+    mocks.getQuota.mockResolvedValue({ used: 0, remaining: 250, isLimitReached: false });
+    mocks.resolveStudentTargetGisu.mockResolvedValue(40);
+    mocks.rosterFindFirst.mockResolvedValue({ id: "roster-2026-1", name: "Roster Student" });
+    mocks.tokenDelete.mockResolvedValue({ id: "token" }); mocks.rosterUpdate.mockResolvedValue({ count: 1 }); mocks.distributionUpdate.mockResolvedValue({ count: 1 });
+    mocks.reserve.mockResolvedValue({ distributionLogId: "distribution", inviteToken: { id: "token", token: "safe-token", tokenHash: "digest", targetRole: "STUDENT", targetGisu: 40, rosterEntryId: "roster-2026-1" } });
+    mocks.transaction.mockImplementation(async (callback: (tx: unknown) => unknown) => callback({
+      tokenBatch: { create: mocks.batchCreate }, inviteToken: { createMany: mocks.tokenCreateMany, create: mocks.tokenCreate, findMany: mocks.tokenFindMany, delete: mocks.tokenDelete }, tokenDistributionLog: { create: mocks.distributionCreate, findFirst: mocks.distributionFindFirst, updateMany: mocks.distributionUpdate }, studentRosterEntry: { updateMany: mocks.rosterUpdate, findFirst: mocks.rosterFindFirst }, auditLog: { create: mocks.auditCreate },
+    }));
+  });
+
+  it("releases an unconsumed portal roster claim before deleting its invite", async () => {
+    const { deleteToken } = await import("./actions");
+    await deleteToken("token");
+    expect(mocks.rosterUpdate).toHaveBeenCalledWith({
+      where: { claimedInviteTokenId: "token", claimedUserId: null },
+      data: { claimedAt: null, claimedEmail: null, claimedInviteTokenId: null },
+    });
+    expect(mocks.distributionUpdate).toHaveBeenCalledWith({ where: { inviteTokenId: "token" }, data: { inviteTokenId: null } });
+    expect(mocks.rosterUpdate.mock.invocationCallOrder[0]).toBeLessThan(mocks.tokenDelete.mock.invocationCallOrder[0]);
+  });
+
+  it("creates a batch and its audit event in one transaction", async () => {
+    const { createTokens } = await import("./actions");
+    const form = new FormData();
+    form.set("count", "1"); form.set("targetRole", "TEACHER"); form.set("title", "Batch"); form.set("memo", "");
+    const result = await createTokens(form);
+    expect(mocks.transaction).toHaveBeenCalledOnce();
+    expect(mocks.auditCreate).toHaveBeenCalledWith({ data: expect.objectContaining({ action: "TOKEN_BATCH_CREATED", targetId: "batch" }) });
+    expect(mocks.tokenCreateMany).toHaveBeenCalledWith({ data: [expect.objectContaining({ token: null, tokenHash: expect.stringMatching(/^[A-Za-z0-9_-]{43}$/) })] });
+    expect(result.csv).toContain("Token");
+    expect(result.csv).toMatch(/[A-Za-z0-9_-]{43}/);
+  });
+
+  it("persists a targeted pending audit before invoking the email provider flow", async () => {
+    const { sendTokenByEmail } = await import("./actions");
+    const form = new FormData();
+    form.set("email", "student@example.com"); form.set("targetRole", "STUDENT"); form.set("targetGisu", "40"); form.set("studentId", "1304");
+    expect(await sendTokenByEmail({}, form)).toHaveProperty("success");
+    expect(mocks.sendInvite).toHaveBeenCalledWith(expect.objectContaining({ reservation: expect.objectContaining({ distributionLogId: "distribution" }) }));
+    expect(mocks.reserve).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      actorId: "admin",
+      rosterClaimRequired: true,
+      target: expect.objectContaining({ email: "student@example.com", name: "Roster Student", studentId: "1304", rosterEntryId: "roster-2026-1" }),
+    }));
+    expect(mocks.reserve.mock.invocationCallOrder[0]).toBeLessThan(mocks.sendInvite.mock.invocationCallOrder[0]);
+  });
+
+  it("does not send when the reservation/audit transaction fails", async () => {
+    mocks.reserve.mockRejectedValueOnce(new Error("audit unavailable"));
+    const { sendTokenByEmail } = await import("./actions");
+    const form = new FormData(); form.set("email", "student@example.com"); form.set("targetRole", "STUDENT"); form.set("targetGisu", "40"); form.set("studentId", "1304");
+    await expect(sendTokenByEmail({}, form)).rejects.toThrow("audit unavailable");
+    expect(mocks.sendInvite).not.toHaveBeenCalled();
+  });
+
+  it("rejects manual BROADCAST enrollment without an active student roster claim", async () => {
+    const { sendTokenByEmail } = await import("./actions");
+    const form = new FormData(); form.set("email", "broadcast@example.com"); form.set("targetRole", "BROADCAST");
+    await expect(sendTokenByEmail({}, form)).resolves.toHaveProperty("error");
+    expect(mocks.reserve).not.toHaveBeenCalled();
+  });
+
+  it("does not re-send a recent pending or sent equivalent request", async () => {
+    const { DistributionReservationError } = await import("@/lib/distribution-reservation");
+    mocks.reserve.mockRejectedValueOnce(new DistributionReservationError("DUPLICATE"));
+    const { sendTokenByEmail } = await import("./actions");
+    const form = new FormData(); form.set("email", "student@example.com"); form.set("targetRole", "STUDENT"); form.set("targetGisu", "40"); form.set("studentId", "1304");
+    expect(await sendTokenByEmail({}, form)).toHaveProperty("error");
+    expect(mocks.sendInvite).not.toHaveBeenCalled();
+  });
+
+  it("does not grow invite tokens when quota-blocked requests repeat", async () => {
+    const { DistributionReservationError } = await import("@/lib/distribution-reservation");
+    mocks.reserve.mockRejectedValue(new DistributionReservationError("QUOTA"));
+    const { sendTokenByEmail } = await import("./actions");
+    const form = new FormData(); form.set("email", "student@example.com"); form.set("targetRole", "STUDENT"); form.set("targetGisu", "40"); form.set("studentId", "1304");
+    expect(await sendTokenByEmail({}, form)).toHaveProperty("error");
+    expect(await sendTokenByEmail({}, form)).toHaveProperty("error");
+    expect(mocks.tokenCreate).not.toHaveBeenCalled();
+    expect(mocks.sendInvite).not.toHaveBeenCalled();
+  });
+
+  it("requires a valid student ID and an exact active authoritative roster identity", async () => {
+    const { sendTokenByEmail } = await import("./actions");
+    for (const studentId of ["", "9999", "1304-extra"]) {
+      const form = new FormData();
+      form.set("email", "student@example.com"); form.set("targetRole", "STUDENT");
+      form.set("targetGisu", "40"); form.set("studentId", studentId);
+      await expect(sendTokenByEmail({}, form)).resolves.toHaveProperty("error");
+    }
+    mocks.rosterFindFirst.mockResolvedValueOnce(null);
+    const mismatch = new FormData();
+    mismatch.set("email", "student@example.com"); mismatch.set("targetRole", "STUDENT");
+    mismatch.set("targetGisu", "40"); mismatch.set("studentId", "1304");
+    await expect(sendTokenByEmail({}, mismatch)).resolves.toHaveProperty("error");
+    expect(mocks.reserve).not.toHaveBeenCalled();
+  });
+
+  it("rejects student-only identity metadata for non-student invitations", async () => {
+    const { sendTokenByEmail } = await import("./actions");
+    const form = new FormData();
+    form.set("email", "teacher@example.com"); form.set("targetRole", "TEACHER"); form.set("studentId", "1304");
+    await expect(sendTokenByEmail({}, form)).resolves.toHaveProperty("error");
+    expect(mocks.reserve).not.toHaveBeenCalled();
+  });
+
+  it("rejects partially parsed numeric fields and oversized recipient addresses", async () => {
+    const { createTokens, sendTokenByEmail } = await import("./actions");
+    const batch = new FormData();
+    batch.set("count", "1junk"); batch.set("targetRole", "STUDENT"); batch.set("targetGisu", "40"); batch.set("title", "Batch");
+    await expect(createTokens(batch)).rejects.toThrow("Invalid token batch input");
+    expect(mocks.transaction).not.toHaveBeenCalled();
+
+    const mail = new FormData();
+    mail.set("email", `${"a".repeat(250)}@example.com`); mail.set("targetRole", "STUDENT"); mail.set("targetGisu", "40junk");
+    await expect(sendTokenByEmail({}, mail)).resolves.toHaveProperty("error");
+    expect(mocks.reserve).not.toHaveBeenCalled();
+  });
+});

@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import { requireAdmin } from "@/lib/current-user";
 import { ArrowLeft, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { TokenList } from "./token-list";
@@ -6,15 +7,18 @@ import { deleteTokenBatch } from "../actions";
 import { formatKST } from "@/lib/date-utils";
 
 export default async function TokenBatchDetailPage({ params }: { params: Promise<{ batchId: string }> }) {
+  await requireAdmin();
   const { batchId } = await params;
 
   const batch = await prisma.tokenBatch.findUnique({
       where: { id: batchId },
-      include: { 
-          tokens: {
-              include: { usedBy: true }
-          } 
-      }
+      select: {
+        id: true, title: true, memo: true, createdAt: true,
+        tokens: {
+          orderBy: { createdAt: "asc" }, take: 10_000,
+          select: { id: true, targetRole: true, targetGisu: true, isUsed: true, usedBy: { select: { name: true, studentId: true, role: true } } },
+        },
+      },
   });
 
   if (!batch) return <div>존재하지 않는 그룹입니다.</div>;
@@ -39,7 +43,7 @@ export default async function TokenBatchDetailPage({ params }: { params: Promise
            </form>
        </div>
 
-       <TokenList tokens={batch.tokens} batchTitle={batch.title} />
+       <TokenList tokens={batch.tokens} batchTitle={batch.title} batchId={batch.id} />
     </div>
   )
 }

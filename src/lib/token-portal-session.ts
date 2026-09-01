@@ -1,5 +1,6 @@
 import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
+import { getApplicationSecuritySecret } from "@/lib/security/principal-key";
 
 export const TOKEN_PORTAL_SESSION_COOKIE = "gshs_token_portal_session";
 export const TOKEN_PORTAL_CLIENT_COOKIE = "gshs_token_portal_client";
@@ -21,12 +22,7 @@ function fromBase64Url(value: string) {
 }
 
 function getPortalSessionSecret() {
-  const secret = process.env.AUTH_SECRET?.trim();
-  if (!secret) {
-    throw new Error("AUTH_SECRET is required for token portal sessions.");
-  }
-
-  return secret;
+  return getApplicationSecuritySecret();
 }
 
 function createSignature(payload: string) {
@@ -71,7 +67,7 @@ function verifyPortalSessionPayload(serializedValue: string) {
 export async function getPortalClientKey() {
   const cookieStore = await cookies();
   const existingKey = cookieStore.get(TOKEN_PORTAL_CLIENT_COOKIE)?.value;
-  if (existingKey) {
+  if (existingKey && /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(existingKey)) {
     return existingKey;
   }
 

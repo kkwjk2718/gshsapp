@@ -1,6 +1,6 @@
 import { BarChart3, DatabaseBackup, KeyRound, Link, Mail, Save, Settings } from "lucide-react";
+import { requireAdmin } from "@/lib/current-user";
 import { updateGradeMapping } from "./actions";
-import { BackupIntervalForm } from "./backup-interval-form";
 import { BackupNowForm } from "./backup-now-form";
 import { GoogleAnalyticsForm } from "./google-analytics-form";
 import { ICalForm } from "./ical-form";
@@ -8,11 +8,13 @@ import { RestoreUploadForm } from "./restore-upload-form";
 import { loadSettingsPageData } from "./settings-page-data";
 import { TokenPortalSettingsForm } from "./token-portal-settings-form";
 import { TokenPortalPasswordForm } from "./token-portal-password-form";
+import { StudentRosterImportForm } from "./student-roster-import-form";
 
 export const dynamic = "force-dynamic";
 
 export default async function SettingsPage() {
-  const { mapping, iCalUrl, googleAnalyticsId, backups, intervalDays, tokenPortal, warnings } =
+  await requireAdmin();
+  const { mapping, iCalUrl, googleAnalyticsId, backups, tokenPortal, warnings } =
     await loadSettingsPageData();
   const portalUrl = `${process.env.NEXT_PUBLIC_APP_URL || "https://gshs.app"}/signup/request`;
 
@@ -129,6 +131,10 @@ export default async function SettingsPage() {
             <TokenPortalPasswordForm hasPassword={tokenPortal.hasPassword} />
           </div>
         </div>
+        <StudentRosterImportForm
+          activeCount={tokenPortal.activeRosterCount}
+          claimedCount={tokenPortal.claimedRosterCount}
+        />
       </div>
 
       <div className="glass p-8 rounded-3xl space-y-6">
@@ -137,12 +143,11 @@ export default async function SettingsPage() {
           Backup and restore
         </h2>
         <p className="text-sm text-slate-500">
-          Backup files are stored inside <code className="px-1 py-0.5 rounded bg-black/10">data_backup</code>{" "}
-          or next to the SQLite database volume when running in Docker.
+          These are app-managed exports for an administrator to download. They are not the
+          root-only offsite disaster-recovery backup or proof of recovery readiness.
         </p>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <BackupIntervalForm intervalDays={intervalDays} />
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <BackupNowForm />
           <RestoreUploadForm />
         </div>

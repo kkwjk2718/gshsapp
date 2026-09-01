@@ -5,10 +5,16 @@ import { revalidatePath } from "next/cache";
 import bcrypt from "bcryptjs";
 import { getCurrentUser } from "@/lib/session";
 import { createNotification } from "@/lib/notifications";
-import { getGradeMapping } from "@/lib/grade-utils";
 import { logAction } from "@/lib/logger";
 import { resolveUserRoleChange, UserRoleChangeError, isUserRole } from "@/lib/user-role-change";
 import { canChangeGisu } from "@/lib/user-roles";
+import { buildTemporaryPasswordCredentialUpdate, buildRoleCredentialUpdate, updateImportedUserSafely } from "@/lib/security/user-auth-mutations";
+import { writeAuditLog } from "@/lib/audit";
+import { generateTemporaryPassword } from "@/lib/security/temporary-password";
+import { assertUserImportBounds } from "@/lib/security/user-import-bounds";
+import { parseImportedUserRecord, type ImportedUserRecord } from "@/lib/security/user-import-record";
+import { validateAtomicUserImportPlan, validateRosterGovernedUserImports } from "@/lib/security/user-import-plan";
+import { resolveRosterGovernedRoleChange } from "@/lib/security/roster-role-change";
 
 export async function importUsersBackup(_: any, formData: FormData) {
     const sessionUser = await getCurrentUser();
@@ -27,28 +33,44 @@ export async function importUsersBackup(_: any, formData: FormData) {
     }
 
     try {
+        assertUserImportBounds(f.size, 0);
         const raw = await f.text();
         const parsed = JSON.parse(raw);
-        if (parsed?.type !== 'gshs-users-backup' || !Array.isArray(parsed?.users)) {
+        if (parsed?.type !== 'gshs-users-backup' || ![1, 2].includes(parsed?.version) || !Array.isArray(parsed?.users)) {
             return { error: '올바른 사용자 백업 파일이 아닙니다.' };
         }
+        assertUserImportBounds(f.size, parsed.users.length);
 
         // 1) 파일 내부 중복 제거 (userId 기준)
-        const deduped = new Map<string, any>();
+        const deduped = new Map<string, ImportedUserRecord>();
         let invalidCount = 0;
-        for (const u of parsed.users) {
-            if (!u?.userId || !u?.passwordHash || !u?.name || !u?.role) {
+        for (const rawUser of parsed.users) {
+            const imported = parseImportedUserRecord(rawUser, parsed.version);
+            if (!imported) {
                 invalidCount += 1;
                 continue;
             }
-            deduped.set(String(u.userId), u); // 같은 userId가 여러 번 있으면 마지막 항목으로 덮어씀
+            deduped.set(imported.userId, imported);
         }
 
         const users = Array.from(deduped.values());
-        const existing = await prisma.user.findMany({
-            where: { userId: { in: users.map((u) => String(u.userId)) } },
+        assertUserImportBounds(f.size, parsed.users.length, users.length);
+        const result = await prisma.$transaction(async (tx) => {
+        // Acquire SQLite's writer lease before the authorization snapshot so
+        // concurrent imports cannot both approve a conflicting final state.
+        const actorLease = await tx.user.updateMany({
+            where: {
+                id: sessionUser.id!, userId: sessionUser.userId!, role: "ADMIN",
+                sessionVersion: sessionUser.sessionVersion,
+            },
+            data: { sessionVersion: { increment: 0 } },
+        });
+        if (actorLease.count !== 1) throw new Error("IMPORT_ACTOR_SESSION");
+        const existing = await tx.user.findMany({
             select: {
                 userId: true,
+                id: true,
+                sessionVersion: true,
                 passwordHash: true,
                 name: true,
                 email: true,
@@ -61,31 +83,50 @@ export async function importUsersBackup(_: any, formData: FormData) {
         });
         const existingMap = new Map(existing.map((u) => [u.userId, u]));
 
+        validateAtomicUserImportPlan(existing, users, {
+            id: sessionUser.id!, userId: sessionUser.userId!,
+        });
+        const activeRoster = await tx.studentRosterEntry.findMany({
+            where: { active: true, claimedUserId: { not: null } },
+            select: { claimedUserId: true, name: true, email: true, studentId: true, gisu: true },
+        });
+        validateRosterGovernedUserImports(existing, users, activeRoster);
+
         let inserted = 0;
         let updated = 0;
         let skippedSame = 0;
-
+        let invalidDuringApply = 0;
         for (const u of users) {
             const payload = {
-                passwordHash: u.passwordHash,
+                ...(u.passwordHash ? { passwordHash: u.passwordHash } : {}),
                 name: u.name,
                 email: u.email ?? null,
                 role: u.role,
                 studentId: u.studentId ?? null,
                 gisu: u.gisu ?? null,
-                banExpiresAt: u.banExpiresAt ? new Date(u.banExpiresAt) : null,
-                isOnboarded: !!u.isOnboarded,
+                banExpiresAt: u.banExpiresAt,
+                isOnboarded: u.isOnboarded,
             };
 
             const ex = existingMap.get(u.userId);
             if (!ex) {
-                await prisma.user.create({ data: { userId: u.userId, ...payload } });
+                if (!u.passwordHash) {
+                    invalidDuringApply += 1;
+                    continue;
+                }
+                const passwordHash = u.passwordHash;
+                  const created = await tx.user.create({
+                      data: { userId: u.userId, ...payload, passwordHash, mustChangePassword: true },
+                  });
+                  await writeAuditLog(tx, {
+                    actorId: sessionUser.id!, action: "USER_IMPORTED", target: { type: "USER", id: created.id },
+                  });
                 inserted += 1;
                 continue;
             }
 
             const isSame =
-                ex.passwordHash === payload.passwordHash &&
+                (typeof payload.passwordHash !== "string" || ex.passwordHash === payload.passwordHash) &&
                 ex.name === payload.name &&
                 (ex.email ?? null) === payload.email &&
                 ex.role === payload.role &&
@@ -100,13 +141,38 @@ export async function importUsersBackup(_: any, formData: FormData) {
             }
 
             // 2) 교집합(기존 userId 존재)은 새 데이터로 덮어씀
-            await prisma.user.update({ where: { userId: u.userId }, data: payload });
+              await updateImportedUserSafely(ex, payload, {
+                  findCurrent: (id) => tx.user.findUnique({
+                      where: { id },
+                      select: {
+                          id: true,
+                          passwordHash: true,
+                          name: true,
+                          email: true,
+                          role: true,
+                          studentId: true,
+                          gisu: true,
+                          banExpiresAt: true,
+                          isOnboarded: true,
+                          sessionVersion: true,
+                      },
+                  }),
+                  updateIfCurrent: ({ where, data }) => tx.user.updateMany({
+                      where,
+                      data,
+                  }),
+              });
+              await writeAuditLog(tx, {
+                actorId: sessionUser.id!, action: "USER_IMPORTED", target: { type: "USER", id: ex.id },
+              });
             updated += 1;
         }
+        return { inserted, updated, skippedSame, invalidDuringApply };
+        });
 
         revalidatePath('/admin/users');
         return {
-            success: `반영 완료: 추가 ${inserted}건, 업데이트 ${updated}건, 동일 데이터 스킵 ${skippedSame}건, 무효 ${invalidCount}건`
+            success: `반영 완료: 추가 ${result.inserted}건, 업데이트 ${result.updated}건, 동일 데이터 스킵 ${result.skippedSame}건, 무효 ${invalidCount + result.invalidDuringApply}건`
         };
     } catch (e) {
         return { error: '복원 중 오류가 발생했습니다.' };
@@ -125,12 +191,19 @@ export async function resetPassword(formData: FormData) {
     if (!userId) return { error: "User ID is required." };
 
     try {
-        const newPassword = Math.random().toString(36).slice(-8);
+        const newPassword = generateTemporaryPassword();
         const passwordHash = await bcrypt.hash(newPassword, 10);
 
-        await prisma.user.update({
-            where: { id: userId },
-            data: { passwordHash },
+        await prisma.$transaction(async (tx) => {
+          await tx.user.update({
+              where: { id: userId },
+              data: buildTemporaryPasswordCredentialUpdate(passwordHash),
+          });
+          await writeAuditLog(tx, {
+            actorId: sessionUser.id!,
+            action: "USER_PASSWORD_RESET",
+            target: { type: "USER", id: userId },
+          });
         });
 
         revalidatePath("/admin/users");
@@ -194,6 +267,10 @@ function getRoleChangeErrorMessage(error: unknown) {
             return "현재 로그인한 관리자 계정의 ADMIN 권한은 해제할 수 없습니다.";
         }
 
+        if (error.message === "ACTIVE_ROSTER_REQUIRED") {
+            return "Student and broadcast roles require an exact active authoritative roster identity.";
+        }
+
         if (error.message === "LAST_ADMIN_PROTECTED") {
             return "마지막 관리자 계정은 다른 권한으로 변경할 수 없습니다.";
         }
@@ -221,8 +298,6 @@ export async function changeUserRole(formData: FormData): Promise<ChangeUserRole
     }
 
     try {
-        const gradeMapping = targetRole === "STUDENT" ? await getGradeMapping() : undefined;
-
         const result = await prisma.$transaction(async (tx) => {
             const targetUser = await tx.user.findUnique({
                 where: { id: userId },
@@ -230,6 +305,7 @@ export async function changeUserRole(formData: FormData): Promise<ChangeUserRole
                     id: true,
                     userId: true,
                     name: true,
+                    email: true,
                     role: true,
                     studentId: true,
                     gisu: true,
@@ -258,21 +334,33 @@ export async function changeUserRole(formData: FormData): Promise<ChangeUserRole
                 }
             }
 
-            const nextRole = resolveUserRoleChange({
-                currentStudentId: targetUser.studentId,
-                currentGisu: targetUser.gisu,
+            const rosterIdentity = targetRole === "STUDENT" || targetRole === "BROADCAST"
+                ? await tx.studentRosterEntry.findFirst({
+                    where: { claimedUserId: targetUser.id, active: true },
+                    select: { studentId: true, gisu: true, name: true, email: true },
+                })
+                : null;
+            const nextRole = resolveRosterGovernedRoleChange({
                 targetRole,
+                currentRole: targetUser.role,
                 studentIdInput,
-                gradeMapping,
-            });
+                userName: targetUser.name,
+                userEmail: targetUser.email,
+                roster: rosterIdentity,
+            }) ?? resolveUserRoleChange({
+                    currentStudentId: targetUser.studentId,
+                    currentGisu: targetUser.gisu,
+                    targetRole,
+                    studentIdInput,
+                });
 
             const updatedUser = await tx.user.update({
                 where: { id: userId },
-                data: {
+                data: buildRoleCredentialUpdate({
                     role: nextRole.role,
                     studentId: nextRole.studentId,
                     gisu: nextRole.gisu,
-                },
+                }),
                 select: {
                     id: true,
                     userId: true,
@@ -281,6 +369,11 @@ export async function changeUserRole(formData: FormData): Promise<ChangeUserRole
                     studentId: true,
                     gisu: true,
                 },
+            });
+            await writeAuditLog(tx, {
+                actorId: sessionUser.id,
+                action: "USER_ROLE_CHANGED",
+                target: { type: "USER", id: targetUser.id },
             });
 
             return {
@@ -394,7 +487,7 @@ export async function changeUserGisu(formData: FormData): Promise<ChangeUserGisu
 
             const updatedUser = await tx.user.update({
                 where: { id: targetUser.id },
-                data: { gisu: nextGisu },
+                data: { gisu: nextGisu, sessionVersion: { increment: 1 } },
                 select: {
                     id: true,
                     userId: true,
@@ -402,6 +495,11 @@ export async function changeUserGisu(formData: FormData): Promise<ChangeUserGisu
                     role: true,
                     gisu: true,
                 },
+            });
+            await writeAuditLog(tx, {
+                actorId: sessionUser.id,
+                action: "USER_GISU_CHANGED",
+                target: { type: "USER", id: targetUser.id },
             });
 
             return { before: targetUser, after: updatedUser };
@@ -526,12 +624,16 @@ export async function deleteUserAccount(formData: FormData): Promise<DeleteUserR
             await tx.notification.deleteMany({ where: { userId: targetUser.id } });
             await tx.personalEvent.deleteMany({ where: { userId: targetUser.id } });
             await tx.teacherProfile.deleteMany({ where: { userId: targetUser.id } });
-            await tx.auditLog.deleteMany({ where: { actorId: targetUser.id } });
             await tx.errorReport.deleteMany({ where: { userId: targetUser.id } });
             await tx.songRequest.deleteMany({ where: { requesterId: targetUser.id } });
             await tx.notice.deleteMany({ where: { writerId: targetUser.id } });
             await tx.schedule.deleteMany({ where: { writerId: targetUser.id } });
             await tx.user.delete({ where: { id: targetUser.id } });
+            await writeAuditLog(tx, {
+                actorId: sessionUser.id,
+                action: "USER_DELETED",
+                target: { type: "USER", id: targetUser.id },
+            });
 
             return {
                 targetUser,
@@ -542,7 +644,7 @@ export async function deleteUserAccount(formData: FormData): Promise<DeleteUserR
                     personalEvents: personalEventCount,
                     notifications: notificationCount,
                     errorReports: errorReportCount,
-                    auditLogs: auditLogCount,
+                    auditLogsPreserved: auditLogCount,
                     systemLogsDetached: systemLogCount,
                 },
             };
@@ -581,18 +683,24 @@ export async function banUser(formData: FormData) {
 
     const userId = formData.get("userId") as string;
     const banUntilDate = formData.get("banUntil") as string;
-    const reason = formData.get("reason") as string;
+    const reason = String(formData.get("reason") || "").trim();
 
-    if (!userId || !banUntilDate) {
+    const banUntil = new Date(banUntilDate);
+    const maximumBan = new Date(Date.now() + 30 * 86_400_000);
+    if (!userId || !banUntilDate || !reason || [...reason].length > 500 || new TextEncoder().encode(reason).byteLength > 1_000 ||
+        /[\u0000-\u001f\u007f-\u009f\ufeff]/u.test(reason) || !Number.isFinite(banUntil.getTime()) || banUntil <= new Date() || banUntil > maximumBan) {
         return { error: "User ID and ban date are required." };
     }
 
     try {
-        await prisma.user.update({
-            where: { id: userId },
-            data: {
-                banExpiresAt: new Date(banUntilDate),
-            },
+        await prisma.$transaction(async (tx) => {
+            const target = await tx.user.findUnique({ where: { id: userId }, select: { id: true, role: true } });
+            if (!target) throw new Error("TARGET_USER_NOT_FOUND");
+            if (sessionUser.role === "BROADCAST" && (target.id === sessionUser.id || !["STUDENT", "TEACHER"].includes(target.role))) {
+                throw new Error("INELIGIBLE_BROADCAST_TARGET");
+            }
+            await tx.user.update({ where: { id: target.id }, data: { banExpiresAt: banUntil } });
+            await writeAuditLog(tx, { actorId: sessionUser.id!, action: "USER_BANNED", target: { type: "USER", id: target.id } });
         });
 
         const message = reason
@@ -610,6 +718,7 @@ export async function banUser(formData: FormData) {
         revalidatePath("/admin/users");
         return { success: "User has been banned." };
     } catch (e) {
+        if (e instanceof Error && e.message === "INELIGIBLE_BROADCAST_TARGET") return { error: "Target is not eligible for a song-request ban." };
         return { error: "Failed to ban user." };
     }
 }
@@ -627,11 +736,9 @@ export async function unbanUser(formData: FormData) {
     }
 
     try {
-        await prisma.user.update({
-            where: { id: userId },
-            data: {
-                banExpiresAt: null,
-            },
+        await prisma.$transaction(async (tx) => {
+            await tx.user.update({ where: { id: userId }, data: { banExpiresAt: null } });
+            await writeAuditLog(tx, { actorId: sessionUser.id!, action: "USER_UNBANNED", target: { type: "USER", id: userId } });
         });
 
         await createNotification(

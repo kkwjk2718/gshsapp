@@ -28,6 +28,10 @@ test("public routes render without server errors @smoke", async ({ page }) => {
   await page.setViewportSize({ width: 1366, height: 768 });
 
   await page.goto("/");
+  await expect.poll(async () =>
+    (await page.getByTestId("desktop-utility-login-disabled").count()) +
+    (await page.getByTestId("desktop-utility-login-link").count()),
+  ).toBe(1);
   const isMemberServiceSuspended =
     (await page.getByTestId("desktop-utility-login-disabled").count()) > 0;
 

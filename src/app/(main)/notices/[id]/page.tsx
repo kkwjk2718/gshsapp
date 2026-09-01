@@ -1,9 +1,10 @@
-import { prisma } from "@/lib/db";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Megaphone, ShieldCheck, Calendar, User } from "lucide-react";
 import { Metadata } from "next";
 import { formatKST } from "@/lib/date-utils";
+import { findPublicNoticeById } from "@/lib/public-notice";
+import { isCanonicalUuid } from "@/lib/security/public-input";
 
 type Props = {
     params: Promise<{ id: string }>;
@@ -11,10 +12,8 @@ type Props = {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
     const { id } = await params;
-    const notice = await prisma.notice.findUnique({
-        where: { id },
-        include: { writer: true },
-    });
+    if (!isCanonicalUuid(id)) return { title: "Notice not found", robots: { index: false, follow: false } };
+    const notice = await findPublicNoticeById(id, { id: true, title: true, content: true });
 
     if (!notice) {
         return {
@@ -46,9 +45,15 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function NoticeDetailPage({ params }: Props) {
     const { id } = await params;
-    const notice = await prisma.notice.findUnique({
-        where: { id },
-        include: { writer: true },
+    if (!isCanonicalUuid(id)) notFound();
+    const notice = await findPublicNoticeById(id, {
+            id: true,
+            category: true,
+            title: true,
+            content: true,
+            expiresAt: true,
+            createdAt: true,
+            writer: { select: { name: true, role: true } },
     });
 
     if (!notice) {

@@ -1,4 +1,4 @@
-import { getLogStats, getLogSettings } from "./actions";
+import { loadLogDashboard } from "./loader";
 import { LogSettingsForm, DownloadButton } from "./client";
 import { LogViewer } from "./log-viewer";
 import { Metadata } from "next";
@@ -12,8 +12,7 @@ export const metadata: Metadata = {
 };
 
 export default async function LogsPage() {
-  const stats = await getLogStats();
-  const retentionDays = await getLogSettings();
+  const { stats, retentionDays } = await loadLogDashboard();
 
   return (
     <div className="p-6 space-y-6">

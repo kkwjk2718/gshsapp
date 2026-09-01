@@ -8,7 +8,7 @@ permissions:
   contents: read
 
 env:
-  AUTH_SECRET: ci-auth-secret
+  AUTH_SECRET: ci-only-auth-secret-material-over-32-bytes
   AUTH_TRUST_HOST: "true"
   AUTH_URL: http://localhost:3000
   NEXTAUTH_URL: http://localhost:3000
@@ -21,10 +21,12 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
-          node-version: 20
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24.19.0
           cache: npm
       - run: npm ci
       - run: npm run lint
@@ -32,21 +34,58 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
-          node-version: 20
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24.19.0
           cache: npm
       - run: npm ci
       - run: npm test
+      - name: Exercise first-deployment backup boundary
+        run: |
+          npm run build:ops
+          python3 -m py_compile deploy/*.py
+          python3 -m unittest deploy/bootstrap_backup_test.py
+          python3 -m unittest deploy/validate_live_database_test.py deploy/validate_operations_config_test.py deploy/validate_docker_network_test.py deploy/validate_host_routes_test.py
+          node scripts/generate-control-assets-manifest.mjs --check
+          node scripts/control-assets-manifest.test.mjs
+          bash -n deploy/*.sh docker-entrypoint.sh
+          bash deploy/deploy-quiescence.test.sh
+          bash deploy/predeployment-backup.test.sh
+          bash deploy/import-backup.test.sh
+          bash deploy/restore-drill.test.sh
+          bash deploy/root-operations-bootstrap.test.sh
+          sudo -n bash deploy/control-update-recovery.test.sh
+          sudo -n bash deploy/offsite-mount-pin.test.sh
+          bash deploy/approve-release.test.sh
+
+  firewall-policy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Validate host firewall policy scripts
+        run: |
+          bash -n deploy/*.sh docker-entrypoint.sh
+          bash deploy/deploy-policy.test.sh
+          python3 -m unittest deploy/validate_ufw_rules_test.py
+          bash deploy/host-hardening.test.sh
+          bash deploy/docker-user-firewall.test.sh
+          bash deploy/backup-writer-recovery.test.sh
+          bash deploy/writer-boot-recovery.test.sh
 
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
-          node-version: 20
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24.19.0
           cache: npm
       - run: npm ci
       - run: npm run build

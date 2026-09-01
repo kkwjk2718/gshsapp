@@ -1,11 +1,12 @@
 import { prisma } from "@/lib/db";
-import { createTokens } from "./actions";
+import { requireAdmin } from "@/lib/current-user";
 import { ChevronRight, FileText, MailPlus, Send, Users } from "lucide-react";
 import Link from "next/link";
 import { ManualSendForm } from "./manual-send-form";
 import { getDistributionQuotaSummary } from "@/lib/token-distribution";
 import { TOKEN_DISTRIBUTION_DAILY_LIMIT } from "@/lib/token-portal-config";
 import { formatKST } from "@/lib/date-utils";
+import { BatchCreateForm } from "./batch-create-form";
 
 const ROLE_LABELS: Record<string, string> = {
   STUDENT: "학생",
@@ -26,6 +27,7 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 export default async function TokenManagerPage() {
+  await requireAdmin();
   const [batches, recentLogs, quota] = await Promise.all([
     prisma.tokenBatch.findMany({
       orderBy: { createdAt: "desc" },
@@ -38,12 +40,9 @@ export default async function TokenManagerPage() {
     prisma.tokenDistributionLog.findMany({
       orderBy: { createdAt: "desc" },
       take: 20,
-      include: {
-        inviteToken: {
-          select: {
-            token: true,
-          },
-        },
+      select: {
+        id: true, source: true, recipientEmail: true, requesterName: true, targetRole: true,
+        targetGisu: true, status: true, errorMessage: true, brevoMessageId: true, createdAt: true,
       },
     }),
     getDistributionQuotaSummary(),
@@ -65,6 +64,8 @@ export default async function TokenManagerPage() {
               <Users className="h-5 w-5" />
               토큰 일괄 발급
             </h2>
+            <BatchCreateForm />
+            {/*
             <form action={createTokens} className="space-y-4">
               <div>
                 <label className="mb-1 block text-xs font-bold text-slate-500">발급명(제목)</label>
@@ -122,6 +123,7 @@ export default async function TokenManagerPage() {
                 배치 토큰 발급
               </button>
             </form>
+            */}
           </div>
 
           <div className="glass rounded-3xl p-6">
@@ -194,7 +196,6 @@ export default async function TokenManagerPage() {
                 <th className="px-3 py-3">수신 주소</th>
                 <th className="px-3 py-3">대상 권한</th>
                 <th className="px-3 py-3">상태</th>
-                <th className="px-3 py-3">토큰</th>
                 <th className="px-3 py-3">비고</th>
               </tr>
             </thead>
@@ -224,13 +225,12 @@ export default async function TokenManagerPage() {
                       {STATUS_LABELS[log.status] || log.status}
                     </span>
                   </td>
-                  <td className="px-3 py-3 font-mono text-xs">{log.inviteToken?.token || "-"}</td>
                   <td className="px-3 py-3 text-xs text-slate-500">{log.errorMessage || log.brevoMessageId || "-"}</td>
                 </tr>
               ))}
               {recentLogs.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-3 py-8 text-center text-slate-500">
+                  <td colSpan={6} className="px-3 py-8 text-center text-slate-500">
                     발송 기록이 없습니다.
                   </td>
                 </tr>

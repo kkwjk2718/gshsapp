@@ -57,15 +57,24 @@ Route group 기준:
 - `/api/public-settings`: 공개 런타임 설정
 - `/api/me/summary`: 공개 셸 사용자 상태 요약
 - `/api/me/home`: 홈 개인화 데이터
-- `/api/log/page-view`, `/api/log/meal-view`: 비차단 로깅
+- `/api/log/page-view`, `/api/log/meal-view`: 비차단 로깅. 정확한 `NEXT_PUBLIC_APP_URL` origin, same-origin Fetch Metadata, JSON content type, 1,024바이트 body와 512바이트 pathname, 프로세스 limiter를 통과한 이벤트만 받는다. forwarded IP 신뢰 기본값은 0 hop이다.
 
 대표 서비스 계층:
 
 - `src/lib/public-content.ts`: 공개 데이터 조회 및 캐시
-- `src/lib/token-distribution.ts`: 토큰 발급/재사용/메일 발송
+- `src/lib/distribution-reservation.ts`: SQLite writer lock 아래 `PENDING` 예약, 쿨다운, 일일 한도, 토큰 해시 저장을 원자적으로 처리
+- `src/lib/invite-redemption.ts`: bcrypt 전에 활성·수신자 결합을 저비용 사전 검증하고 조건부 1회 claim 이후 계정 생성
+- `src/lib/token-distribution.ts`: 예약된 토큰의 fragment 링크 메일 발송, 실패 시 토큰 분리·삭제, 실패를 포함한 발송 한도 상태 전이
+- `src/lib/invite-token-lifecycle.ts`: 7일이 지난 초대 레코드와 legacy 평문 토큰을 배부 로그에서 분리한 뒤 제한된 배치로 삭제
 - `src/lib/brevo.ts`: Brevo 메일 연동
 - `src/lib/backup.ts`: 백업 경로와 파일 처리
-- `src/auth.config.ts`: 인증/인가와 route guard
+- `src/auth.config.ts`: Edge 호환 route UX guard와 JWT/session claim 전달(DB 접근 금지)
+- `src/lib/current-user.ts`: Node 런타임의 DB 기반 현재 사용자·관리자 인가
+- `src/lib/system-log-store.ts`: `SystemLog` 정규화, 1~90일 보관, 공개/전체 행 상한과 oldest-first pruning
+- 클라이언트 주소 경계: 운영 컨테이너는 `TRUSTED_PROXY_HOPS=1..3`의 명시적 설정 없이는 시작하지 않는다. 이 값은 `X-Forwarded-For`를 덮어쓰는 통제된 프록시의 정확한 수다. 주소를 결정할 수 없으면 로그인·회원가입·포털 제한기는 공유 `unknown` 네트워크 버킷을 만들지 않고 식별자·클라이언트 차원만 적용한다. 학교 NAT의 네트워크 임계값은 계정·클라이언트 임계값보다 높고, key 상한에서는 전역 차단 대신 LRU 항목을 교체한다. 회원가입 제한과 초대 사전 조회는 bcrypt보다 먼저 실행된다.
+- `src/lib/audit.ts`: 공개 텔레메트리와 분리된 폐쇄형 관리자 감사 이벤트 기록
+- `InviteToken.token`은 7일 legacy 호환을 위한 nullable 필드이고 신규 발급은 `tokenHash`만 저장한다. 원문은 DB에서 복구하지 않는다.
+- `AuditLog.actorId`는 사용자 삭제 뒤에도 감사 행을 보존하기 위해 nullable `ON DELETE SET NULL` 관계를 사용한다.
 
 ## 5. 외부 연동
 
@@ -75,7 +84,7 @@ Route group 기준:
 - Google Calendar iCal: 일정 소스 일부
 - Brevo API: 토큰 메일 발송
 - Docker Hub: 배포 이미지 저장소
-- GitHub Actions: CI/CD, 릴리스, 정기 작업
+- GitHub Actions: GitHub-hosted CI, 후보 이미지 publish·attestation, 공개 origin 검증, 릴리스, 공개 health monitor
 - OpenClaw / Telegram / 기타 운영 도구는 서버 운영 보조 용도로 별도 존재
 
 연동 관련 주의점:
@@ -83,6 +92,8 @@ Route group 기준:
 - 메일 발송은 환경변수 시크릿에 의존
 - 공개 데이터는 실패해도 페이지 전체가 죽지 않도록 폴백이 필요
 - 운영 도메인과 테스트 도메인 값이 외부 연동 URL에 섞이면 안 됨
+- NEIS·날씨·YouTube oEmbed 응답은 공용 스트리밍 리더로 콘텐츠 유형과 최대 바이트를 검사하며, 각 연동은 타임아웃과 스키마/행 상한을 별도로 적용
+- iCal은 임의 외부 URL을 받지 않고 `ICAL_ALLOWED_HOSTS`(기본 `calendar.google.com`)의 정확한 HTTPS 호스트만 허용한다. 시간 제한 안에 받은 DNS 결과 전체가 공용 주소인지 검사하고, 선택한 주소를 새 TLS 연결의 lookup에 고정해 검증/연결 사이 DNS 변경과 기존 소켓 재사용을 차단한다. 응답 크기와 물리/논리 줄, 속성, UID, 이벤트 수를 파싱 전에 제한하고 예약 객체 키를 거부한 뒤 own-property만 공개 DTO로 변환한다
 
 ## 6. 권한 구조
 
@@ -103,32 +114,52 @@ Route group 기준:
 - `/songs`, `/timetable`, `/links`, `/sites`는 로그인 필요
 - `GRADUATE`는 로그인은 가능하지만 학생 전용 핵심 정보에는 접근하지 않음
 - 일부 공개 화면은 로그인 시 개인화 정보를 추가 표시
+- middleware의 JWT 역할 검사는 UX용이며 최종 권한 판단이 아님
+- 보호된 Node route/action은 JWT subject와 정수 `sessionVersion`을 DB 값과 정확히 비교하고 DB의 현재 역할을 사용
+- 기존 JWT에 version claim이 없거나 값이 잘못되면 fail closed되어 재로그인이 필요
+- 비밀번호 변경/초기화, 역할 변경, 인증 필드 import는 같은 DB write에서 `sessionVersion`을 원자적으로 증가
+- 관리자 초기화 비밀번호는 `mustChangePassword`를 설정하고 정상 보호 기능보다 비밀번호 변경을 먼저 강제
+- 로그인/포털의 keyed 제한과 포털 세션 서명에는 placeholder가 아닌 32바이트 이상의 `AUTH_SECRET`이 필요하며, 조건을 만족하지 않으면 fail closed
+- `/teachers`는 현재 회원 세션을 요구하며 이름, 이메일, 과목, 위치, 소개 문구만 조회
 
 ## 7. 배포 아키텍처
 
 배포 흐름:
 
 1. PR / push에서 CI 실행
-2. `main` push 시 Docker 이미지 빌드
-3. Docker Hub에 `sha-<commit>`, `main`, `latest` 푸시
-4. 테스트 서버 self-hosted runner가 자동 배포
-5. 운영 서버는 수동 `Deploy Production`으로 승격
+2. 보호된 `main` push 시 GitHub-hosted job이 Docker 이미지를 빌드하고 provenance를 생성
+3. Docker Hub에 `sha-<40-hex commit>` 이미지를 푸시하고 digest 고정
+4. 독립 채널로 인증한 root control이 테스트 호스트에서 승인·offsite import·restore drill·systemd deploy 수행
+5. GitHub-hosted `Preproduction Public Verification`이 이미 배포된 테스트 origin의 exact 후보를 검증하고 proof 생성
+6. 같은 proof로 운영 root 승인을 만든 뒤 운영 호스트에서 동일한 root-only 절차 수행
+7. GitHub-hosted `Production Release Verification`이 공개 운영 origin을 검증하고 semver Release 생성
+
+Actions에는 호스트 SSH, Docker socket, runtime secret, SQLite, backup mount 접근 경로가 없습니다. 테스트·운영 호스트에는 GitHub Actions runner를 설치하지 않습니다.
 
 서버 구조:
 
 ```text
+/usr/local/lib/gshsapp-operations/
+/etc/gshsapp-operations/
+  host-role
+  deploy.env
+  backup.env
+  github-token
 /opt/gshsapp
   .env
-  .deploy.env
-  compose.yml
-  deploy.sh
   data/
   backup/
+  root-backup/       # 앱과 분리된 root-only DR 세대
+$OFFSITE_DIR/                  # 별도 exact mount
+  .gshsapp-receipts/           # immutable/versioned root receipt
 ```
 
 핵심 규칙:
 
-- 실제 배포 기준은 `sha-<commit>`
+- 실제 배포 기준은 검증된 `sha-<commit>` 출처와 immutable image digest
+- 실행 control은 OOB bootstrap으로 `/usr/local/lib/gshsapp-operations`에 root:root `0400`으로 설치된 exact manifest 집합만 사용
+- 배포와 백업은 root-only systemd unit이며 `/run/lock/gshsapp/lifecycle.lock`을 공유
+- web은 격리된 Docker bridge에서 exact host IP에만 publish되고, 지속되는 `DOCKER-USER`/`GSHSAPP-INGRESS` 정책이 reverse proxy source 이외의 전달을 차단
 - GitHub Release는 `package.json` semver 기준 `vX.Y.Z`
 - 운영 릴리스가 다른 SHA에 이미 사용된 semver를 재사용하면 배포 실패
 - 배포 컨테이너 시간대는 `TZ=Asia/Seoul`, UI 시간 표시는 KST helper 기준으로 통일
@@ -137,17 +168,24 @@ Route group 기준:
 
 현재 백업 구조:
 
-- 정기 백업은 웹 요청이 아니라 scheduler 기반
-- 테스트 서버 정기 백업 workflow 존재
+- 정기 백업은 GitHub Actions가 아니라 host의 `gshsapp-backup.timer`와 root-only service가 수행하며, hourly freshness 재확인은 writer 정지 전에 검증되어 mount 장애 복구를 같은 날 재시도
+- timer는 writer를 quiesce하고 archive/metadata pair와 root checksum receipt를 exact offsite mount의 고정 `.gshsapp-receipts`에 영속화·검증
 - 복원 리허설은 라이브 DB를 덮어쓰지 않는 임시 컨테이너 방식
-- 운영 직전에는 최신 백업과 restore drill 상태를 확인
+- fresh-host import는 빈 data root, exact approval, offsite pair·고정 receipt와 별도 운영 기록의 receipt digest가 모두 일치할 때만 허용
+- 운영 직전에는 approval 뒤 생성된 exact restore-drill receipt를 확인
+- 이전 DB를 복원하면 세션 버전도 과거로 돌아갈 수 있으므로 복원 후 `AUTH_SECRET`을 회전해 전역 로그아웃
 
 주요 파일:
 
 - `deploy/run-scheduled-backup.sh`
-- `scripts/run-scheduled-backup.mjs`
+- `scripts/run-scheduled-backup.ts` → 빌드 시 `.next/ops/run-scheduled-backup.mjs`
+- `deploy/predeployment-backup.sh`, `deploy/bootstrap-backup.py`
 - `deploy/restore-drill.sh`
 - `deploy/offsite-backup.sh`
+
+백업은 라이브 SQLite 파일 복사가 아니라 `VACUUM INTO`/SQLite online-backup 스냅샷과 버전 2 manifest로 생성됩니다. Host deployment, scheduled backup, import, restore와 control update는 `/run/lock/gshsapp/lifecycle.lock`으로 직렬화되고 backup engine 내부 writer도 cross-process heartbeat lease를 사용합니다. Pre-deployment 경계는 old container의 자동 재시작을 끄고 exact stopped container를 보존한 채 호스트 online-backup을 만들며, 후보 이미지는 output tmpfs와 resource/time limit 안에서 생성 아카이브만 읽어 legacy/current 스키마의 격리 migration을 검증합니다. 후보에 라이브 DB, data root, runtime secret은 전달하지 않습니다. 아카이브는 허용된 논리 루트, 일반 파일/디렉터리, 경로·항목 수·크기·깊이 제한, manifest SHA-256을 모두 통과해야 합니다. 생성 전에 snapshot과 archive가 동시에 존재할 최악의 공간 및 reserve를 검사하고, 성공한 최신 세대와 최소 세대 수를 보호한 채 완전한 archive/metadata 쌍만 count·age·total-bytes 기준으로 정리합니다. 웹 복원은 이 검증을 거친 보류 항목을 비공개 데이터 디렉터리에 스테이징할 뿐 라이브 DB를 교체하지 않습니다. Fresh-host `import-backup.sh`만 빈 data root와 exact approval/offsite receipt를 요구해 검증된 세대를 원자 승격합니다.
+
+런타임의 모든 파일 경로는 `DATA_ROOT` 아래 정적 매핑으로 계산합니다. 프로덕션 standalone 산출물은 원본 `src`, 로컬 DB, 문서, seed/repair/debug 도구, 공개 디버그 캡처를 포함할 수 없으며 빌드 후 assertion이 이를 검사합니다.
 
 ## 9. 운영 추적과 릴리스
 

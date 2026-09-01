@@ -1,21 +1,6 @@
 import type { NextAuthConfig } from 'next-auth';
 import { MEMBER_SERVICE_SUSPENDED } from "@/lib/member-service-suspension";
 
-declare module "next-auth" {
-  interface User {
-    role?: string;
-    studentId?: string | null;
-    gisu?: number | null;
-  }
-  interface Session {
-    user: User & {
-      role?: string;
-      studentId?: string | null;
-      gisu?: number | null;
-    };
-  }
-}
-
 export const authConfig = {
   pages: {
     signIn: '/login',
@@ -24,6 +9,7 @@ export const authConfig = {
     authorized({ auth, request: { nextUrl } }) {
       const isLoggedIn = !!auth?.user;
       const role = auth?.user?.role;
+      const mustChangePassword = auth?.user?.mustChangePassword === true;
       const isOnDashboard = nextUrl.pathname === '/me' || nextUrl.pathname.startsWith('/me/');
       const isOnAdmin = nextUrl.pathname.startsWith('/admin');
       const isOnLogin = nextUrl.pathname.startsWith('/login');
@@ -63,6 +49,10 @@ export const authConfig = {
           return true;
         }
       }
+
+      if (isLoggedIn && mustChangePassword && !isOnDashboard && !isOnLogout) {
+        return Response.redirect(new URL("/me?forcePasswordChange=1", nextUrl));
+      }
       
       if (isOnMeals) {
           return true;
@@ -91,10 +81,9 @@ export const authConfig = {
       }
 
       if (isOnLogin) {
-        if (isLoggedIn) return Response.redirect(new URL('/', nextUrl));
         return true;
       }
-      
+
       return true;
     },
     session({ session, token }) {
@@ -103,6 +92,12 @@ export const authConfig = {
          session.user.role = token.role as string;
          session.user.studentId = token.studentId as string;
          session.user.gisu = token.gisu as number;
+         if (typeof token.sessionVersion === "number") {
+           session.user.sessionVersion = token.sessionVersion;
+         }
+         if (typeof token.mustChangePassword === "boolean") {
+           session.user.mustChangePassword = token.mustChangePassword;
+         }
        }
        return session;
     },
@@ -112,6 +107,8 @@ export const authConfig = {
         token.role = user.role;
         token.studentId = user.studentId;
         token.gisu = user.gisu;
+        token.sessionVersion = user.sessionVersion;
+        token.mustChangePassword = user.mustChangePassword;
       }
       return token;
     }
